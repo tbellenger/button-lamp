@@ -1,9 +1,9 @@
 /* ========= Spiral Lamp (CLEANED) — Main + Dots + Wave + Rainbow + Classic + Secret + Lava (Chaos) =========
    Based on "Version 4 – Exact YouTube Version" from the Alexjulness plans. Fixes (see issues.md):
      - All pins / LED count / colour order / brightness cap in ONE config block below.
-     - Chaos switch is active-LOW by default (switch to GND = ON), like every other input,
-       so an UNWIRED D11 no longer forces Lava mode. Set CHAOS_ACTIVE_HIGH 1 if you wire
-       it the plans' way (SPDT: common -> D11, throws to 5V and GND).
+     - Chaos mushroom is on its NC contacts (D11, INPUT_PULLUP): pressed = pin HIGH
+       (CHAOS_ACTIVE_HIGH 1). An unwired D11 also reads HIGH, so Chaos arms only after
+       the pin has been seen LOW once and does not force Lava at boot.
      - Global brightness cap (BRIGHTNESS_CAP) so USB / small supplies don't brown out.
      - HAVE_FADER / HAVE_SPEED_KNOB = 0 uses fixed values when a pot isn't wired yet
        (floating analog pins gave random brightness and speed).
@@ -16,7 +16,7 @@
      - RAM diet for 144 LEDs (Uno has 2 KB; NeoPixel mallocs LED_COUNT*3 = 432 B at runtime):
        colour tables / names / secret pattern moved to flash (PROGMEM / F()), per-LED Jumbo
        brightness computed on the fly, Wave per-LED mode packed to 2 bits, constants made const.
-       Globals 1728 -> 1236 B, leaving ~380 B for the stack after the strip buffer.
+       Globals 1728 -> 1237 B, leaving ~379 B for the stack after the strip buffer.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
        LED_COUNT (were hard-coded to LED 29/30 of a 60-LED strip).
 
@@ -59,9 +59,10 @@
 #define FIXED_FADER      0.6f   // 0..1 brightness used when HAVE_FADER is 0
 #define FIXED_KNOB       0.5f   // 0..1 knob position used when HAVE_SPEED_KNOB is 0 (0.5 = normal speed)
 
-// Chaos / Lava switch polarity. 0 = switch to GND turns Chaos ON (recommended; unwired = OFF).
-//                               1 = pin HIGH turns Chaos ON (the original plans' wiring).
-#define CHAOS_ACTIVE_HIGH 0
+// Chaos / Lava mushroom on NC contacts: released = closed to GND = LOW, pressed = open = HIGH.
+// Unwired D11 also reads HIGH, so Chaos stays off until the pin has been seen LOW once.
+// Set to 0 only for a normally-open switch to GND (pressed = LOW); that wiring is always armed.
+#define CHAOS_ACTIVE_HIGH 1
 
 #define DEBOUNCE_MS     20    // a switch must be stable this long to count
 #define DEBUG_SERIAL    1     // 1 = print every switch change to Serial @115200 (0 frees ~200 B RAM)
@@ -1241,8 +1242,17 @@ namespace Lava {
   }
 } // namespace Lava
 
-// Chaos state from the DEBOUNCED input (polarity from CHAOS_ACTIVE_HIGH)
+// Chaos from the debounced input. NC mushroom (CHAOS_ACTIVE_HIGH): pressed = HIGH,
+// but an unwired D11 is also HIGH, so Chaos arms only after the pin has been LOW
+// once. One byte; not a field on DebouncedInput (that would cost a byte per switch).
+#if CHAOS_ACTIVE_HIGH
+static uint8_t chaosSeenLow;
+static inline void noteChaosLow(){ if(inChaos.stable==LOW) chaosSeenLow=1; }
+static inline bool chaosOn(){ return chaosSeenLow && inChaos.pressed(); }
+#else
+static inline void noteChaosLow(){}
 static inline bool chaosOn(){ return inChaos.pressed(); }
+#endif
 
 // ================== Setup ==================
 void setup(){
@@ -1256,10 +1266,17 @@ void setup(){
   inLeft.begin(PIN_LEFT,true,F("Red btn"));    inRight.begin(PIN_RIGHT,true,F("White btn"));
   inKey.begin(PIN_KEY,true,F("Rainbow key"));  inWave.begin(PIN_WAVE,true,F("Wave sw"));
   inChaos.begin(PIN_CHAOS,!CHAOS_ACTIVE_HIGH,F("Chaos sw"));
+  noteChaosLow();
 
 #if DEBUG_SERIAL
   Serial.print(F("Rocker ")); Serial.print(inJumbo.pressed()?F("ON"):F("OFF"));
-  Serial.print(F(" | Chaos ")); Serial.println(inChaos.pressed()?F("ON (Lava takes over)"):F("OFF"));
+  Serial.print(F(" | Chaos "));
+#if CHAOS_ACTIVE_HIGH
+  if(!chaosSeenLow) Serial.println(F("unwired (arms once D11 reads LOW)"));
+  else Serial.println(inChaos.pressed()?F("ON (Lava takes over)"):F("OFF"));
+#else
+  Serial.println(inChaos.pressed()?F("ON (Lava takes over)"):F("OFF"));
+#endif
   if(!inJumbo.pressed()) Serial.println(F("Note: strip stays dark until the rocker (D7) is ON / grounded."));
 #endif
 
@@ -1304,6 +1321,10 @@ void loop(){
   uint8_t eK=inKey.update(now);
   uint8_t eW=inWave.update(now);
   uint8_t eC=inChaos.update(now);
+#if CHAOS_ACTIVE_HIGH
+  uint8_t chaosWasArmed=chaosSeenLow;   // arming edge (first LOW) is not "Chaos just turned off"
+#endif
+  noteChaosLow();
 
   bool rockerOn=inJumbo.pressed();
   bool toggleOn=inToggle.pressed();
@@ -1319,7 +1340,11 @@ void loop(){
   }
 
   // If Chaos just turned OFF and Wave switch is ON, kick Wave's ON sequence
-  bool chaosJustOff = CHAOS_ACTIVE_HIGH ? (eC==2 /*HIGH->LOW*/) : (eC==1 /*LOW->HIGH*/);
+#if CHAOS_ACTIVE_HIGH
+  bool chaosJustOff = chaosWasArmed && (eC==2 /*HIGH->LOW, already armed*/);
+#else
+  bool chaosJustOff = (eC==1 /*LOW->HIGH*/);
+#endif
   if (chaosJustOff && waveOn){
     if (g_wavePreroll.anyLitBeforeStart()){
       g_wavePreroll.begin(now, toggleOn, keyOn);
