@@ -1,0 +1,9 @@
+.DS_Store
+
+# Arduino CLI / IDE build directories and compiler output
+build/
+**/build/
+*.hex
+*.elf
+*.bin
+*.eep
