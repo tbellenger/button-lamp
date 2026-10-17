@@ -24,6 +24,10 @@ Unplug USB and the wall adapter, then wire:
 
 Open `sketches/bench_test/bench_test.ino` (the folder name must match the `.ino`), upload, plug in the 5 V supply, and open Serial Monitor at **115200** baud. Boot runs a red, then green, then blue wipe, then a dim moving rainbow. The blue button steps colour/pattern; the red button steps brightness (5 → 10 → 20 → 40).
 
+### 1b. Bench test v2 (all switches and pots)
+
+Once the strip and both buttons work, upload `sketches/bench_test_v2/bench_test_v2.ino` and add the pots and panel switches one at a time with [docs/bench_test_v2.md](docs/bench_test_v2.md). Serial at 115200 prints every pot and switch state 4x a second.
+
 ### 2. Full sketch
 
 When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLamp_clean.ino` and upload that. Same library. The lamp stays dark until the rocker on D7 is closed to GND. `BRIGHTNESS_CAP` is 50 so full white on 144 LEDs stays near 1.7 A on the 5 V 2 A supply.
@@ -33,6 +37,7 @@ When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLa
 | Path | What it is |
 |---|---|
 | `sketches/bench_test/` | Breadboard check: strip, colour button, brightness button |
+| `sketches/bench_test_v2/` | Bench test v2: both pots and every panel switch, one at a time ([guide](docs/bench_test_v2.md)) |
 | `sketches/SpiralLamp_clean/` | Full lamp (cleaned Version 4) |
 | `docs/wiring.md` | Authoritative wiring |
 | `docs/issues.md` | What was wrong in the purchased plans |
