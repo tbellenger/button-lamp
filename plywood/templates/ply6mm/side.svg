@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="334.00mm" height="186.00mm" viewBox="0 0 334.00 186.00">
+<defs><pattern id="waste" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M 0 0 V 4" stroke="#bbbbbb" stroke-width="0.5"/></pattern></defs>
+<rect width="100%" height="100%" fill="white"/>
+<path d="M 22.000,160.000 L 272.000,160.000 L 272.000,132.000 L 144.000,40.000 L 22.000,40.000 L 22.000,160.000 Z" fill="none" stroke="black" stroke-width="0.6"/>
+<path d="M 28.000,46.000 L 144.000,46.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="29.00" y="44.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">inside face: top board underside</text>
+<path d="M 34.350,136.000 L 34.350,52.350 L 28.000,52.350 L 28.000,136.000 L 34.350,136.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="35.35" y="134.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">glue strip</text>
+<path d="M 134.000,52.350 L 134.000,46.000 L 34.350,46.000 L 34.350,52.350 L 134.000,52.350" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="135.00" y="50.85" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">glue strip</text>
+<path d="M 151.866,53.043 L 257.130,128.701 L 253.424,133.857 L 148.160,58.199 L 151.866,53.043" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="152.87" y="51.54" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">glue strip</text>
+<path d="M 48.000,154.000 L 48.000,136.000 L 28.000,136.000 L 28.000,154.000 L 48.000,154.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="49.00" y="152.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">printed block</text>
+<path d="M 157.000,154.000 L 157.000,136.000 L 137.000,136.000 L 137.000,154.000 L 157.000,154.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="158.00" y="152.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">printed block</text>
+<path d="M 266.000,154.000 L 266.000,136.000 L 246.000,136.000 L 246.000,154.000 L 266.000,154.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="267.00" y="152.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">printed block</text>
+<path d="M 28.000,160.000 L 28.000,46.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="29.00" y="158.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">back board</text>
+<path d="M 266.000,160.000 L 266.000,137.000" fill="none" stroke="#1a5fb4" stroke-width="0.25" stroke-dasharray="2,1.5"/>
+<text x="267.00" y="158.50" font-size="2.8" fill="#1a5fb4" font-family="sans-serif">front board</text>
+<circle cx="82.00" cy="110.00" r="0.8" fill="#1a5fb4"/>
+<text x="84.00" y="108.00" font-size="3" fill="#1a5fb4" font-family="sans-serif">INSIDE FACE (mirror marks for the other side)</text>
+<text x="22" y="7" font-size="4.2" font-family="sans-serif" font-weight="bold">SIDE x2  250.0 x 120.0 mm  (6mm ply)</text>
+<text x="22" y="12" font-size="3" font-family="sans-serif">Side (make 2). Same outline both sides. Marks = inside face of the RIGHT side; flip the template for the left side.  </text>
+<text x="22" y="16.5" font-size="2.8" font-family="sans-serif">Black = cut line (saw on the waste side, sand to the line). Red = drill first. Hatched = waste. Blue dashed = layout marks only.</text>
+<path d="M 22 181.0 h 50 M 22 179.0 v 4 M 72 179.0 v 4 M 47 179.8 v 2.4" stroke="black" stroke-width="0.4" fill="none"/>
+<text x="74" y="182.0" font-size="3" font-family="sans-serif">50 mm check bar (print at 100%)</text>
+</svg>

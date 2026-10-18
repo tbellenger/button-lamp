@@ -1,0 +1,5 @@
+# Store mesh, document, and image binaries verbatim: no LFS, no CRLF conversion.
+*.stl binary
+*.pdf binary
+*.png binary
+*.svg binary

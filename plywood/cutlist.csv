@@ -1,0 +1,21 @@
+ply,piece,qty,length_mm,width_mm,length_in,width_in,holes_cutouts,notes
+3mm,side,2,250.0,120.0,"9 27/32"" (9.843"")","4 23/32"" (4.724"")",,Side (make 2). Same outline both sides. Marks = inside face of the RIGHT side; flip the template for the left side.
+3mm,back,1,204.0,117.0,"8 1/32"" (8.031"")","4 19/32"" (4.606"")",USB-C power inlet slot 10 x 4.5 (drill 4.5 both ends); Arduino USB-B window 20 x 18 (8 mm entry hole),Back. Drawn as seen from INSIDE the box. USB-C power slot + window for the Arduino USB-B plug.
+3mm,top,1,122.0,204.0,"4 13/16"" (4.803"")","8 1/32"" (8.031"")",4 x 3.4 mm on 76.2 mm square; 10 mm wire hole,"Top, seen from above. Spiral holder bolts here (4 x M3) + 10 mm wire hole (toward the back)."
+3mm,slope,1,155.6,204.0,"6 1/8"" (6.127"")","8 1/32"" (8.031"")",Window with 13 mm corner tabs (4 x 8 mm entry holes); 4 x 3.4 mm,Sloped control face. Printed switch panel lays ON TOP and covers the window; 4 x M3 at the corners.
+3mm,front,1,204.0,25.5,"8 1/32"" (8.031"")","1"" (1.004"")",,Front strip.
+3mm,bottom,1,243.0,203.0,"9 9/16"" (9.567"")","8"" (7.992"")",6 x 3.4 mm screw holes; 4 x 3.2 mm Uno holes; 12 x 8 mm vent holes,"Removable bottom, seen from above (inside face). 6 screws up into the printed blocks. Feet go on the underside."
+3mm,glue strip 1/4in sq: back/top cross strip,1,204.0,6.35,"8 1/32"" (8.031"")","1/4""",,
+3mm,glue strip 1/4in sq: back corner upright (each side),2,89.7,6.35,"3 17/32"" (3.530"")","1/4""",,
+3mm,glue strip 1/4in sq: side/top strip,2,102.7,6.35,"4 1/32"" (4.041"")","1/4""",,
+3mm,glue strip 1/4in sq: side/slope strip (under slope board),2,131.6,6.35,"5 3/16"" (5.182"")","1/4""",,
+6mm,side,2,250.0,120.0,"9 27/32"" (9.843"")","4 23/32"" (4.724"")",,Side (make 2). Same outline both sides. Marks = inside face of the RIGHT side; flip the template for the left side.
+6mm,back,1,198.0,114.0,"7 25/32"" (7.795"")","4 1/2"" (4.488"")",USB-C power inlet slot 10 x 4.5 (drill 4.5 both ends); Arduino USB-B window 20 x 18 (8 mm entry hole),Back. Drawn as seen from INSIDE the box. USB-C power slot + window for the Arduino USB-B plug.
+6mm,top,1,122.0,198.0,"4 13/16"" (4.803"")","7 25/32"" (7.795"")",4 x 3.4 mm on 76.2 mm square; 10 mm wire hole,"Top, seen from above. Spiral holder bolts here (4 x M3) + 10 mm wire hole (toward the back)."
+6mm,slope,1,153.6,198.0,"6 1/16"" (6.049"")","7 25/32"" (7.795"")",Window with 13 mm corner tabs (4 x 8 mm entry holes); 4 x 3.4 mm,Sloped control face. Printed switch panel lays ON TOP and covers the window; 4 x M3 at the corners.
+6mm,front,1,198.0,23.0,"7 25/32"" (7.795"")","29/32"" (0.906"")",,Front strip.
+6mm,bottom,1,237.0,197.0,"9 11/32"" (9.331"")","7 3/4"" (7.756"")",6 x 3.4 mm screw holes; 4 x 3.2 mm Uno holes; 12 x 8 mm vent holes,"Removable bottom, seen from above (inside face). 6 screws up into the printed blocks. Feet go on the underside."
+6mm,glue strip 1/4in sq: back/top cross strip,1,198.0,6.35,"7 25/32"" (7.795"")","1/4""",,
+6mm,glue strip 1/4in sq: back corner upright (each side),2,83.7,6.35,"3 9/32"" (3.293"")","1/4""",,
+6mm,glue strip 1/4in sq: side/top strip,2,99.7,6.35,"3 15/16"" (3.923"")","1/4""",,
+6mm,glue strip 1/4in sq: side/slope strip (under slope board),2,129.6,6.35,"5 3/32"" (5.104"")","1/4""",,

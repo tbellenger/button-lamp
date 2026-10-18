@@ -4,6 +4,12 @@ Tom's Arduino spiral lamp: an Uno-compatible ATmega328P on a screw-terminal shie
 
 Upload the sketches in `sketches/`. `original-plans/` is the purchased set (STLs, four original `.ino` versions, and PDFs), kept for reference.
 
+## Plywood enclosure + tube spiral
+
+Hand-cut plywood base and printed spiral holder: [plywood/README.md](plywood/README.md). Full build plan: [plywood/PLAN.pdf](plywood/PLAN.pdf).
+
+The new strip is the BTF FCOB 160/m 5 mm strip, cut to 900 mm / 144 LEDs so `LED_COUNT` stays 144, in the 13 mm JARBIH silicone tube.
+
 ## Quick start
 
 Run the bench test before the full sketch. Both sketches need the [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel) library (Arduino IDE → Library Manager → Adafruit NeoPixel).
@@ -44,3 +50,4 @@ When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLa
 | `docs/wiring_diagram_OUTDATED.png` | Old diagram. Strip is shown powered from the Arduino. Do not follow it. |
 | `docs/draw_wiring.py` | Script that drew that diagram |
 | `original-plans/` | Purchased originals, kept for reference |
+| `plywood/` | Plywood enclosure and tube spiral ([readme](plywood/README.md), [plan](plywood/PLAN.pdf)) |
