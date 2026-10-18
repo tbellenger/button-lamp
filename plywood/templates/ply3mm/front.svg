@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="288.00mm" height="91.50mm" viewBox="0 0 288.00 91.50">
+<defs><pattern id="waste" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M 0 0 V 4" stroke="#bbbbbb" stroke-width="0.5"/></pattern></defs>
+<rect width="100%" height="100%" fill="white"/>
+<path d="M 226.000,65.500 L 226.000,40.000 L 22.000,40.000 L 22.000,65.500 L 226.000,65.500 Z" fill="none" stroke="black" stroke-width="0.6"/>
+<text x="22" y="7" font-size="4.2" font-family="sans-serif" font-weight="bold">FRONT x1  204.0 x 25.5 mm  (3mm ply)</text>
+<text x="22" y="12" font-size="3" font-family="sans-serif">Front strip.  </text>
+<text x="22" y="16.5" font-size="2.8" font-family="sans-serif">Black = cut line (saw on the waste side, sand to the line). Red = drill first. Hatched = waste. Blue dashed = layout marks only.</text>
+<path d="M 22 86.5 h 50 M 22 84.5 v 4 M 72 84.5 v 4 M 47 85.3 v 2.4" stroke="black" stroke-width="0.4" fill="none"/>
+<text x="74" y="87.5" font-size="3" font-family="sans-serif">50 mm check bar (print at 100%)</text>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="282.00mm" height="180.00mm" viewBox="0 0 282.00 180.00">
+<defs><pattern id="waste" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M 0 0 V 4" stroke="#bbbbbb" stroke-width="0.5"/></pattern></defs>
+<rect width="100%" height="100%" fill="white"/>
+<circle cx="58.75" cy="140.00" r="2.25" fill="none" stroke="#c01c28" stroke-width="0.3"/><circle cx="58.75" cy="140.00" r="0.5" fill="#c01c28"/>
+<circle cx="53.25" cy="140.00" r="2.25" fill="none" stroke="#c01c28" stroke-width="0.3"/><circle cx="53.25" cy="140.00" r="0.5" fill="#c01c28"/>
+<text x="59.25" y="141.00" font-size="2.6" fill="#c01c28" font-family="sans-serif">SLOT: drill 4.5 (11/64") at both ends, saw/file between</text>
+<path d="M 194.100,125.900 L 174.100,125.900 L 174.100,143.900 L 194.100,143.900 L 194.100,125.900 Z" fill="url(#waste)" stroke="none"/>
+<circle cx="184.10" cy="134.90" r="4" fill="white" stroke="#c01c28" stroke-width="0.35"/><path d="M 182.10 134.90 H 186.10 M 184.10 132.90 V 136.90" stroke="#c01c28" stroke-width="0.25"/>
+<text x="174.10" y="147.90" font-size="2.6" fill="#c01c28" font-family="sans-serif">WASTE: drill 8 mm (5/16") entry hole, saw out</text>
+<path d="M 22.000,40.000 L 220.000,40.000 L 220.000,154.000 L 22.000,154.000 L 22.000,40.000 Z" fill="none" stroke="black" stroke-width="0.6"/>
+<path d="M 58.750,142.250 L 58.971,142.239 L 59.189,142.207 L 59.403,142.153 L 59.611,142.079 L 59.811,141.984 L 60.000,141.871 L 60.177,141.739 L 60.341,141.591 L 60.489,141.427 L 60.621,141.250 L 60.734,141.061 L 60.829,140.861 L 60.903,140.653 L 60.957,140.439 L 60.989,140.221 L 61.000,140.000 L 60.989,139.779 L 60.957,139.561 L 60.903,139.347 L 60.829,139.139 L 60.734,138.939 L 60.621,138.750 L 60.489,138.573 L 60.341,138.409 L 60.177,138.261 L 60.000,138.129 L 59.811,138.016 L 59.611,137.921 L 59.403,137.847 L 59.189,137.793 L 58.971,137.761 L 58.750,137.750 L 53.250,137.750 L 53.029,137.761 L 52.811,137.793 L 52.597,137.847 L 52.389,137.921 L 52.189,138.016 L 52.000,138.129 L 51.823,138.261 L 51.659,138.409 L 51.511,138.573 L 51.379,138.750 L 51.266,138.939 L 51.171,139.139 L 51.097,139.347 L 51.043,139.561 L 51.011,139.779 L 51.000,140.000 L 51.011,140.221 L 51.043,140.439 L 51.097,140.653 L 51.171,140.861 L 51.266,141.061 L 51.379,141.250 L 51.511,141.427 L 51.659,141.591 L 51.823,141.739 L 52.000,141.871 L 52.189,141.984 L 52.389,142.079 L 52.597,142.153 L 52.811,142.207 L 53.029,142.239 L 53.250,142.250 L 58.750,142.250 Z" fill="none" stroke="black" stroke-width="0.6"/>
+<path d="M 194.100,125.900 L 174.100,125.900 L 174.100,143.900 L 194.100,143.900 L 194.100,125.900 Z" fill="none" stroke="black" stroke-width="0.6"/>
+<circle cx="51.00" cy="133.00" r="0.8" fill="#1a5fb4"/>
+<text x="53.00" y="131.00" font-size="3" fill="#1a5fb4" font-family="sans-serif">USB-C power inlet 10 x 4.5</text>
+<circle cx="174.10" cy="121.90" r="0.8" fill="#1a5fb4"/>
+<text x="176.10" y="119.90" font-size="3" fill="#1a5fb4" font-family="sans-serif">Arduino USB-B window 20 x 18 (hold the Uno up to check)</text>
+<text x="22" y="7" font-size="4.2" font-family="sans-serif" font-weight="bold">BACK x1  198.0 x 114.0 mm  (6mm ply)</text>
+<text x="22" y="12" font-size="3" font-family="sans-serif">Back. Drawn as seen from INSIDE the box. USB-C power slot + window for the Arduino USB-B plug.  </text>
+<text x="22" y="16.5" font-size="2.8" font-family="sans-serif">Black = cut line (saw on the waste side, sand to the line). Red = drill first. Hatched = waste. Blue dashed = layout marks only.</text>
+<path d="M 22 175.0 h 50 M 22 173.0 v 4 M 72 173.0 v 4 M 47 173.8 v 2.4" stroke="black" stroke-width="0.4" fill="none"/>
+<text x="74" y="176.0" font-size="3" font-family="sans-serif">50 mm check bar (print at 100%)</text>
+</svg>
