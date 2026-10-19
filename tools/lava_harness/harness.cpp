@@ -25,7 +25,8 @@ static int pixelLit(uint16_t i) {
 }
 
 // One lava frame for ball 0.
-// row: * ball (palette red), W white-yellow, Y yellow, O orange, r red tail, . off
+// row: * ball (palette red), O orange, Y yellow, W white, r red, . off
+// From the ball outward the tail reads O then Y then W.
 // bri: brightest shown channel as a digit, 9 ≈ BRIGHTNESS_CAP.
 struct TrailSnap {
   int got;
