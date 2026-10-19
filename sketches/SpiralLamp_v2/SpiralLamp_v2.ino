@@ -22,7 +22,7 @@
        brightness is computed on the fly, Wave per-LED mode is packed to 2 bits, constants are const.
        The plans' style used 1728 B of globals; the diet brought a 144-LED build to 1237 B
        (~379 B free after its 432 B strip buffer). This 160-LED build (arduino:avr:uno):
-       30192 B flash (93%), 1293 B globals. After the 480 B strip buffer, about 275 B
+       30152 B flash (93%), 1293 B globals. After the 480 B strip buffer, about 275 B
        remain for the stack, which is under 400 B. Don't add per-LED arrays.
        The lava fire tail did not add globals; it only grew flash.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
@@ -32,9 +32,10 @@
        Toss height varies; the strongest toss reaches the strip centre. The span advances
        once per bounce (from the speed that just landed). Sampling millis() instead locked
        the centre speed-knob setting onto the short toss after the opening bounce.
-       Each ball also leaves a fire tail opposite its travel (LAVA_FIRE_TRAIL): white-yellow
-       beside the ball, then orange, then red, gone at the apex. Length follows |velocity|
-       (about 12 LEDs at launch speed 256). No per-LED trail state.
+       Each ball also leaves a fire tail opposite its travel (LAVA_FIRE_TRAIL): orange
+       beside the ball, then yellow, then white at the far end. Brightness fades
+       toward the tip so it does not stop hard. Gone at the apex. Length follows
+       |velocity| (about 12 LEDs at launch speed 256). No per-LED trail state.
        Jumbo, Rainbow, Wave, Secret, Classic and Dots already run across every LED.
 
    PRIORITIES (top -> bottom):
@@ -83,8 +84,9 @@
 // Set to 0 only for a normally-open switch to GND (pressed = LOW); that wiring is always armed.
 #define CHAOS_ACTIVE_HIGH 1
 
-// Fire tail behind each lava ball, opposite its travel. Fixed white→yellow→orange→red
-// colours (the ball itself still uses the lava palette). 0 restores the plain balls.
+// Fire tail behind each lava ball, opposite its travel. Fixed orange→yellow→white,
+// dimming toward the tip (the ball itself still uses the lava palette). 0 restores
+// the plain balls.
 // Computed from pos/vel each frame: no per-LED trail buffer.
 #define LAVA_FIRE_TRAIL 1
 
@@ -1291,27 +1293,29 @@ namespace Lava {
     x ^= (uint16_t)(x << 3);
     return (uint8_t)(200u + (x & 55u));
   }
-  // t = 0 beside the ball (white-yellow), 255 at the tip (off).
+  // t = 0 beside the ball (orange), then yellow, then white. The last stretch
+  // fades that white out so the tip does not end on a hard edge.
   static inline void fireAt(uint8_t t, uint8_t &cr, uint8_t &cg, uint8_t &cb){
-    if (t < 40){
+    if (t < 80){
       cr = 255;
-      cg = (uint8_t)(255u - (uint16_t)(255u - 210u) * t / 40u);
-      cb = (uint8_t)(180u - (uint16_t)180u * t / 40u);
-    } else if (t < 110){
-      uint8_t u = (uint8_t)(t - 40);
+      cg = (uint8_t)(40u + (uint16_t)50u * t / 80u); // 40..89, orange
+      cb = 0;
+    } else if (t < 150){
+      uint8_t u = (uint8_t)(t - 80);
       cr = 255;
-      cg = (uint8_t)(210u - (uint16_t)(210u - 70u) * u / 70u);
+      cg = (uint8_t)(90u + (uint16_t)165u * u / 70u); // 90..255, into yellow
       cb = 0;
-    } else if (t < 190){
-      uint8_t u = (uint8_t)(t - 110);
-      cr = (uint8_t)(255u - (uint16_t)(255u - 180u) * u / 80u);
-      cg = (uint8_t)(70u - (uint16_t)70u * u / 80u);
-      cb = 0;
+    } else if (t < 210){
+      uint8_t u = (uint8_t)(t - 150);
+      cr = 255;
+      cg = 255;
+      cb = (uint8_t)((uint16_t)255u * u / 60u); // yellow → white
     } else {
-      uint8_t u = (uint8_t)(t - 190);
-      cr = (uint8_t)(180u - (uint16_t)180u * u / 65u);
-      cg = 0;
-      cb = 0;
+      uint8_t u = (uint8_t)(t - 210);
+      uint8_t s = (uint8_t)(255u - (uint16_t)255u * u / 45u);
+      cr = s;
+      cg = s;
+      cb = s;
     }
   }
   static inline void addClamp(uint8_t &dst, uint8_t add){
@@ -1377,7 +1381,7 @@ namespace Lava {
             int32_t along = behind - edge;
             if (along <= tailFix){
               // Same 0..MAX_BRIGHTNESS steps as the ball. The last quarter would
-              // otherwise quantize to 0 and clip the red fade, so the tip stays
+              // otherwise quantize to 0 and clip the white fade, so the tip stays
               // at 1 until fireAt() itself reaches black.
               uint8_t level = (uint8_t)(((tailFix - along) * MAX_BRIGHTNESS) / tailFix);
               if (level > MAX_BRIGHTNESS) level = MAX_BRIGHTNESS;
