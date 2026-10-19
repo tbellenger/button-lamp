@@ -18,14 +18,16 @@
        brightness is computed on the fly, Wave per-LED mode is packed to 2 bits, constants are const.
        The plans' style used 1728 B of globals; the diet brought a 144-LED build to 1237 B
        (~379 B free after its 432 B strip buffer). This 160-LED build (arduino:avr:uno):
-       29410 B flash (91%), 1293 B globals. After the 480 B strip buffer, about 275 B
+       29422 B flash (91%), 1293 B globals. After the 480 B strip buffer, about 275 B
        remain for the stack, which is under 400 B. Don't add per-LED arrays.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
        LED_COUNT (were hard-coded to LED 29/30 of a 60-LED strip).
      - Lava launch speed is derived from LED_COUNT. The old fixed kick (246) peaked about
        59 LEDs up, which is the whole of a 60-LED strip and short of centre on this one.
-       Toss height varies; the strongest toss reaches the strip centre. Jumbo, Rainbow,
-       Wave, Secret, Classic and Dots already run across every LED.
+       Toss height varies; the strongest toss reaches the strip centre. The span advances
+       once per bounce (from the speed that just landed). Sampling millis() instead locked
+       the centre speed-knob setting onto the short toss after the opening bounce.
+       Jumbo, Rainbow, Wave, Secret, Classic and Dots already run across every LED.
 
    PRIORITIES (top -> bottom):
      1) Lava Lamp (Chaos switch ON: PIN_CHAOS=11)  -> full takeover
@@ -1116,6 +1118,20 @@ namespace Lava {
   static Blob    blobs[2];
   static uint8_t squashTimer[2];
 
+#ifdef HOST_LAVA_HARNESS
+  // Host-only peak tracker. Not compiled into the Uno sketch, so SRAM is unchanged.
+  static int16_t hostPeakPos[2];
+  static int16_t hostPeakVel[2];
+  static uint32_t hostSteps;
+  static uint32_t hostTicks;
+  static const uint8_t HOST_TOSS_CAP = 96;
+  static int16_t hostTossPeak[2];
+  static int16_t hostTossLaunch[2];
+  static uint8_t hostTossN[2];
+  static int16_t hostTossPeaks[2][HOST_TOSS_CAP];
+  static int16_t hostTossVels[2][HOST_TOSS_CAP];
+#endif
+
   static const uint8_t PAL[7][3] PROGMEM = {
     {255,   0,   0},  // Red
     {170,   0, 255},  // Purple
@@ -1192,9 +1208,20 @@ namespace Lava {
     if (s == 3) return 223;
     return 204;
   }
-  static inline int16_t launchVel(uint8_t which){
-    uint8_t slot = (uint8_t)((millis() / 900UL) + (uint32_t)which * 2UL);
-    return velForApex(centerReachFix() * tossSpan(slot) / 255);
+  // Not inline: one copy of the apex search, called a few times per bounce.
+  static int16_t launchForSlot(uint8_t slot){
+    return velForApex(centerReachFix() * (int32_t)tossSpan(slot) / 255);
+  }
+  // This integrator lands at velocity -V, where V is the launch speed.
+  // The next span is the one after that V, so the five heights repeat in order.
+  // millis()/900 did not: at the knob centre the flight time stayed inside one
+  // 900 ms bucket and every later toss was the short one (~60 LEDs).
+  static int16_t nextLaunchAfter(int16_t prev){
+    for (uint8_t s = 0; s < 5; ++s){
+      if (launchForSlot(s) == prev)
+        return launchForSlot((uint8_t)((s + 1u) % 5u));
+    }
+    return launchForSlot(2); // unknown speed → the centre toss
   }
 
   static inline void stepBlobsOnce(){
@@ -1204,15 +1231,33 @@ namespace Lava {
       int32_t pos = (int32_t)b.pos + vel;
 
       if (pos < 0){
+        int16_t prevLaunch = (int16_t)(-vel);
         b.pos = 0;
-        b.vel = launchVel(i);
+        b.vel = nextLaunchAfter(prevLaunch);
         squashTimer[i] = SQUASH_FRAMES; // trigger temporary shrink on bounce
+#ifdef HOST_LAVA_HARNESS
+        if (hostTossN[i] < HOST_TOSS_CAP){
+          hostTossPeaks[i][hostTossN[i]] = hostTossPeak[i];
+          hostTossVels[i][hostTossN[i]] = hostTossLaunch[i];
+        }
+        if (hostTossN[i] < 255) hostTossN[i]++;
+        hostTossLaunch[i] = b.vel;
+        hostTossPeak[i] = 0;
+#endif
       } else {
         if (pos > 32767) pos = 32767;
         b.pos = (int16_t)pos;
         b.vel = (int16_t)vel;
         if (squashTimer[i] > 0) squashTimer[i]--;
+#ifdef HOST_LAVA_HARNESS
+        if (b.pos > hostTossPeak[i]) hostTossPeak[i] = b.pos;
+#endif
       }
+#ifdef HOST_LAVA_HARNESS
+      hostSteps++;
+      if (b.pos > hostPeakPos[i]) hostPeakPos[i] = b.pos;
+      if (b.vel > hostPeakVel[i]) hostPeakVel[i] = b.vel;
+#endif
     }
   }
 
@@ -1263,8 +1308,14 @@ namespace Lava {
   }
 
   void init(){
-    blobs[0].pos=0; blobs[0].vel=velForApex(centerReachFix()); blobs[0].colorIdx=0; // bottom, first toss reaches centre
-    blobs[1].pos=0; blobs[1].vel=launchVel(1); blobs[1].colorIdx=0; // top, varied
+    blobs[0].pos=0; blobs[0].vel=launchForSlot(2); blobs[0].colorIdx=0; // bottom, span 255, reaches centre
+    blobs[1].pos=0; blobs[1].vel=launchForSlot(0); blobs[1].colorIdx=0; // top, offset so peaks don't coincide
+#ifdef HOST_LAVA_HARNESS
+    hostTossLaunch[0]=blobs[0].vel;
+    hostTossLaunch[1]=blobs[1].vel;
+    hostTossPeak[0]=hostTossPeak[1]=0;
+    hostTossN[0]=hostTossN[1]=0;
+#endif
     squashTimer[0]=0; squashTimer[1]=0;
     lastMs = millis();
     accMs  = 0.0f;
@@ -1273,6 +1324,9 @@ namespace Lava {
 
   // Call while Chaos is ON
   void tick(uint8_t eLeft, uint8_t eRight, uint32_t nowMs){
+#ifdef HOST_LAVA_HARNESS
+    hostTicks++;
+#endif
     // Button edges cycle colors (including OFF)
     if (eLeft==2){  blobs[0].colorIdx = (uint8_t)((blobs[0].colorIdx + 1) % 7); }
     if (eRight==2){ blobs[1].colorIdx = (uint8_t)((blobs[1].colorIdx + 1) % 7); }
@@ -1296,6 +1350,41 @@ namespace Lava {
 
     render();
   }
+
+#ifdef HOST_LAVA_HARNESS
+  struct HostView {
+    int16_t pos0, vel0, pos1, vel1;
+    int16_t peak0, peak1;
+    int16_t peakVel0, peakVel1;
+    int16_t fixScale;
+    int32_t centerFix;
+    float interval;
+    uint32_t steps, ticks;
+    uint8_t tossN0, tossN1;
+    int16_t openPeak0, openPeak1;
+    int16_t openVel0, openVel1;
+  };
+  static inline HostView hostView(){
+    HostView v;
+    v.pos0=blobs[0].pos; v.vel0=blobs[0].vel;
+    v.pos1=blobs[1].pos; v.vel1=blobs[1].vel;
+    v.peak0=hostPeakPos[0]; v.peak1=hostPeakPos[1];
+    v.peakVel0=hostPeakVel[0]; v.peakVel1=hostPeakVel[1];
+    v.fixScale=FIX_SCALE;
+    v.centerFix=centerReachFix();
+    v.interval=curInterval;
+    v.steps=hostSteps;
+    v.ticks=hostTicks;
+    v.tossN0=hostTossN[0]; v.tossN1=hostTossN[1];
+    v.openPeak0=hostTossPeak[0]; v.openPeak1=hostTossPeak[1];
+    v.openVel0=hostTossLaunch[0]; v.openVel1=hostTossLaunch[1];
+    return v;
+  }
+  static inline void hostToss(uint8_t ball, uint8_t i, int16_t *peak, int16_t *vel){
+    *peak = hostTossPeaks[ball][i];
+    *vel = hostTossVels[ball][i];
+  }
+#endif
 } // namespace Lava
 #undef LAVA_FIX_SCALE
 
