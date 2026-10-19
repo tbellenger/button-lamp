@@ -13,12 +13,19 @@
      - One shared Jumbo colour-cycle edge tracker (two separate `static bool prev`
        copies could miss / double the toggle edge).
      - Optional Serial debug of every switch change (115200 baud). Unused vars removed.
-     - RAM diet for 144 LEDs (Uno has 2 KB; NeoPixel mallocs LED_COUNT*3 = 432 B at runtime):
-       colour tables / names / secret pattern moved to flash (PROGMEM / F()), per-LED Jumbo
-       brightness computed on the fly, Wave per-LED mode packed to 2 bits, constants made const.
-       Globals 1728 -> 1237 B, leaving ~379 B for the stack after the strip buffer.
+     - RAM diet so 160 LEDs fit on an Uno (2 KB SRAM; NeoPixel mallocs LED_COUNT*3 = 480 B at runtime):
+       colour tables / names / secret pattern live in flash (PROGMEM / F()), per-LED Jumbo
+       brightness is computed on the fly, Wave per-LED mode is packed to 2 bits, constants are const.
+       The plans' style used 1728 B of globals; the diet brought a 144-LED build to 1237 B
+       (~379 B free after its 432 B strip buffer). This 160-LED build (arduino:avr:uno):
+       29410 B flash (91%), 1293 B globals. After the 480 B strip buffer, about 275 B
+       remain for the stack, which is under 400 B. Don't add per-LED arrays.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
        LED_COUNT (were hard-coded to LED 29/30 of a 60-LED strip).
+     - Lava launch speed is derived from LED_COUNT. The old fixed kick (246) peaked about
+       59 LEDs up, which is the whole of a 60-LED strip and short of centre on this one.
+       Toss height varies; the strongest toss reaches the strip centre. Jumbo, Rainbow,
+       Wave, Secret, Classic and Dots already run across every LED.
 
    PRIORITIES (top -> bottom):
      1) Lava Lamp (Chaos switch ON: PIN_CHAOS=11)  -> full takeover
@@ -45,13 +52,15 @@
 
 // ================== CONFIG (change these to match YOUR build) ==================
 #define PIN_LED         9     // strip DIN (through a 330-470 ohm resistor)
-#define LED_COUNT       144   // BTF WS2812B ECO 1 m @ 144/m
-#define LED_TYPE        (NEO_GRB + NEO_KHZ800)   // WS2812B. Try NEO_RGB if red/green swapped.
+#define LED_COUNT       160   // BTF FCOB 5 mm, 160/m, full metre: 80 x 12.5 mm segments
+#define LED_TYPE        (NEO_GRB + NEO_KHZ800)   // WS2812B-compatible. Try NEO_RGB if red/green swapped.
 
 // Overall brightness ceiling 0-255 applied on top of everything (fader included).
-//   ~40 : strip powered from USB / Arduino 5V (bench)
-//   255 : only with a 5 V / 4 A+ supply feeding the strip directly
-#define BRIGHTNESS_CAP  50    // 144 LEDs on a 5 V 2 A plug: full white ~1.7 A. Raise only with a bigger supply.
+// 160 LEDs at 60 mA full white is about 9.6 A, so:
+//   ~10 : strip powered from USB / Arduino 5V (about 0.4 A)
+//   80  : about the limit of a 5 V 3 A supply
+//   255 : only with a 5 V / 10 A supply feeding the strip directly
+#define BRIGHTNESS_CAP  50    // 160 LEDs on a 5 V 3 A supply: full white ~1.9 A.
 
 // Set to 0 if that pot is NOT wired yet; the fixed value below is used instead.
 #define HAVE_FADER       1
@@ -1075,11 +1084,20 @@ static inline void overlayDotsAndShow(uint32_t now, bool allowInput, uint8_t eL,
 }
 
 // ================== LAVA LAMP (Chaos priority) ==================
+// Counts per LED. 512 is the original resolution. A longer strip uses a coarser
+// scale so a toss to the centre still fits in the int16 ball position
+// (largest safe apex is 256*255/2 = 32640).
+#if LED_COUNT <= 1
+#define LAVA_FIX_SCALE 512
+#elif ((LED_COUNT - 1) * 512 <= 65280)
+#define LAVA_FIX_SCALE 512
+#else
+#define LAVA_FIX_SCALE (65280 / (LED_COUNT - 1))
+#endif
 namespace Lava {
   // Physics constants (tweakable)
-  static const int16_t  FIX_SCALE        = 512;
+  static const int16_t  FIX_SCALE        = LAVA_FIX_SCALE;
   static const int16_t  GRAVITY          = -1;     // accel per step (fixed units)
-  static const int16_t  INIT_VEL         = 246;    // upward kick at each bounce
   static const uint16_t BASE_INTERVAL_MS = 10;     // baseline speed @ knob center
 
   static const int16_t RADIUS_FIX      = (FIX_SCALE * 3) / 2; // ~1.5 LEDs radius
@@ -1144,17 +1162,55 @@ namespace Lava {
     curInterval = interval;
   }
 
+  // Distance from either end to the middle of the strip, in fixed units.
+  // Capped at the largest apex that fits in int16 (V = 256).
+  static inline int32_t centerReachFix(){
+    if (LED_COUNT <= 1) return 0;
+    int32_t h = ((int32_t)(LED_COUNT - 1) * FIX_SCALE) / 2;
+    if (h > 32640) h = 32640;
+    return h;
+  }
+  // Apex of a toss launched at V, after gravity is applied before each move, is V*(V-1)/2.
+  static inline int16_t velForApex(int32_t hFix){
+    if (hFix <= 0) return 1;
+    int32_t lo = 1, hi = 256;
+    while (lo < hi){
+      int32_t mid = (lo + hi) >> 1;
+      if (mid * (mid - 1) / 2 < hFix) lo = mid + 1;
+      else hi = mid;
+    }
+    return (int16_t)lo;
+  }
+  // Rise, hit centre, ease down. Fractions of 255, so 255 is exactly the centre.
+  // 192/255 is about 3/4 of the way there: on this 160-LED strip that is the old ~59 LED toss.
+  static inline uint8_t tossSpan(uint8_t slot){
+    // if/else, not a switch: avr-gcc puts a small switch table in RAM.
+    uint8_t s = (uint8_t)(slot % 5);
+    if (s == 0) return 192;
+    if (s == 1) return 213;
+    if (s == 2) return 255;
+    if (s == 3) return 223;
+    return 204;
+  }
+  static inline int16_t launchVel(uint8_t which){
+    uint8_t slot = (uint8_t)((millis() / 900UL) + (uint32_t)which * 2UL);
+    return velForApex(centerReachFix() * tossSpan(slot) / 255);
+  }
+
   static inline void stepBlobsOnce(){
     for (uint8_t i = 0; i < 2; ++i){
       Blob &b = blobs[i];
-      b.vel += GRAVITY;
-      b.pos += b.vel;
+      int32_t vel = (int32_t)b.vel + GRAVITY;
+      int32_t pos = (int32_t)b.pos + vel;
 
-      if (b.pos < 0){
+      if (pos < 0){
         b.pos = 0;
-        b.vel = INIT_VEL;
+        b.vel = launchVel(i);
         squashTimer[i] = SQUASH_FRAMES; // trigger temporary shrink on bounce
       } else {
+        if (pos > 32767) pos = 32767;
+        b.pos = (int16_t)pos;
+        b.vel = (int16_t)vel;
         if (squashTimer[i] > 0) squashTimer[i]--;
       }
     }
@@ -1207,8 +1263,8 @@ namespace Lava {
   }
 
   void init(){
-    blobs[0].pos=0; blobs[0].vel=INIT_VEL; blobs[0].colorIdx=0; // bottom
-    blobs[1].pos=0; blobs[1].vel=INIT_VEL; blobs[1].colorIdx=0; // top
+    blobs[0].pos=0; blobs[0].vel=velForApex(centerReachFix()); blobs[0].colorIdx=0; // bottom, first toss reaches centre
+    blobs[1].pos=0; blobs[1].vel=launchVel(1); blobs[1].colorIdx=0; // top, varied
     squashTimer[0]=0; squashTimer[1]=0;
     lastMs = millis();
     accMs  = 0.0f;
@@ -1241,6 +1297,7 @@ namespace Lava {
     render();
   }
 } // namespace Lava
+#undef LAVA_FIX_SCALE
 
 // Chaos from the debounced input. NC mushroom (CHAOS_ACTIVE_HIGH): pressed = HIGH,
 // but an unwired D11 is also HIGH, so Chaos arms only after the pin has been LOW

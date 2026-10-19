@@ -46,31 +46,27 @@ COB strips are also the best match for a round diffuser: there are no dots to se
 
 ### LED count and power
 
-You don't need to put all 2 m in the coil, and the Uno can't drive it all anyway:
+**Revision 3.** The strip was cut a bit long, so the coil uses the **full metre: 160 LEDs** (80 cut segments, 1000 mm), not the 900 mm / 144 LED cut from revision 2. `LED_COUNT` is 160 in every sketch under `sketches/`. The other metre (160 LEDs) stays as a spare. All 2 m (320 LEDs) still will not run on the Uno.
 
 - The sketch's globals grow with `LED_COUNT`, and NeoPixel also allocates 3 bytes per LED at runtime.
-- I compiled SpiralLamp_clean for the Uno at 144, 160 and 320 LEDs. The free RAM left after the LED buffer is shown below:
+- Compiled for `arduino:avr:uno`. Free RAM is what is left after the globals **and** the LED buffer (`LED_COUNT × 3`):
 
 | `LED_COUNT` | Strip used | Globals (compile) | + LED buffer | RAM left for the stack |
 |---|---|---|---|---|
-| **144 (recommended)** | **900 mm = 72 cut segments** | 1236 B | 432 B | **≈380 B: same as now** |
-| 160 | 1000 mm | 1292 B | 480 B | ≈276 B: tight, test it |
-| 320 | 2000 mm | 1852 B | 960 B | **negative: won't run on an Uno** |
+| 144 (revision 2) | 900 mm = 72 cut segments | 1236 B | 432 B | ≈380 B |
+| **160 (this build)** | **1000 mm = 80 cut segments** | **1293 B** | **480 B** | **275 B: under 400 B, test every mode** |
+| 320 | 2000 mm | ~1850 B | 960 B | **negative: won't run on an Uno** |
 
-**Recommendation: cut the strip at the 72nd segment (900 mm, 144 LEDs).**
+The 160-LED build fits, but the stack margin is under 400 B. Test every mode before adding features, and don't add another `LED_COUNT`-sized array.
 
-- `LED_COUNT` stays **144**, so **no code change**. All the animations were written for 144 pixels.
-- Keep the other 1.1 m (176 LEDs) as a spare.
-- The holder is now **resized for 900 mm of strip**: 937 mm of tube, 4.3 turns, and 165 mm tall, which is almost exactly the original spiral's 164 mm.
+The holder is **resized for 1000 mm of strip**: 1037 mm of tube (1000 mm strip + 37 mm for the socket and end cap), **4.75 turns**, **19 clips**, and **182 mm** tall. The cage STL was regenerated from that length.
 
-**Power:**
+**Power** (5 V 3 A supply):
 
-- The listing's figure scales to about **13.5 W, ≈2.7 A** at full mixed white for 0.9 m.
-- With `BRIGHTNESS_CAP 50` (about 20%), expect roughly **0.5–0.6 A**.
-- The **5 V 3 A USB-C supply stays**, and it has more headroom than before. You could raise `BRIGHTNESS_CAP` later; stay under about 150 to keep the total inside 3 A.
+- The listing's mixed-white figure for 1 m is **15 W, 3.0 A**.
+- Worst case, 60 mA per LED at full white, is **9.6 A** at brightness 255. `BRIGHTNESS_CAP 50` (about 20%) brings that to **about 1.9 A**. On the listing's mixed-white figure the same cap is about **0.6 A**.
+- Leave the cap at **50**. On this supply, don't take it past **80** (about 3.0 A of full white).
 - Keep the 330 Ω on DIN and the 1000 µF across 5 V and GND.
-
-If you want to use 1 m (160 LEDs), set `LED_COUNT 160` and change `strip_len` to 1000 in `src/spiral.py`. It compiles, but leaves only about 276 B of stack, so test every mode. Using all 2 m would need a Mega or ESP32.
 
 ---
 
@@ -102,22 +98,22 @@ The **spiral holder is one printed "cage"**: four slim columns on a square flang
 - **Plywood rib discs on a dowel / stacked plywood helix:** these need dozens of identical angled notches cut by hand. A 13 mm silicone tube is soft, so it needs to be held in a proper C-shape rather than a notch. Lots of fiddly cuts for a worse grip.
 - **Central dowel with clip arms:** every arm has to be glued on at a different height and angle. Easy to get wrong, hard to make look neat.
 - **Segmented spiral cradle:** a continuous helical channel overhangs everywhere, so it needs supports all the way up, and it hides half the tube.
-- **Cage (chosen):** **one print, no supports**, ~92 × 92 × 165 mm, so it fits the CR-10 easily. The clips are self-aligning, and every overhang is 45° or steeper. Tube length, turns and pitch are worked out from the 900 mm (144-LED) strip, so the LEDs fill the coil exactly.
+- **Cage (chosen):** **one print, no supports**, 92 × 92 × 182 mm, so it fits the CR-10 easily. The clips are self-aligning, and every overhang is 45° or steeper. Tube length, turns and pitch are worked out from the 1000 mm (160-LED) strip, so the LEDs fill the coil exactly.
 
 Bonus trick from a reviewer of this tube: if the coil sags between clips, slide a stiff wire (1.5–2 mm aluminium armature wire or coat-hanger wire) into **one of the six outer chambers** before you clip it in. It holds the shape and you can't see it.
 
-### Spiral numbers (13 mm tube, 144 LEDs)
+### Spiral numbers (13 mm tube, 160 LEDs)
 
 | | New holder | Original |
 |---|---|---|
 | Coil centre-line radius | 34.3 mm (same as the original) | 34.3 mm |
 | Coil outside diameter | 81.6 mm | 91.4 mm |
 | Pitch / gap between turns | 34 / 21 mm | 27.5 / 5 mm |
-| Turns | 4.3 | ~5 |
-| **Tube to cut** | **937 mm** (900 mm strip + 37 mm for the socket and end cap) | – |
-| Holder height (incl. flange) | 165 mm | 169 mm |
+| Turns | 4.75 | ~5 |
+| **Tube to cut** | **1037 mm** (1000 mm strip + 37 mm for the socket and end cap) | – |
+| Holder height (incl. flange) | 182 mm | 169 mm |
 | Bend radius the tube sees | 35 mm | – |
-| Clips | 17 | – |
+| Clips | 19 | – |
 
 **Bend radius:** the listing doesn't give one. Their photos show it looped much tighter than 35 mm, and inside the coil the strip bends the easy way, flat, as long as its LEDs face **outward** (see step 4 below). Even so, **do a quick test before cutting the tube:** wrap 30 cm of tube *with the strip inside* around a ~70 mm can, light it up, and look for kinks or dark LEDs. If it's unhappy, I can change `R` (coil radius) in `src/spiral.py` to 40 mm. That gives fewer turns and a fatter coil.
 
@@ -129,7 +125,7 @@ You already have the printed switch panel, the controls, the Arduino Uno with sc
 
 | Item | Qty | Example listing | Notes |
 |---|---|---|---|
-| JARBIH silicone neon tube **"for 5MM", 13 mm OD** | 1 roll | <https://www.amazon.com/dp/B0CKZ2WWJF> | The one you linked. You need about 0.95 m of the 5 m roll. |
+| JARBIH silicone neon tube **"for 5MM", 13 mm OD** | 1 roll | <https://www.amazon.com/dp/B0CKZ2WWJF> | The one you linked. You need about 1.05 m of the 5 m roll. |
 | 1/8" (3 mm) Baltic birch, 12 × 12" sheets | 4 sheets (a 10-pack leaves spares) | TX liteart 10-pack: <https://www.amazon.com/dp/B0CWRNWG6C> | That listing says the sheets are really **11.8 × 11.8"**. The layout is already planned on 299 mm sheets. |
 | 1/4" × 1/4" × 24" square strips | 2 sticks (about 0.9 m total) | Bud Nosen basswood 20-pack: <https://www.amazon.com/dp/B092D3GTG1> or Woodpeckers square dowels: <https://www.amazon.com/dp/B09SS3GDF8> | For the glue strips. |
 | M3 stainless socket-cap screws + nuts | about 12 screws, 8 nuts | Guard4U M3 kit (6–20 mm): <https://www.amazon.com/dp/B08LW1V2RL> | Panel: 4 × M3×10 + nuts. Spiral flange: 4 × M3×16 + nuts. Bottom: 6 × M3×12 (they self-tap into the printed blocks), or #4 × 1/2" wood screws. |
@@ -138,7 +134,7 @@ You already have the printed switch panel, the controls, the Arduino Uno with sc
 | Wood glue | 1 | Titebond II 8 oz: <https://www.amazon.com/dp/B0000223US> | Wood-to-wood joints. |
 | CA gel (super glue) | 1 | Gorilla Super Glue Gel 20 g: <https://www.amazon.com/dp/B087QK383W> | Gluing the **printed** blocks to wood. PVA doesn't stick well to PLA. |
 | PLA, white or natural | about 250 g | (your usual) | White or natural PLA makes the clip shadows on the tube much less obvious. |
-| Optional: 1.5–2 mm aluminium armature wire | 1.1 m | any | Shape-keeper in an outer chamber of the tube. |
+| Optional: 1.5–2 mm aluminium armature wire | 1.15 m | any | Shape-keeper in an outer chamber of the tube. |
 | Optional: clear silicone sealant / RTV | small tube | any | Seals the end cap on and glues the tube end into the socket. |
 
 I couldn't confirm Prime status on every listing from here. The tube page and the Titebond listing show Prime, but check for the badge on the others when you order. I didn't buy anything.
@@ -219,12 +215,12 @@ Everything's in `stl/`. I checked that every file is watertight, is a single bod
 | File | Size (mm) | Qty | Orientation and notes |
 |---|---|---|---|
 | `clip_fit_test_tube13mm.stl` | 46 × 46 × 79 | 1 | **Print this first.** It's one column with two clips. Snap a scrap of tube in: it should click in and hold without squashing. If it's too tight or loose, tell me and I'll change `bore_clear` or `clip_open_deg`. |
-| `spiral_cage_tube13mm.stl` | 92 × 92 × 165 | 1 | **Flange flat on the bed, as exported. No supports.** The clip undersides have 45° gussets and the top spokes are 45°. A 5 mm brim is a good idea because it's tall and slim. 3 walls, normal infill. Clip tops are like small horizontal holes and bridge fine. |
+| `spiral_cage_tube13mm.stl` | 92 × 92 × 182 | 1 | **Flange flat on the bed, as exported. No supports.** The clip undersides have 45° gussets and the top spokes are 45°. A 5 mm brim is a good idea because it's tall and slim. 3 walls, normal infill. Clip tops are like small horizontal holes and bridge fine. |
 | `end_cap_tube13mm.stl` | 17 × 17 × 17 | 1 (print 2 spare) | **Open end down**, no supports. The cone nose is 45°. Push it over the tube end with a dab of silicone. |
 | `top_backer_plate.stl` | 92 × 92 × 5 | 1 | Flat, nut-trap side down on the bed (as exported). Press 4 M3 nuts in. It goes under the plywood top so the 3 mm ply doesn't flex. |
 | `bottom_block_x6.stl` | 20 × 20 × 18 | **6** | Flat, as exported. 100% infill or 4+ walls helps the screws bite. There's a 2.5 mm pilot hole for M3 self-tapping or #4 wood screws. |
 
-Volumes, if every part were printed solid: cage 119 cm³, backer 34 cm³, each block 7 cm³. With normal walls and infill they'll weigh less. Cura will tell you the real weight and print time.
+Volumes, if every part were printed solid: cage 127 cm³, backer 34 cm³, each block 7 cm³. With normal walls and infill they'll weigh less. Cura will tell you the real weight and print time.
 
 ---
 
@@ -235,7 +231,7 @@ Volumes, if every part were printed solid: cage 119 cm³, backer 34 cm³, each b
 1. Slide 30 cm of the 5 mm strip into the 13 mm tube to confirm the fit.
 2. Print the clip fit test and snap the tube in.
 3. Do the bend test around a ~70 mm can.
-4. **Cut the strip at the 72nd segment** (900 mm, 144 LEDs), on the copper pads at the cut mark.
+4. **Leave the strip at 160 LEDs** (1000 mm, the 80th segment). It was cut long on purpose. If it is still the full 2 m reel, cut on the copper pads at the 80th segment.
 
 **B. Cut the wood**
 
@@ -253,7 +249,7 @@ Volumes, if every part were printed solid: cage 119 cm³, backer 34 cm³, each b
 
 **D. Spiral**
 
-12. Cut **937 mm** of tube, square and clean.
+12. Cut **1037 mm** of tube, square and clean.
 13. Feed the strip in using the built-in pull cord:
     - Tie the cord to the strip's *output* end (the end the arrows point toward).
     - Pull it through until the **input end, with its wires, is at the end of the tube that goes in the socket**.
@@ -286,7 +282,7 @@ This is the same wiring as before: SpiralLamp_clean V4, inputs on `INPUT_PULLUP`
   - Hole positions assume a standard Uno R3. **Hold your board on the template before drilling.**
 - **WAGO rails, 5 V and GND:** front-left of the Uno. The 1000 µF cap goes across them, striped leg to GND.
 - **MT3608** (about 36 × 17): beside the vents. Fix it with double-sided foam tape and set it to 12 V *before* connecting the covered switch.
-- **Vents:** 12 × Ø8 drilled holes beside the MT3608. With `BRIGHTNESS_CAP 50` (about 0.5–0.6 A on the 144-LED FCOB strip), almost all the heat is in the LEDs outside the box. The vents plus the feet's air gap are plenty.
+- **Vents:** 12 × Ø8 drilled holes beside the MT3608. With `BRIGHTNESS_CAP 50` (about 0.6 A on the listing's mixed-white figure, or about 1.9 A if all 160 LEDs are full white), almost all the heat is in the LEDs outside the box. The vents plus the feet's air gap are plenty.
 
 **Wire runs:**
 
@@ -330,11 +326,11 @@ The covered toggle's lamp gets **12 V from the MT3608**: + terminal to MT3608 OU
 
 ## 9. Open questions for you
 
-1. **144 or 160 LEDs?** The plan uses 144 (900 mm, no code change). Say if you'd rather have 160 and test the RAM.
+1. **LED count is settled at 160** (1000 mm). The stack margin on the Uno is under 400 B, so test every mode.
 2. **Which panel edge faces you?** I assumed the fader slot edge is at the low front. The window and holes are symmetric, so either way works.
 3. **USB-C breakout:** can you send the board's size and hole spacing? Then I'll give it screw holes instead of glue.
 4. **Your Uno's USB-B position:** the window is 20 × 18 around a standard R3 jack. Hold your board up to the template and check before cutting.
-5. **Coil look:** about 4.3 slim turns at the original's radius. A tighter pitch (about 28 mm) would give about 5 turns but a shorter coil.
+5. **Coil look:** 4.75 slim turns at the original's radius, 182 mm tall. A tighter pitch (about 28 mm) would add a turn and shorten the coil.
 6. **Wood finish colour.**
 
 ---

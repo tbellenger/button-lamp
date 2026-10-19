@@ -1,6 +1,6 @@
 # Spiral Lamp / Button Box
 
-Tom's Arduino spiral lamp: an Uno-compatible ATmega328P on a screw-terminal shield, driving a BTF WS2812B ECO strip (1 m, 144 LEDs) from a 5 V 2 A barrel supply. The panel has arcade buttons, a key switch, a mushroom stop switch, a toggle, and slide and rotary pots.
+Tom's Arduino spiral lamp: an Arduino Uno R3 (ATmega328P) on a screw-terminal shield, driving a BTF FCOB strip (5 mm, 160 LEDs/m, cut to the full metre = 160 LEDs) from a 5 V 3 A supply. The panel has arcade buttons, a key switch, a mushroom stop switch, a toggle, and slide and rotary pots.
 
 Upload the sketches in `sketches/`. `original-plans/` is the purchased set (STLs, four original `.ino` versions, and PDFs), kept for reference.
 
@@ -8,7 +8,7 @@ Upload the sketches in `sketches/`. `original-plans/` is the purchased set (STLs
 
 Hand-cut plywood base and printed spiral holder: [plywood/README.md](plywood/README.md). Full build plan: [plywood/PLAN.pdf](plywood/PLAN.pdf).
 
-The new strip is the BTF FCOB 160/m 5 mm strip, cut to 900 mm / 144 LEDs so `LED_COUNT` stays 144, in the 13 mm JARBIH silicone tube.
+The strip is the BTF FCOB 160/m 5 mm strip, left at **1000 mm / 160 LEDs** (it was cut a bit long for the old 900 mm / 144 LED plan), in the 13 mm JARBIH silicone tube. `LED_COUNT` is 160. The coil is sized for that metre: 1037 mm of tube, 4.75 turns.
 
 ## Quick start
 
@@ -36,7 +36,7 @@ Once the strip and both buttons work, upload `sketches/bench_test_v2/bench_test_
 
 ### 2. Full sketch
 
-When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLamp_clean.ino` and upload that. Same library. The lamp stays dark until the rocker on D7 is closed to GND. `BRIGHTNESS_CAP` is 50 so full white on 144 LEDs stays near 1.7 A on the 5 V 2 A supply.
+When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLamp_clean.ino` and upload that. Same library. The lamp stays dark until the rocker on D7 is closed to GND. `BRIGHTNESS_CAP` is 50 so full white on 160 LEDs stays near 1.9 A on the 5 V 3 A supply.
 
 ## Layout
 

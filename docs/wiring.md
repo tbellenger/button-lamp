@@ -5,20 +5,20 @@ Sketch: `bench_test/bench_test.ino`. Diagram: `wiring_diagram.png`.
 
 ## What you need
 - Arduino Uno or Nano (ATmega328P), USB cable
-- WS2812B / NeoPixel strip, GRB colour order. **Tom's strip: BTF WS2812B ECO, 1 m at 144/m = 144 LEDs** (the plans assume 60; both sketches are set to `LED_COUNT 144`)
+- WS2812B-compatible / NeoPixel strip, GRB colour order. **Tom's strip: BTF FCOB 5 mm, 160 LEDs/m, full metre = 160 LEDs** (the purchased plans assume 60; the sketches in `sketches/` are set to `LED_COUNT 160`)
 - 2 push buttons (4-pin tactile switches or the arcade buttons)
 - 1 resistor, 330 Ω (any 220–470 Ω works). 5-band blue resistors: orange-orange-black-black = 330 Ω
 - 1 electrolytic capacitor, 1000 µF, 6.3 V or higher (the kit's 16 V one is fine)
 - Jumper wires and a breadboard
-- **5 V 2 A wall adapter** with a barrel-jack-to-screw-terminal adapter, to power the strip (must say **5 V**; a 12 V adapter destroys the strip)
+- **5 V 3 A supply** with a barrel-jack-to-screw-terminal adapter, to power the strip (must say **5 V**; a 12 V adapter destroys the strip)
 
-## Pin-by-pin table (Tom's build: strip on the 5 V 2 A adapter, Arduino on USB)
+## Pin-by-pin table (Tom's build: strip on the 5 V 3 A supply, Arduino on USB)
 
 The strip's input end has **two** sets of wires: a loose **red/white power pigtail** and a **3-pin plug** (red / green / white).
 
 | From | To | Notes |
 |---|---|---|
-| Strip power pigtail **red** | barrel adapter screw terminal **+** | Strip power comes from the 5 V 2 A wall adapter. |
+| Strip power pigtail **red** | barrel adapter screw terminal **+** | Strip power comes from the 5 V 3 A supply. |
 | Strip power pigtail **white** | barrel adapter screw terminal **−** | |
 | 1000 µF cap | across adapter **+ / −**, at the screw terminal | Striped leg (−) to the white/− side. Backwards = it can pop. |
 | 3-pin plug **green** (DIN) | 330 Ω resistor → Arduino **D9** | Data line. Keep it short. |
@@ -38,7 +38,7 @@ To use different pins, change `PIN_LED`, `PIN_BTN1` and `PIN_BTN2` at the top of
 
 ## Step by step
 1. **Unplug USB and the wall adapter.** Wire with no power connected.
-2. Check the adapter label says **5 V** output (Tom's: 5 V 2 A).
+2. Check the adapter label says **5 V** output (Tom's: 5 V 3 A).
 3. Find the strip's **input end**: the printed arrows point *away* from it (pads say DIN/DI, not DOUT/DO).
 4. Pigtail red → adapter **+**, pigtail white → adapter **−**.
 5. 1000 µF cap across the adapter terminals: long leg to +, striped leg to −.
@@ -46,7 +46,7 @@ To use different pins, change `PIN_LED`, `PIN_BTN1` and `PIN_BTN2` at the top of
 7. 3-pin plug white → Arduino **GND**.
 8. 3-pin plug red → **not connected**. Tape the end.
 9. Buttons: COM → GND, NO → D4 (button 1) / D8 (button 2). NC unused.
-10. Install the **Adafruit NeoPixel** library (Arduino IDE → Library Manager). Open `bench_test/bench_test.ino` (folder name must match the `.ino`). `LED_COUNT` is already 144. Upload, then plug in the wall adapter.
+10. Install the **Adafruit NeoPixel** library (Arduino IDE → Library Manager). Open `bench_test/bench_test.ino` (folder name must match the `.ino`). `LED_COUNT` is already 160. Upload, then plug in the 5 V supply.
 11. Open **Serial Monitor at 115200 baud**.
 
 What you should see:
@@ -57,10 +57,10 @@ What you should see:
 
 ## Power notes (read these)
 - **Common ground is mandatory.** The Arduino, the strip and any supply must share GND. If they don't, the data signal has no reference, and you'll get nothing or random colours.
-- **Each LED can draw about 60 mA at full white, so 144 LEDs can draw about 8.6 A at brightness 255.** A USB port gives about 0.5 A, and the Arduino's 5V pin isn't made for more. That's why the strip runs from its own adapter and the 3-pin plug's red wire stays disconnected.
-- **Bench test on the 5 V 2 A adapter:** all four steps (5/10/20/40 of 255) are safe; full white at 40 is about 1.4 A. If you ever run the strip from USB instead, stay at 5 or 10.
-- **Full sketch:** `BRIGHTNESS_CAP` is **50**, so full white stays under about 1.7 A on the 2 A adapter. The original sketch starts at brightness 255 (rocker ON + toggle OFF = solid white), which browns out any small supply and *looks* like broken code.
-- To go brighter later, use a **5 V 4 A** (or bigger) supply and raise `BRIGHTNESS_CAP`. Don't use VIN for a 5 V supply (VIN needs 7–12 V). Only feed the Arduino's 5V pin from the supply when USB is unplugged.
+- **Each LED can draw about 60 mA at full white, so 160 LEDs can draw about 9.6 A at brightness 255.** A USB port gives about 0.5 A, and the Arduino's 5V pin isn't made for more. That's why the strip runs from its own supply and the 3-pin plug's red wire stays disconnected.
+- **Bench test on the 5 V 3 A supply:** all four steps (5/10/20/40 of 255) are safe; full white at 40 is about 1.5 A. If you ever run the strip from USB instead, stay at 5 or 10 (10 is about 0.4 A).
+- **Full sketch:** `BRIGHTNESS_CAP` is **50**, so full white stays near 1.9 A on the 3 A supply. The original sketch starts at brightness 255 (rocker ON + toggle OFF = solid white), which browns out any small supply and *looks* like broken code.
+- To go brighter later, raise `BRIGHTNESS_CAP` but keep it at or below **80** on this 5 V 3 A supply (80 is about 3.0 A of full white). A higher cap needs a bigger 5 V supply: brightness 255 is about 9.6 A. Don't use VIN for a 5 V supply (VIN needs 7–12 V). Only feed the Arduino's 5V pin from the supply when USB is unplugged.
 - The 330 Ω (220–470 Ω) data resistor prevents ringing and protects the first LED. The 1000 µF cap absorbs the switch-on surge.
 
 ## Troubleshooting checklist
@@ -97,4 +97,4 @@ What you should see:
 - [ ] In the original code, an **unconnected D11 (Chaos) counts as ON**, so Lava/bouncy-ball mode takes over and the buttons don't do what you expect. The clean sketch fixes this: Chaos is ON only when D11 is grounded.
 - [ ] If the fader/knob aren't wired yet, set `HAVE_FADER 0` / `HAVE_SPEED_KNOB 0`. Otherwise the floating A0/A1 inputs give random brightness/speed (often near 0 = "nothing lights").
 - [ ] Use the **Adafruit NeoPixel** library. FastLED is not used by these sketches.
-- [ ] RAM: with 144 LEDs the strip buffer (432 B) is allocated at runtime. The clean sketch keeps globals at 1236 B, so about 380 B remain for the stack. If you add features, keep "Global variables" under about 1250 B in the compile output, or the lamp will crash/reset at random.
+- [ ] RAM: Uno compile of `SpiralLamp_clean` reports **1293 B** of globals (63%). NeoPixel then mallocs **480 B** for 160 LEDs, leaving about **275 B** for the stack (2048 − 1293 − 480). That is under 400 B. Don't add per-LED arrays; the lamp can crash or reset if the stack runs into the LED buffer.

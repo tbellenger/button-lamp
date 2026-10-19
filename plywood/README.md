@@ -2,7 +2,7 @@
 
 A hand-cut 3 mm (1/8") plywood replacement for the printed Spiral Lamp enclosure (Alexjulness plans). It uses the original printed switch panel and a printed cage that holds a JARBIH 13 mm silicone neon tube.
 
-- **Strip:** BTF-LIGHTING FCOB WS2812B-compatible, 5 V, 160 LEDs/m, 5 mm wide. It's cut to **900 mm = 144 LEDs**, so `LED_COUNT` stays 144.
+- **Strip:** BTF-LIGHTING FCOB WS2812B-compatible, 5 V, 160 LEDs/m, 5 mm wide. Left at the full metre: **1000 mm = 160 LEDs** (80 cut segments). `LED_COUNT` is 160. It runs on the 5 V 3 A supply with `BRIGHTNESS_CAP` 50.
 - **Tube:** JARBIH "for 5MM", 13 mm OD, 6.5 mm slot (B0CKZ2WWJF).
 - **Box:** 250 × 210 × 120 mm with butt joints and 1/4" glue strips. The panel sits on the slope. The bottom is removable and doubles as the electronics tray. The back has a USB-C power inlet and a USB-B window for the Arduino.
 

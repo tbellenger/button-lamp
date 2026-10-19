@@ -2,7 +2,7 @@
 
 Sketch: `sketches/bench_test_v2/bench_test_v2.ino`. It uses the same pins as the full lamp (`SpiralLamp_clean.ino`), so whatever works here will work there.
 
-Start from the working v1 bench test: strip on D9 through the 330 Ω resistor, strip on the 5 V 2 A adapter, strip white tied to Arduino GND, buttons on D4 and D8.
+Start from the working v1 bench test: strip on D9 through the 330 Ω resistor, strip on the 5 V 3 A supply, strip white tied to Arduino GND, buttons on D4 and D8.
 
 **Rules for every step**
 - Unplug USB and the 5 V adapter before you move a wire.
@@ -32,7 +32,7 @@ Expected: boot wipe red → green → blue, then a rainbow at brightness 20. Ser
 | other outer leg | GND |
 | middle leg (wiper) | A0 |
 
-Move the slider off the top end once. `A0=` drops below 1000, `(not seen)` disappears, and the status changes to `bright=..(pot)`. The slider now sets brightness from 0 to 50 (the cap for the 2 A adapter). If it's brightest at the wrong end, swap the two outer legs. Once the slide pot is live, **D8 shifts the colour** instead of setting brightness.
+Move the slider off the top end once. `A0=` drops below 1000, `(not seen)` disappears, and the status changes to `bright=..(pot)`. The slider now sets brightness from 0 to 50 (the cap for 160 LEDs on the 5 V 3 A supply, about 1.9 A at full white). If it's brightest at the wrong end, swap the two outer legs. Once the slide pot is live, **D8 shifts the colour** instead of setting brightness.
 
 ## Step 2: rotary pot (speed / hue) on A1
 Wire it the same way: outer legs to 5V and GND, middle leg to **A1**. Turn it off the end once.
@@ -92,4 +92,4 @@ Priority, highest first: power OFF, then Chaos, then key (rainbow), then the D4 
 
 **Note for the full sketch:** `SpiralLamp_clean.ino` has `CHAOS_ACTIVE_HIGH 0`, which treats D11 grounded as Chaos ON. That suits a normally-open switch. With the mushroom on its **NC** terminals, set `CHAOS_ACTIVE_HIGH 1` there, or it will sit in Chaos whenever the mushroom is released.
 
-Compile check (arduino-cli, Uno): 11,946 B flash (37%), 330 B globals (16%). The 432 B strip buffer is allocated at runtime, leaving about 1.3 KB free.
+Compile check (arduino-cli, `arduino:avr:uno`): 12,048 B flash (37%), 330 B globals (16%). The 480 B strip buffer is allocated at runtime, leaving 1,238 B for the stack.
