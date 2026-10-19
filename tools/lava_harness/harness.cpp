@@ -1,6 +1,7 @@
-// Drives the real SpiralLamp_clean sketch on the host.
-// Build via tools/lava_harness/build.sh, which preprocess-injects Arduino
-// prototypes and then compiles this file against stub headers.
+// Drives a SpiralLamp sketch on the host. tools/lava_harness/build.sh
+// preprocess-injects Arduino prototypes and compiles this file against stub
+// headers. The default sketch is SpiralLamp_v2 (the fire trail). Pass "clean"
+// as build.sh's second argument to build SpiralLamp_clean instead.
 //
 // Args: A0 A1 frameMs seconds logFrames [ppmPath]
 // With logFrames=0 the per-frame trace is quiet. The run still prints SUMMARY

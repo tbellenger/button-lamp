@@ -1,5 +1,6 @@
-Lava fire-tail frames from tools/lava_harness, 16 ms/frame, light switch D7 ON,
-mushroom D11 pressed (after arming). A0=1023 (fader open), A1=512 (centre speed).
+Lava fire-tail frames from SpiralLamp_v2 via tools/lava_harness, 16 ms/frame,
+light switch D7 ON, mushroom D11 pressed (after arming). A0=1023 (fader open),
+A1=512 (centre speed). SpiralLamp_clean is unchanged and has no tail.
 
 col: * ball (palette red), W white-yellow, Y yellow, O orange, r red tail, . off.
      Read from the ball outward, the tail is W/Y then O then r.
