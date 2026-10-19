@@ -1,0 +1,48 @@
+Lava fire-tail frames from tools/lava_harness, 16 ms/frame, light switch D7 ON,
+mushroom D11 pressed (after arming). A0=1023 (fader open), A1=512 (centre speed).
+
+col: * ball (palette red), W white-yellow, Y yellow, O orange, r red tail, . off.
+     Read from the ball outward, the tail is W/Y then O then r.
+bri: brightest shown channel as a digit, 9 ≈ BRIGHTNESS_CAP 50.
+behind: lit LEDs opposite the direction of travel, outside the ball.
+ahead: lit LEDs in front of the ball. A one-sided tail stays at 0.
+Physics peak is pos/fix. Centre of 160 LEDs is 79.5. The apex row lights LEDs 79 and 80.
+visMaxLed0 can read 81 because the falling tail points past the ball, toward higher LEDs.
+
+# a0=1023 a1=512 frame_ms=16 seconds=12 sizeof_int=4
+# t_ms ticks pos0 vel0 led0 pos1 vel1 led1 peak0 peak1 interval_ms
+SUMMARY a0=1023 a1=512 frame_ms=16 seconds=12 frames=750 ticks=748 steps=2400 fix=410 centerFix=32595 interval_ms=10.000 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=255 visMaxLed0=81 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=78 visTravel1=81.000 tosses0=2 tosses1=2
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=open vel=229 pos=25896 led=63.161
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=open vel=256 pos=32640 led=79.610
+AFTER_FIRST bestLed0=69.951 bestLed1=66.490
+TRAIL phase=rise t_ms=352 vel=232 led=14.254 behind=11 ahead=0 maxCh=39 seq=WWYOOOOrrrr
+  leds 0..28
+  col ...rrrrOOOOYWW**.............
+  bri 00000111333555740000000000000
+TRAIL phase=rise_flicker t_ms=400 vel=227 led=17.046 behind=10 ahead=0 maxCh=39 seq=WYYOOOrrrr
+  leds 3..31
+  col ...rrrrOOOYYW***.............
+  bri 00000111344562720000000000000
+TRAIL phase=apex t_ms=2672 vel=0 led=79.610 behind=0 ahead=0 maxCh=39 seq=
+  leds 66..94
+  col .............**..............
+  bri 00000000000004400000000000000
+TRAIL phase=fall t_ms=4976 vel=-230 led=14.817 behind=11 ahead=0 maxCh=39 seq=WWYYOOOrrrr
+  leds 1..29
+  col .............**WWYYOOOrrrr...
+  bri 00000000000002756634311100000
+FLICKER_G 8@14 7@14 6@15 6@16 8@17 8@18 10@19 8@20
+TRAIL_PROOF rise_behind=11 rise_ahead=0 flicker_behind=10 apex_behind=0 apex_ahead=0 fall_behind=11 fall_ahead=0 rise_bri_digits=7 peakLed0=79.610 peakLed1=79.610
+
+Same run at the fast end of the speed knob (A1=1023, interval 1.265 ms). Both balls still peak at 79.610. The apex sample is the frame closest to zero velocity (vel=4); the tail is already gone.
+SUMMARY a0=1023 a1=1023 frame_ms=16 seconds=8 frames=500 ticks=498 steps=11952 fix=410 centerFix=32595 interval_ms=1.265 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=81 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=78 visTravel1=81.000 tosses0=12 tosses1=12
+TRAIL phase=rise t_ms=176 vel=232 led=14.254 behind=11 ahead=0 maxCh=39 seq=WWYYOOOrrrr
+TRAIL phase=apex t_ms=480 vel=4 led=79.595 behind=0 ahead=0 maxCh=39 seq=
+TRAIL phase=fall t_ms=768 vel=-212 led=24.541 behind=10 ahead=0 maxCh=39 seq=WWYOOOrrrr
+TRAIL_PROOF rise_behind=11 rise_ahead=0 flicker_behind=10 apex_behind=0 apex_ahead=0 fall_behind=10 fall_ahead=0 rise_bri_digits=7 peakLed0=79.610 peakLed1=79.610
+
+With the fader closed (A0=0, 8 s) the same toss still reaches pos 32640 (led 79.610). After the fader settles, the captured frames are black (maxCh=0). A few early frames are still dim (visMaxLed0=6) while the fader EMA is closing.

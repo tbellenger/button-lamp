@@ -38,13 +38,16 @@ Once the strip and both buttons work, upload `sketches/bench_test_v2/bench_test_
 
 When the strip and both buttons behave, open `sketches/SpiralLamp_clean/SpiralLamp_clean.ino` and upload that. Same library. The lamp stays dark until the rocker on D7 is closed to GND. `BRIGHTNESS_CAP` is 50 so full white on 160 LEDs stays near 1.9 A on the 5 V 3 A supply.
 
+Lava is the mushroom on D11 (Chaos), after that pin has been seen low once. Two balls bounce in from the ends; the strongest toss reaches the middle of the strip. Each ball leaves a fire tail opposite the way it is moving: white-yellow beside the ball, then orange, then red, and nothing at the top of the bounce. The tail is about a dozen LEDs at full speed and shrinks as the ball slows. It uses the same fader, colour calibration and brightness cap as the balls. Set `LAVA_FIRE_TRAIL` to 0 for plain balls. `tools/lava_harness/` builds that effect on the host and prints the peak of each toss plus a few ASCII frames of the tail.
+
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `sketches/bench_test/` | Breadboard check: strip, colour button, brightness button |
 | `sketches/bench_test_v2/` | Bench test v2: both pots and every panel switch, one at a time ([guide](docs/bench_test_v2.md)) |
-| `sketches/SpiralLamp_clean/` | Full lamp (cleaned Version 4) |
+| `sketches/SpiralLamp_clean/` | Full lamp (cleaned Version 4), including the lava fire tail |
+| `tools/lava_harness/` | Host build of the lava effect: bounce peaks and fire-trail frames |
 | `docs/wiring.md` | Authoritative wiring |
 | `docs/issues.md` | What was wrong in the purchased plans |
 | `docs/wiring_diagram_OUTDATED.png` | Old diagram. Strip is shown powered from the Arduino. Do not follow it. |
