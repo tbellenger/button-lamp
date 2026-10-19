@@ -10,8 +10,8 @@
    Wiring (see wiring.md / wiring_diagram.png for the full picture):
      - LED strip DIN  -> 330-470 ohm resistor -> PIN_LED (D9)
      - LED strip GND  -> Arduino GND (ALWAYS, even on USB power)
-     - LED strip +5V  -> Arduino 5V for this test ONLY (low brightness, <=60 LEDs)
-                         or an external 5 V supply (GND still tied to Arduino GND)
+     - LED strip +5V  -> the 5 V 3 A supply (GND still tied to Arduino GND).
+                         USB / Arduino 5V only if brightness stays at 5 or 10.
      - Button 1: one leg -> PIN_BTN1 (D4), the DIAGONALLY opposite leg -> GND
      - Button 2: one leg -> PIN_BTN2 (D8), the DIAGONALLY opposite leg -> GND
      No resistors on the buttons: the internal pull-ups are used, so a pin
@@ -25,16 +25,16 @@
 
 // ------------------------- EASY-TO-CHANGE SETTINGS -------------------------
 #define PIN_LED        9      // strip data (DIN). Plans use D9.
-#define LED_COUNT      144    // BTF WS2812B ECO 1 m @ 144/m = 144 LEDs
+#define LED_COUNT      160    // BTF FCOB 5 mm, 160/m, full metre = 160 LEDs
 #define LED_TYPE       (NEO_GRB + NEO_KHZ800)  // WS2812B = GRB. If red/green look
                                                // swapped, try NEO_RGB.
 #define PIN_BTN1       4      // "white" arcade button in the plans (D4)
 #define PIN_BTN2       8      // "red"   arcade button in the plans (D8)
 
 // Brightness steps cycled by button 2 (0-255). Keep them LOW on USB power:
-// 60 LEDs at full white can pull ~3.6 A, a USB port gives ~0.5 A.
-const uint8_t BRIGHT_STEPS[] = { 5, 10, 20, 40 };  // 144 LEDs: keep <=10 on USB power, 20+ needs the 5 V supply
-#define BOOT_BRIGHT_INDEX 1   // start at 10/255, safe on USB with 144 LEDs
+// 160 LEDs at full white can pull ~9.6 A; a USB port gives ~0.5 A.
+const uint8_t BRIGHT_STEPS[] = { 5, 10, 20, 40 };  // 160 LEDs: keep <=10 on USB, 20+ needs the 5 V 3 A supply
+#define BOOT_BRIGHT_INDEX 1   // start at 10/255 (~0.4 A), safe on USB with 160 LEDs
 
 #define DEBOUNCE_MS    25     // button must be stable this long to count
 #define SCAN_OTHER_PINS 1     // 1 = also report ANY other pin D2..D12 that changes

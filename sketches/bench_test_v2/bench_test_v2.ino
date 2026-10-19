@@ -40,8 +40,11 @@
 
 // ------------------------- EASY-TO-CHANGE SETTINGS -------------------------
 #define PIN_LED        9
-#define LED_COUNT      144
+#define LED_COUNT      160    // BTF FCOB 5 mm, 160/m, full metre
 #define LED_TYPE       (NEO_GRB + NEO_KHZ800)
+// Lengths that were 24 and 48 on the 144-LED strip (one sixth and one third).
+#define COMET_TAIL     (LED_COUNT / 6)   // 26 LEDs
+#define WAVE_PERIOD    (LED_COUNT / 3)   // 53 LEDs: three humps along the strip
 
 #define PIN_BTN1       4     // next pattern
 #define PIN_BTN2       8     // brightness preset / colour shift
@@ -65,7 +68,7 @@
 #define CHAOS_NC       1     // 1 = mushroom wired on its NC contact (pressed = HIGH)
                              // 0 = wired on an NO contact (pressed = LOW)
 
-#define BRIGHTNESS_CAP 50    // 144 LEDs on the 5 V 2 A adapter: full white ~1.7 A
+#define BRIGHTNESS_CAP 50    // 160 LEDs on the 5 V 3 A supply: full white ~1.9 A (60 mA/LED at 255)
 const uint8_t BRIGHT_PRESETS[] = { 5, 10, 20, 35, 50 };   // D8 steps (all <= cap)
 #define BOOT_PRESET    2     // start at 20/255
 
@@ -209,8 +212,9 @@ void render(uint32_t now) {
       case M_COMET: {
         int32_t head = t / 12; head %= LED_COUNT; if (head < 0) head += LED_COUNT;
         int16_t d = (int16_t)head - (int16_t)p; if (d < 0) d += LED_COUNT;
-        if (d >= 24) { strip.setPixelColor(i, 0); continue; }
-        c = strip.ColorHSV(hueShift + 6000); lvl = 255 - d * 10;
+        if (d >= (int16_t)COMET_TAIL) { strip.setPixelColor(i, 0); continue; }
+        c = strip.ColorHSV(hueShift + 6000);
+        lvl = (uint8_t)(255 - (uint16_t)d * 240 / COMET_TAIL);  // fades out over the tail
         break;
       }
       case M_BREATHE: {
@@ -225,8 +229,9 @@ void render(uint32_t now) {
         break;
       }
     }
-    if (waveOn()) {                              // travelling brightness wave, ~48 LEDs long
-      uint8_t s = strip.sine8((uint8_t)(p * 256 / 48 - t / 4));
+    if (waveOn()) {                              // travelling brightness wave, one third of the strip
+      int32_t phase = (int32_t)((uint32_t)p * 256UL / WAVE_PERIOD) - (t / 4);
+      uint8_t s = strip.sine8((uint8_t)phase);
       lvl = (uint16_t)lvl * (15 + (uint16_t)s * 240 / 255) / 255;
     }
     putScaled(i, c, lvl);

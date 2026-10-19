@@ -13,10 +13,13 @@
      - One shared Jumbo colour-cycle edge tracker (two separate `static bool prev`
        copies could miss / double the toggle edge).
      - Optional Serial debug of every switch change (115200 baud). Unused vars removed.
-     - RAM diet for 144 LEDs (Uno has 2 KB; NeoPixel mallocs LED_COUNT*3 = 432 B at runtime):
-       colour tables / names / secret pattern moved to flash (PROGMEM / F()), per-LED Jumbo
-       brightness computed on the fly, Wave per-LED mode packed to 2 bits, constants made const.
-       Globals 1728 -> 1237 B, leaving ~379 B for the stack after the strip buffer.
+     - RAM diet so 160 LEDs fit on an Uno (2 KB SRAM; NeoPixel mallocs LED_COUNT*3 = 480 B at runtime):
+       colour tables / names / secret pattern live in flash (PROGMEM / F()), per-LED Jumbo
+       brightness is computed on the fly, Wave per-LED mode is packed to 2 bits, constants are const.
+       The plans' style used 1728 B of globals; the diet brought a 144-LED build to 1237 B
+       (~379 B free after its 432 B strip buffer). This 160-LED build (arduino:avr:uno):
+       28950 B flash (89%), 1293 B globals. After the 480 B strip buffer, about 275 B
+       remain for the stack, which is under 400 B. Don't add per-LED arrays.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
        LED_COUNT (were hard-coded to LED 29/30 of a 60-LED strip).
 
@@ -45,13 +48,15 @@
 
 // ================== CONFIG (change these to match YOUR build) ==================
 #define PIN_LED         9     // strip DIN (through a 330-470 ohm resistor)
-#define LED_COUNT       144   // BTF WS2812B ECO 1 m @ 144/m
-#define LED_TYPE        (NEO_GRB + NEO_KHZ800)   // WS2812B. Try NEO_RGB if red/green swapped.
+#define LED_COUNT       160   // BTF FCOB 5 mm, 160/m, full metre: 80 x 12.5 mm segments
+#define LED_TYPE        (NEO_GRB + NEO_KHZ800)   // WS2812B-compatible. Try NEO_RGB if red/green swapped.
 
 // Overall brightness ceiling 0-255 applied on top of everything (fader included).
-//   ~40 : strip powered from USB / Arduino 5V (bench)
-//   255 : only with a 5 V / 4 A+ supply feeding the strip directly
-#define BRIGHTNESS_CAP  50    // 144 LEDs on a 5 V 2 A plug: full white ~1.7 A. Raise only with a bigger supply.
+// 160 LEDs at 60 mA full white is about 9.6 A, so:
+//   ~10 : strip powered from USB / Arduino 5V (about 0.4 A)
+//   80  : about the limit of a 5 V 3 A supply
+//   255 : only with a 5 V / 10 A supply feeding the strip directly
+#define BRIGHTNESS_CAP  50    // 160 LEDs on a 5 V 3 A supply: full white ~1.9 A.
 
 // Set to 0 if that pot is NOT wired yet; the fixed value below is used instead.
 #define HAVE_FADER       1

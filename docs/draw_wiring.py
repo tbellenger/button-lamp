@@ -82,7 +82,7 @@ T(cx-3.5, 80.5, "1000 µF, 6.3 V+ electrolytic\nlong leg (+) to +5V,\nstriped le
 # power supply
 ax.add_patch(FancyBboxPatch((143, 36), 15, 24, boxstyle="round,pad=0.5", fc="#fff3c4", ec=BLK, lw=2))
 T(150.5, 57.5, "5 V\nPOWER\nSUPPLY", ha="center", va="top", fontsize=11.5, fontweight="bold")
-T(150.5, 45.5, "2 A+ bench\n3–4 A full\nbrightness", ha="center", va="center", fontsize=8.8)
+T(150.5, 45.5, "5 V 3 A\n160 LEDs\ncap 50 ~1.9 A", ha="center", va="center", fontsize=8.8)
 T(146, 61.3, "+5V", color=RED, fontsize=10, fontweight="bold")
 T(146, 32.2, "GND", fontsize=10, fontweight="bold")
 wire([(150.5, 60.5), (150.5, Y5)], RED); dot(150.5, Y5, RED)
@@ -108,9 +108,9 @@ notes = ("Checklist\n"
          "1. Supply GND, strip GND and Arduino GND all joined.\n"
          "2. Resistor in the data wire, near the strip's DIN pad.\n"
          "3. Capacitor across +5V/GND at the strip, polarity right.\n"
-         "4. USB-only test: OK ONLY with bench_test's low\n"
-         "    brightness (MAX_MILLIAMPS = 400). Then strip +5V\n"
-         "    may go to Arduino 5V and the supply is skipped.\n"
+         "4. USB-only test: brightness 5 or 10 only\n"
+         "    (160 LEDs, ~0.4 A at 10). Otherwise the strip\n"
+         "    +5V stays on the 5 V 3 A supply.\n"
          "5. Change pins at the top of bench_test.ino.")
 ax.text(91, 11, notes, fontsize=9.6, va="bottom", ha="left",
         bbox=dict(boxstyle="round,pad=0.6", fc="#f4f6ff", ec=BLU, lw=1.5), zorder=6)

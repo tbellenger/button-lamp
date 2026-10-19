@@ -9,7 +9,7 @@ def default_params(tube_od=13.0):
         tube_od=tube_od,          # tube outside diameter (JARBIH 5mm-strip version = 13; 10mm-strip version = 16)
         R=34.3,                   # helix centre-line radius (original spiral: 34.29)
         pitch=34.0,               # rise per turn
-        strip_len=900.0,          # LED strip length in the coil: BTF FCOB 160/m cut to 144 LEDs = 72 x 12.5 mm segments = 900 mm
+        strip_len=1000.0,         # LED strip length in the coil: BTF FCOB 160/m left at 160 LEDs = 80 x 12.5 mm segments = 1000 mm
         tube_extra=37.0,          # extra tube: 12 in the socket + 15 wire/solder joint + 10 top slack
         clip_w=10.0,              # clip length along the helix
         clip_wall=2.2,
