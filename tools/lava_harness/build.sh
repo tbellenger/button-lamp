@@ -1,7 +1,8 @@
 #!/bin/bash
 # Compile a SpiralLamp sketch as a host program with Arduino/NeoPixel stubs.
-# Usage: build.sh [out_dir] [v2|clean|path/to/sketch.ino]
+# Usage: build.sh [out_dir] [v2|clean|r4|path/to/sketch.ino]
 # Default sketch is sketches/SpiralLamp_v2/SpiralLamp_v2.ino (the fire trail).
+# "r4" builds sketches/SpiralLamp_R4_v0 (Uno R4 port, same lava code).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-/tmp/lava-harness}"
@@ -9,6 +10,7 @@ WHICH="${2:-v2}"
 case "$WHICH" in
   v2) SKETCH="$ROOT/sketches/SpiralLamp_v2/SpiralLamp_v2.ino" ;;
   clean) SKETCH="$ROOT/sketches/SpiralLamp_clean/SpiralLamp_clean.ino" ;;
+  r4) SKETCH="$ROOT/sketches/SpiralLamp_R4_v0/SpiralLamp_R4_v0.ino" ;;
   *) SKETCH="$WHICH" ;;
 esac
 if [[ "$SKETCH" != /* ]]; then

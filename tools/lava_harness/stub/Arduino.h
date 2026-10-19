@@ -65,6 +65,7 @@ inline void harnessSetDigital(uint8_t pin, int v) {
   g_pinLevel[pin & 31] = (uint8_t)(v ? HIGH : LOW);
 }
 inline int analogRead(uint8_t pin) { return g_analog[pin & 31]; }
+inline void analogReadResolution(int) {}
 inline void harnessSetAnalog(uint8_t pin, int v) { g_analog[pin & 31] = v; }
 
 inline uint32_t millis() { return g_millis; }
