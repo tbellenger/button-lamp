@@ -1,0 +1,402 @@
+Lava host harness, 60s, 16 ms/frame, light switch D7 ON, mushroom D11 pressed (after arming).
+fix=410. Centre of 160 LEDs is 79.5. Physics peak is pos/fix. visMaxLed0 is the highest lit pixel nearer the bottom ball; visTravel1 is how far the top ball's lit pixels come down from LED 159.
+Before the fix, A1=512 locked ball 0 on led 60.373 after the opening toss. These numbers are after the per-bounce span advance.
+
+SUMMARY a0=0 a1=0 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=3124 fix=410 centerFix=32595 interval_ms=38.447 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=255 visMaxLed0=1 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=-1 visTravel1=-1.000 tosses0=3 tosses1=3
+AFTER_FIRST bestLed0=69.951 bestLed1=79.610
+SUMMARY a0=0 a1=1023 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=89952 fix=410 centerFix=32595 interval_ms=1.265 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=50 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=-1 visTravel1=-1.000 tosses0=95 tosses1=95
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=0 a1=256 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=7648 fix=410 centerFix=32595 interval_ms=15.691 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=3 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=-1 visTravel1=-1.000 tosses0=8 tosses1=8
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=0 a1=512 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=12000 fix=410 centerFix=32595 interval_ms=10.000 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=6 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=-1 visTravel1=-1.000 tosses0=12 tosses1=12
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=0 a1=768 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=52764 fix=410 centerFix=32595 interval_ms=2.274 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=28 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=-1 visTravel1=-1.000 tosses0=55 tosses1=55
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=1023 a1=0 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=3124 fix=410 centerFix=32595 interval_ms=38.447 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=255 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=3 tosses1=3
+AFTER_FIRST bestLed0=69.951 bestLed1=79.610
+SUMMARY a0=1023 a1=1023 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=89952 fix=410 centerFix=32595 interval_ms=1.265 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=95 tosses1=95
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=1023 a1=256 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=7648 fix=410 centerFix=32595 interval_ms=15.691 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=8 tosses1=8
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=1023 a1=512 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=12000 fix=410 centerFix=32595 interval_ms=10.000 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=12 tosses1=12
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=1023 a1=768 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=52764 fix=410 centerFix=32595 interval_ms=2.274 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=55 tosses1=55
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=512 a1=0 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=3124 fix=410 centerFix=32595 interval_ms=38.447 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=255 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=3 tosses1=3
+AFTER_FIRST bestLed0=69.951 bestLed1=79.610
+SUMMARY a0=512 a1=1023 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=89952 fix=410 centerFix=32595 interval_ms=1.265 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=95 tosses1=95
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=512 a1=256 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=7648 fix=410 centerFix=32595 interval_ms=15.691 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=8 tosses1=8
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=512 a1=512 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=12000 fix=410 centerFix=32595 interval_ms=10.000 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=12 tosses1=12
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+SUMMARY a0=512 a1=768 frame_ms=16 seconds=60 frames=3750 ticks=3748 steps=52764 fix=410 centerFix=32595 interval_ms=2.274 chaos=1 rocker=1 armed=1 peakPos0=32640 peakLed0=79.610 peakVel0=256 visMaxLed0=80 peakPos1=32640 peakLed1=79.610 peakVel1=256 visMinLed1=79 visTravel1=80.000 tosses0=55 tosses1=55
+AFTER_FIRST bestLed0=79.610 bestLed1=79.610
+
+# per-toss peaks at full brightness (A0=1023); other fader settings repeat the same velocities
+# A1=0
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=2 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=open vel=223 pos=18648 led=45.483
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=2 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=open vel=240 pos=23324 led=56.888
+
+# A1=256
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=2 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=3 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=4 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=5 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=6 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=7 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=open vel=223 pos=2175 led=5.305
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=2 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=3 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=4 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=5 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=6 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=7 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=open vel=240 pos=7565 led=18.451
+
+# A1=512
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=2 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=3 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=4 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=5 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=6 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=7 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=8 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=9 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=10 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=11 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=open vel=229 pos=26106 led=63.673
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=2 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=3 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=4 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=5 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=6 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=7 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=8 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=9 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=10 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=11 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=open vel=256 pos=32640 led=79.610
+
+# A1=768
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=2 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=3 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=4 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=5 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=6 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=7 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=8 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=9 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=10 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=11 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=12 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=13 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=14 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=15 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=16 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=17 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=18 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=19 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=20 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=21 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=22 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=23 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=24 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=25 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=26 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=27 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=28 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=29 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=30 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=31 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=32 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=33 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=34 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=35 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=36 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=37 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=38 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=39 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=40 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=41 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=42 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=43 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=44 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=45 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=46 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=47 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=48 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=49 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=50 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=51 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=52 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=53 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=54 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=open vel=256 pos=32640 led=79.610
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=2 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=3 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=4 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=5 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=6 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=7 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=8 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=9 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=10 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=11 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=12 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=13 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=14 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=15 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=16 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=17 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=18 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=19 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=20 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=21 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=22 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=23 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=24 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=25 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=26 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=27 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=28 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=29 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=30 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=31 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=32 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=33 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=34 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=35 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=36 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=37 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=38 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=39 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=40 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=41 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=42 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=43 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=44 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=45 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=46 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=47 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=48 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=49 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=50 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=51 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=52 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=53 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=54 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=open vel=223 pos=24753 led=60.373
+
+# A1=1023
+TOSS ball=0 n=0 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=1 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=2 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=3 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=4 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=5 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=6 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=7 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=8 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=9 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=10 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=11 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=12 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=13 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=14 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=15 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=16 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=17 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=18 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=19 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=20 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=21 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=22 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=23 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=24 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=25 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=26 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=27 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=28 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=29 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=30 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=31 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=32 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=33 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=34 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=35 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=36 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=37 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=38 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=39 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=40 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=41 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=42 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=43 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=44 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=45 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=46 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=47 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=48 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=49 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=50 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=51 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=52 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=53 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=54 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=55 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=56 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=57 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=58 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=59 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=60 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=61 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=62 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=63 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=64 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=65 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=66 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=67 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=68 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=69 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=70 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=71 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=72 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=73 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=74 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=75 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=76 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=77 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=78 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=79 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=80 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=81 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=82 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=83 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=84 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=85 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=86 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=87 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=88 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=89 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=90 vel=256 pos=32640 led=79.610
+TOSS ball=0 n=91 vel=240 pos=28680 led=69.951
+TOSS ball=0 n=92 vel=229 pos=26106 led=63.673
+TOSS ball=0 n=93 vel=223 pos=24753 led=60.373
+TOSS ball=0 n=94 vel=234 pos=27261 led=66.490
+TOSS ball=0 n=open vel=256 pos=13530 led=33.000
+TOSS ball=1 n=0 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=1 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=2 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=3 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=4 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=5 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=6 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=7 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=8 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=9 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=10 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=11 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=12 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=13 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=14 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=15 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=16 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=17 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=18 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=19 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=20 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=21 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=22 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=23 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=24 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=25 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=26 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=27 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=28 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=29 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=30 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=31 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=32 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=33 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=34 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=35 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=36 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=37 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=38 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=39 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=40 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=41 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=42 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=43 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=44 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=45 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=46 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=47 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=48 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=49 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=50 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=51 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=52 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=53 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=54 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=55 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=56 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=57 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=58 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=59 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=60 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=61 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=62 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=63 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=64 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=65 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=66 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=67 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=68 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=69 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=70 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=71 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=72 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=73 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=74 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=75 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=76 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=77 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=78 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=79 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=80 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=81 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=82 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=83 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=84 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=85 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=86 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=87 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=88 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=89 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=90 vel=223 pos=24753 led=60.373
+TOSS ball=1 n=91 vel=234 pos=27261 led=66.490
+TOSS ball=1 n=92 vel=256 pos=32640 led=79.610
+TOSS ball=1 n=93 vel=240 pos=28680 led=69.951
+TOSS ball=1 n=94 vel=229 pos=26106 led=63.673
+TOSS ball=1 n=open vel=223 pos=11550 led=28.171
+
