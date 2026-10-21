@@ -1,16 +1,17 @@
 #!/bin/bash
 # Compile a SpiralLamp sketch as a host program with Arduino/NeoPixel stubs.
 # Usage: build.sh [out_dir] [v2|clean|r4|path/to/sketch.ino]
-# Default sketch is sketches/SpiralLamp_v2/SpiralLamp_v2.ino (the fire trail).
-# "r4" builds sketches/SpiralLamp_R4_v0 (Uno R4 port, same lava code).
+# Default sketch is sketches/SpiralLamp_R3_FireTrail/SpiralLamp_R3_FireTrail.ino (the fire trail).
+# Short aliases: v2 / firetrail, clean / base, r4 / r4-firetrail.
+# "r4" builds sketches/SpiralLamp_R4_FireTrail (Uno R4 port, same lava code).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-/tmp/lava-harness}"
 WHICH="${2:-v2}"
 case "$WHICH" in
-  v2) SKETCH="$ROOT/sketches/SpiralLamp_v2/SpiralLamp_v2.ino" ;;
-  clean) SKETCH="$ROOT/sketches/SpiralLamp_clean/SpiralLamp_clean.ino" ;;
-  r4) SKETCH="$ROOT/sketches/SpiralLamp_R4_v0/SpiralLamp_R4_v0.ino" ;;
+  v2|firetrail|SpiralLamp_R3_FireTrail) SKETCH="$ROOT/sketches/SpiralLamp_R3_FireTrail/SpiralLamp_R3_FireTrail.ino" ;;
+  clean|base|SpiralLamp_R3_Base) SKETCH="$ROOT/sketches/SpiralLamp_R3_Base/SpiralLamp_R3_Base.ino" ;;
+  r4|r4-firetrail|SpiralLamp_R4_FireTrail) SKETCH="$ROOT/sketches/SpiralLamp_R4_FireTrail/SpiralLamp_R4_FireTrail.ino" ;;
   *) SKETCH="$WHICH" ;;
 esac
 if [[ "$SKETCH" != /* ]]; then

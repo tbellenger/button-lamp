@@ -92,9 +92,9 @@ What you should see:
 **Arduino resets, USB disconnects, or LEDs dim when turned up**
 - [ ] Too much current from USB. Lower the brightness, or use an external 5 V supply with a common ground.
 
-**Moving to the full sketch (`SpiralLamp_clean`)**
+**Moving to the full sketch (`SpiralLamp_R3_Base`)**
 - [ ] The lamp stays dark until the **rocker on D7 is ON** (closed to GND). For a quick test, jumper D7 to GND.
-- [ ] In the original code, an **unconnected D11 (Chaos) counts as ON**, so Lava/bouncy-ball mode takes over and the buttons don't do what you expect. The clean sketch fixes this: Chaos is ON only when D11 is grounded.
+- [ ] In the original code, an **unconnected D11 (Chaos) counts as ON**, so Lava/bouncy-ball mode takes over and the buttons don't do what you expect. `SpiralLamp_R3_Base` arms Chaos only after D11 has been seen LOW, and the mushroom's NC contacts are pressed = HIGH (`CHAOS_ACTIVE_HIGH 1`).
 - [ ] If the fader/knob aren't wired yet, set `HAVE_FADER 0` / `HAVE_SPEED_KNOB 0`. Otherwise the floating A0/A1 inputs give random brightness/speed (often near 0 = "nothing lights").
 - [ ] Use the **Adafruit NeoPixel** library. FastLED is not used by these sketches.
-- [ ] RAM: Uno compile of `SpiralLamp_clean` reports **1293 B** of globals (63%). NeoPixel then mallocs **480 B** for 160 LEDs, leaving about **275 B** for the stack (2048 − 1293 − 480). That is under 400 B. Don't add per-LED arrays; the lamp can crash or reset if the stack runs into the LED buffer.
+- [ ] RAM: Uno compile of `SpiralLamp_R3_Base` reports **1293 B** of globals (63%). NeoPixel then mallocs **480 B** for 160 LEDs, leaving about **275 B** for the stack (2048 − 1293 − 480). That is under 400 B. Don't add per-LED arrays; the lamp can crash or reset if the stack runs into the LED buffer.

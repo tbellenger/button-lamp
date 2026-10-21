@@ -1,5 +1,5 @@
 #pragma once
-// Host stand-in for the Arduino core. Enough for SpiralLamp_clean.ino.
+// Host stand-in for the Arduino core. Enough for SpiralLamp_R3_Base.ino.
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
