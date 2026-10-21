@@ -4,9 +4,17 @@ Tom's Arduino spiral lamp: an Arduino Uno R3 (ATmega328P) on a screw-terminal sh
 
 Upload the sketches in `sketches/`. `original-plans/` is the purchased set (STLs, four original `.ino` versions, and PDFs), kept for reference.
 
-## Plywood enclosure + tube spiral
+## Enclosure + tube spiral
 
-Hand-cut plywood base and printed spiral holder: [plywood/README.md](plywood/README.md). Full build plan: [plywood/PLAN.pdf](plywood/PLAN.pdf).
+There are three casings, all the same 250 × 210 × 120 mm wedge:
+
+| Casing | Where | Controls mount in |
+|---|---|---|
+| Hand-cut 3 mm ply, butt joints + glue strips | [plywood/README.md](plywood/README.md), plan [plywood/PLAN.pdf](plywood/PLAN.pdf) | the printed Switch Panel, screwed on the slope |
+| **Laser-cut 1/8" birch, finger joints (SendCutSend)** | [plywood/fingerjoint/README.md](plywood/fingerjoint/README.md) | **v2:** straight in the birch control slope (no printed panel). The set as ordered (S7872337) and a birch retrofit faceplate are there too |
+| **Bent sheet metal, 5052 Al .063" or mild steel .059" (SendCutSend)** | [sheetmetal/README.md](sheetmetal/README.md) | straight in the hood's sloped face |
+
+The two laser-cut versions share one control layout (`plywood/fingerjoint/src/controls.py`, measured from the printed Switch Panel). Both have a 12.2 mm DC jack hole on the back for a 5 V 10 A supply, and keep the USB window for the Uno R4 WiFi's USB-C. The spiral holder is unchanged for now.
 
 The strip is the BTF FCOB 160/m 5 mm strip, left at **1000 mm / 160 LEDs** (it was cut a bit long for the old 900 mm / 144 LED plan), in the 13 mm JARBIH silicone tube. `LED_COUNT` is 160. The coil is sized for that metre: 1037 mm of tube, 4.75 turns.
 
@@ -77,3 +85,5 @@ The R4 is a 5 V board and its digital pins are 5 V tolerant, so the strip data l
 | `docs/draw_wiring.py` | Script that drew that diagram |
 | `original-plans/` | Purchased originals, kept for reference |
 | `plywood/` | Plywood enclosure and tube spiral ([readme](plywood/README.md), [plan](plywood/PLAN.pdf)) |
+| `plywood/fingerjoint/` | Laser-cut finger-joint birch casing: v2 control slope, as-ordered set, retrofit faceplate ([readme](plywood/fingerjoint/README.md)) |
+| `sheetmetal/` | Bent sheet-metal casing, aluminium and steel DXFs ([readme](sheetmetal/README.md)) |

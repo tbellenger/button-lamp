@@ -1,0 +1,8 @@
+part,qty,w_mm,h_mm,cut_len_mm,pierces,file,notes
+side,2,250.0,120.0,736,1,dxf/fj125_side_qty2_mm.dxf,"wedge profile; 8 open notches (2 back, 2 top, 3 slope, 1 front) with dogbones; make 2 (flip one). Unchanged from the ordered set"
+back,1,210.0,120.0,831,4,dxf/fj125_back_v2_qty1_mm.dxf,"v2: as ordered + 12.2 mm DC jack hole (y 72, z 24). 2 tabs each end, 3 tabs into the top; USB-C slot 10 x 4.5 + USB window 20 x 18 (drawn from INSIDE)"
+top,1,122.0,210.0,776,6,dxf/fj125_top_qty1_mm.dxf,unchanged: 4 x 3.4 cage holes on 76.2 sq + 10 mm wire hole (drawn from ABOVE)
+control_slope,1,152.89,210.0,1534,12,dxf/fj125_control_slope_qty1_mm.dxf,v2 CONTROL SLOPE: replaces the printed Switch Panel. 3 tabs each end; 11 control cut-outs in the printed layout (drawn from OUTSIDE)
+front,1,210.0,28.0,477,1,dxf/fj125_front_qty1_mm.dxf,unchanged: 1 tab (12 mm) each end; 28 mm tall
+bottom,1,242.65,202.65,1296,23,dxf/fj125_bottom_qty1_mm.dxf,"unchanged removable tray: 6 x 3.4 screw holes, 4 x 3.2 Uno holes, 12 x 8 vents"
+faceplate,1,184.15,133.35,1450,16,dxf/retrofit/fj125_faceplate_qty1_mm.dxf,"OPTIONAL retrofit only: 1/8"" birch copy of the printed panel for the slope already ordered (S7872337); 4 x M3 on 171.45 x 120.65"

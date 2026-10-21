@@ -1,0 +1,472 @@
+{
+ "al063": {
+  "material": "5052-H32 aluminium .063in (1.60 mm)",
+  "rules": {
+   "hood_min_cut_web_edge_mm": [
+    2.2,
+    4.89,
+    4.3,
+    true
+   ],
+   "cheek_right_min_cut_web_edge_mm": [
+    2.5,
+    60.83,
+    3.75,
+    true
+   ],
+   "cheek_left_min_cut_web_edge_mm": [
+    2.5,
+    60.83,
+    3.75,
+    true
+   ],
+   "bottom_min_cut_web_edge_mm": [
+    3.2,
+    4.0,
+    4.3,
+    true
+   ],
+   "hood_min_leg_mm": [
+    28.0,
+    7.7,
+    true
+   ],
+   "cheek_tab_flange_mm": [
+    11.0,
+    7.7,
+    true
+   ],
+   "max_bend_angle": [
+    90.0,
+    130,
+    true
+   ],
+   "hood_flat_in": [
+    16.67,
+    8.27,
+    true
+   ],
+   "bend_length_in": [
+    8.27,
+    16,
+    true
+   ],
+   "cheek_bend_relief_depth_mm": [
+    3.0,
+    "SCS relief depth",
+    true
+   ],
+   "u_channel_base_vs_flange": [
+    "back 120 / front 28 face each other across a 250 mm kinked base",
+    "base >= 2x flange",
+    "borderline: SCS 3D checker decides; fallback = split hood at the top/slope bend"
+   ],
+   "powder_coat_hole": [
+    "every part has holes >= 0.063\"",
+    true
+   ]
+  },
+  "features": [
+   {
+    "name": "usb_c_slot (old 5 V inlet)",
+    "face": 0,
+    "to_bend_mm": 102.49,
+    "ok": true
+   },
+   {
+    "name": "usb_window (Uno R4 USB-C)",
+    "face": 0,
+    "to_bend_mm": 95.04,
+    "ok": true
+   },
+   {
+    "name": "dc_jack",
+    "face": 0,
+    "to_bend_mm": 88.64,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 19.94,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 19.94,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 20.88,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 20.88,
+    "ok": true
+   },
+   {
+    "name": "wire_hole",
+    "face": 1,
+    "to_bend_mm": 22.5,
+    "ok": true
+   },
+   {
+    "name": "arcade_left",
+    "face": 2,
+    "to_bend_mm": 51.57,
+    "ok": true
+   },
+   {
+    "name": "arcade_top",
+    "face": 2,
+    "to_bend_mm": 26.41,
+    "ok": true
+   },
+   {
+    "name": "key",
+    "face": 2,
+    "to_bend_mm": 26.08,
+    "ok": true
+   },
+   {
+    "name": "mushroom",
+    "face": 2,
+    "to_bend_mm": 29.25,
+    "ok": true
+   },
+   {
+    "name": "toggle_left",
+    "face": 2,
+    "to_bend_mm": 59.38,
+    "ok": true
+   },
+   {
+    "name": "rocker",
+    "face": 2,
+    "to_bend_mm": 46.66,
+    "ok": true
+   },
+   {
+    "name": "toggle_right",
+    "face": 2,
+    "to_bend_mm": 59.38,
+    "ok": true
+   },
+   {
+    "name": "knob",
+    "face": 2,
+    "to_bend_mm": 60.88,
+    "ok": true
+   },
+   {
+    "name": "fader_slot",
+    "face": 2,
+    "to_bend_mm": 23.96,
+    "ok": true
+   },
+   {
+    "name": "fader_screw_l",
+    "face": 2,
+    "to_bend_mm": 23.36,
+    "ok": true
+   },
+   {
+    "name": "fader_screw_r",
+    "face": 2,
+    "to_bend_mm": 23.36,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f0",
+    "face": 0,
+    "to_bend_mm": 52.04,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f0",
+    "face": 0,
+    "to_bend_mm": 52.04,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f1",
+    "face": 1,
+    "to_bend_mm": 57.04,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f1",
+    "face": 1,
+    "to_bend_mm": 57.04,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f2",
+    "face": 2,
+    "to_bend_mm": 76.58,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f2",
+    "face": 2,
+    "to_bend_mm": 76.58,
+    "ok": true
+   }
+  ],
+  "FAILS": [],
+  "hood": {
+   "flat_len": 423.4,
+   "bend_u": [
+    118.74,
+    239.16,
+    395.94
+   ],
+   "angles": [
+    90.0,
+    35.71,
+    54.29
+   ]
+  }
+ },
+ "ms059": {
+  "material": "mild steel (CRS) .059in (1.50 mm)",
+  "rules": {
+   "hood_min_cut_web_edge_mm": [
+    2.2,
+    4.89,
+    4.3,
+    true
+   ],
+   "cheek_right_min_cut_web_edge_mm": [
+    2.5,
+    60.83,
+    3.75,
+    true
+   ],
+   "cheek_left_min_cut_web_edge_mm": [
+    2.5,
+    60.83,
+    3.75,
+    true
+   ],
+   "bottom_min_cut_web_edge_mm": [
+    3.2,
+    4.0,
+    4.3,
+    true
+   ],
+   "hood_min_leg_mm": [
+    28.0,
+    7.85,
+    true
+   ],
+   "cheek_tab_flange_mm": [
+    11.0,
+    7.85,
+    true
+   ],
+   "max_bend_angle": [
+    90.0,
+    130,
+    true
+   ],
+   "hood_flat_in": [
+    16.66,
+    8.27,
+    true
+   ],
+   "bend_length_in": [
+    8.27,
+    16,
+    true
+   ],
+   "cheek_bend_relief_depth_mm": [
+    3.61,
+    "SCS relief depth",
+    true
+   ],
+   "u_channel_base_vs_flange": [
+    "back 120 / front 28 face each other across a 250 mm kinked base",
+    "base >= 2x flange",
+    "borderline: SCS 3D checker decides; fallback = split hood at the top/slope bend"
+   ],
+   "powder_coat_hole": [
+    "every part has holes >= 0.063\"",
+    true
+   ]
+  },
+  "features": [
+   {
+    "name": "usb_c_slot (old 5 V inlet)",
+    "face": 0,
+    "to_bend_mm": 102.38,
+    "ok": true
+   },
+   {
+    "name": "usb_window (Uno R4 USB-C)",
+    "face": 0,
+    "to_bend_mm": 95.03,
+    "ok": true
+   },
+   {
+    "name": "dc_jack",
+    "face": 0,
+    "to_bend_mm": 88.53,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 19.83,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 19.83,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 20.89,
+    "ok": true
+   },
+   {
+    "name": "cage_M3",
+    "face": 1,
+    "to_bend_mm": 20.89,
+    "ok": true
+   },
+   {
+    "name": "wire_hole",
+    "face": 1,
+    "to_bend_mm": 22.39,
+    "ok": true
+   },
+   {
+    "name": "arcade_left",
+    "face": 2,
+    "to_bend_mm": 51.56,
+    "ok": true
+   },
+   {
+    "name": "arcade_top",
+    "face": 2,
+    "to_bend_mm": 26.41,
+    "ok": true
+   },
+   {
+    "name": "key",
+    "face": 2,
+    "to_bend_mm": 26.08,
+    "ok": true
+   },
+   {
+    "name": "mushroom",
+    "face": 2,
+    "to_bend_mm": 29.25,
+    "ok": true
+   },
+   {
+    "name": "toggle_left",
+    "face": 2,
+    "to_bend_mm": 59.37,
+    "ok": true
+   },
+   {
+    "name": "rocker",
+    "face": 2,
+    "to_bend_mm": 46.65,
+    "ok": true
+   },
+   {
+    "name": "toggle_right",
+    "face": 2,
+    "to_bend_mm": 59.37,
+    "ok": true
+   },
+   {
+    "name": "knob",
+    "face": 2,
+    "to_bend_mm": 60.87,
+    "ok": true
+   },
+   {
+    "name": "fader_slot",
+    "face": 2,
+    "to_bend_mm": 23.95,
+    "ok": true
+   },
+   {
+    "name": "fader_screw_l",
+    "face": 2,
+    "to_bend_mm": 23.35,
+    "ok": true
+   },
+   {
+    "name": "fader_screw_r",
+    "face": 2,
+    "to_bend_mm": 23.35,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f0",
+    "face": 0,
+    "to_bend_mm": 51.93,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f0",
+    "face": 0,
+    "to_bend_mm": 51.93,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f1",
+    "face": 1,
+    "to_bend_mm": 56.93,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f1",
+    "face": 1,
+    "to_bend_mm": 56.93,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f2",
+    "face": 2,
+    "to_bend_mm": 76.57,
+    "ok": true
+   },
+   {
+    "name": "cheek_screw_f2",
+    "face": 2,
+    "to_bend_mm": 76.57,
+    "ok": true
+   }
+  ],
+  "FAILS": [],
+  "hood": {
+   "flat_len": 423.17,
+   "bend_u": [
+    118.63,
+    238.94,
+    395.72
+   ],
+   "angles": [
+    90.0,
+    35.71,
+    54.29
+   ]
+  }
+ },
+ "dxf_readback_ok": true,
+ "die_half_keepout_mm": 8.001
+}
