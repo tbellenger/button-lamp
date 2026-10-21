@@ -270,7 +270,7 @@ Volumes, if every part were printed solid: cage 127 cm³, backer 34 cm³, each b
 
 ## 7. Wiring and space, tied to your pin map
 
-This is the same wiring as before: SpiralLamp_clean V4, inputs on `INPUT_PULLUP`, switches between the pin and GND. The box only changes where things sit.
+This is the same wiring as before: SpiralLamp_R3_Base V4, inputs on `INPUT_PULLUP`, switches between the pin and GND. The box only changes where things sit.
 
 ![tray](render/bottom_tray_layout.png)
 

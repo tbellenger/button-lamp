@@ -1,7 +1,8 @@
 // Drives a SpiralLamp sketch on the host. tools/lava_harness/build.sh
 // preprocess-injects Arduino prototypes and compiles this file against stub
-// headers. The default sketch is SpiralLamp_v2 (the fire trail). Pass "clean"
-// as build.sh's second argument to build SpiralLamp_clean instead.
+// headers. The default sketch is SpiralLamp_R3_FireTrail (the fire trail).
+// Pass "clean" or "base" as build.sh's second argument to build
+// SpiralLamp_R3_Base instead. "r4" builds SpiralLamp_R4_FireTrail.
 //
 // Args: A0 A1 frameMs seconds logFrames [ppmPath]
 // With logFrames=0 the per-frame trace is quiet. The run still prints SUMMARY

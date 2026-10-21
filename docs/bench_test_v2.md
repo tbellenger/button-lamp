@@ -1,6 +1,6 @@
 # Bench test v2: add the panel parts one at a time
 
-Sketch: `sketches/bench_test_v2/bench_test_v2.ino`. It uses the same pins as the full lamp (`SpiralLamp_clean.ino`), so whatever works here will work there.
+Sketch: `sketches/bench_test_v2/bench_test_v2.ino`. It uses the same pins as the full lamp (`SpiralLamp_R3_Base.ino`), so whatever works here will work there.
 
 Start from the working v1 bench test: strip on D9 through the 330 Ω resistor, strip on the 5 V 3 A supply, strip white tied to Arduino GND, buttons on D4 and D8.
 
@@ -90,6 +90,6 @@ Each microswitch has **COM**, **NO** and **NC**. COM goes to GND, NO goes to the
 
 Priority, highest first: power OFF, then Chaos, then key (rainbow), then the D4 pattern. Wave and the modifier apply on top of the pattern.
 
-**Note for the full sketch:** `SpiralLamp_clean.ino` has `CHAOS_ACTIVE_HIGH 0`, which treats D11 grounded as Chaos ON. That suits a normally-open switch. With the mushroom on its **NC** terminals, set `CHAOS_ACTIVE_HIGH 1` there, or it will sit in Chaos whenever the mushroom is released.
+**Note for the full sketch:** `SpiralLamp_R3_Base.ino` has `CHAOS_ACTIVE_HIGH 1` (mushroom NC: pressed = pin HIGH). Chaos arms only after D11 has been seen LOW, so an unwired pin does not force Lava.
 
 Compile check (arduino-cli, `arduino:avr:uno`): 12,048 B flash (37%), 330 B globals (16%). The 480 B strip buffer is allocated at runtime, leaving 1,238 B for the stack.

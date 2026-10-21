@@ -2,7 +2,7 @@
    Spiral Lamp -- BENCH TEST v2 (every switch, both pots)
    ---------------------------------------------------------------------
    Adds the panel parts to the working v1 bench test ONE AT A TIME.
-   Same pins as the full lamp sketch (SpiralLamp_clean.ino):
+   Same pins as the full lamp sketch (SpiralLamp_R3_Base.ino):
 
      D9   LED strip DIN (through the 330 ohm resistor)
      D4   arcade button 1 ("white")  -> next pattern

@@ -7,3 +7,7 @@ build/
 *.elf
 *.bin
 *.eep
+
+# Home WiFi credentials for SpiralLamp_R4_FireTrail_WiFi_MIDI.
+# Copy secrets.example.h to secrets.h. Do not commit real credentials.
+sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/secrets.h

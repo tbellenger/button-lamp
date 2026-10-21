@@ -1,7 +1,7 @@
-/* ========= Spiral Lamp R4 v0 — Uno R4 WiFi port of SpiralLamp_v2 =========
+/* ========= SpiralLamp_R4_FireTrail — Uno R4 WiFi port of SpiralLamp_R3_FireTrail =========
    Straight port. Same pins, 160 LEDs, modes, switches, fader, speed knob,
    lava bounce and fire trail. No WiFi, LED matrix, or RTC yet.
-   SpiralLamp_clean and SpiralLamp_v2 stay the Uno R3 sketches; do not edit
+   SpiralLamp_R3_Base and SpiralLamp_R3_FireTrail stay the Uno R3 sketches; do not edit
    them for this board.
 
    What changed from v2:
@@ -30,9 +30,9 @@
        24712 B remain for locals. NeoPixel still mallocs 480 B for 160 LEDs.
    The same file still builds for arduino:avr:uno:
        30150 B flash (93%), 1293 B globals. After the 480 B strip buffer, about
-       275 B of stack, the same fit as SpiralLamp_v2.
+       275 B of stack, the same fit as SpiralLamp_R3_FireTrail.
 
-   Copy of SpiralLamp_v2, which is SpiralLamp_clean plus the lava fire tail.
+   Copy of SpiralLamp_R3_FireTrail, which is SpiralLamp_R3_Base plus the lava fire tail.
    Set LAVA_FIRE_TRAIL to 0 for the plain balls.
 
    Based on "Version 4 – Exact YouTube Version" from the Alexjulness plans. Fixes (see issues.md):

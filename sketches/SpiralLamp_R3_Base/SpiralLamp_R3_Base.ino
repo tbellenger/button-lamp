@@ -1,8 +1,5 @@
-/* ========= Spiral Lamp v2 — fire tail on the lava balls =========
-   Copy of SpiralLamp_clean with one addition: a fire tail behind each lava ball.
-   SpiralLamp_clean is the known-good lamp and is left unchanged. Upload this
-   sketch to try the tail. Set LAVA_FIRE_TRAIL to 0 for the plain balls.
-
+/* ========= SpiralLamp_R3_Base — known-good lamp (was SpiralLamp_clean) =========
+   Main + Dots + Wave + Rainbow + Classic + Secret + Lava (Chaos).
    Based on "Version 4 – Exact YouTube Version" from the Alexjulness plans. Fixes (see issues.md):
      - All pins / LED count / colour order / brightness cap in ONE config block below.
      - Chaos mushroom is on its NC contacts (D11, INPUT_PULLUP): pressed = pin HIGH
@@ -22,9 +19,8 @@
        brightness is computed on the fly, Wave per-LED mode is packed to 2 bits, constants are const.
        The plans' style used 1728 B of globals; the diet brought a 144-LED build to 1237 B
        (~379 B free after its 432 B strip buffer). This 160-LED build (arduino:avr:uno):
-       30152 B flash (93%), 1293 B globals. After the 480 B strip buffer, about 275 B
+       29422 B flash (91%), 1293 B globals. After the 480 B strip buffer, about 275 B
        remain for the stack, which is under 400 B. Don't add per-LED arrays.
-       The lava fire tail did not add globals; it only grew flash.
      - Centre-out fades (Rainbow on/off, Jumbo<->Rainbow handover) now centre on the middle of
        LED_COUNT (were hard-coded to LED 29/30 of a 60-LED strip).
      - Lava launch speed is derived from LED_COUNT. The old fixed kick (246) peaked about
@@ -32,10 +28,6 @@
        Toss height varies; the strongest toss reaches the strip centre. The span advances
        once per bounce (from the speed that just landed). Sampling millis() instead locked
        the centre speed-knob setting onto the short toss after the opening bounce.
-       Each ball also leaves a fire tail opposite its travel (LAVA_FIRE_TRAIL): orange
-       beside the ball, then yellow, then white at the far end. Brightness fades
-       toward the tip so it does not stop hard. Gone at the apex. Length follows
-       |velocity| (about 12 LEDs at launch speed 256). No per-LED trail state.
        Jumbo, Rainbow, Wave, Secret, Classic and Dots already run across every LED.
 
    PRIORITIES (top -> bottom):
@@ -83,12 +75,6 @@
 // Unwired D11 also reads HIGH, so Chaos stays off until the pin has been seen LOW once.
 // Set to 0 only for a normally-open switch to GND (pressed = LOW); that wiring is always armed.
 #define CHAOS_ACTIVE_HIGH 1
-
-// Fire tail behind each lava ball, opposite its travel. Fixed orange→yellow→white,
-// dimming toward the tip (the ball itself still uses the lava palette). 0 restores
-// the plain balls.
-// Computed from pos/vel each frame: no per-LED trail buffer.
-#define LAVA_FIRE_TRAIL 1
 
 #define DEBOUNCE_MS     20    // a switch must be stable this long to count
 #define DEBUG_SERIAL    1     // 1 = print every switch change to Serial @115200 (0 frees ~200 B RAM)
@@ -1276,60 +1262,9 @@ namespace Lava {
     }
   }
 
-#if LAVA_FIRE_TRAIL
-  // Tail length at |vel|==256, in LEDs. Apex (|vel| near 0) draws nothing.
-  // 12/256 = 3/64, so the scale multiply stays in int32.
-  static const int16_t TAIL_LEDS_NUM = 3;
-  static const int16_t TAIL_LEDS_DEN = 64;
-
-  // Brightness wobble 200..255 from the LED index and the clock. No stored state.
-  static inline uint8_t flameGain(uint16_t led, uint8_t ball){
-    uint16_t x = (uint16_t)(led * 73u);
-    x = (uint16_t)(x + (uint16_t)ball * 19u);
-    uint16_t clk = (uint16_t)(millis() >> 4); // ~16 ms, slow enough to read as flame
-    x = (uint16_t)(x + clk * 47u);
-    x ^= (uint16_t)(x << 5);
-    x ^= (uint16_t)(x >> 7);
-    x ^= (uint16_t)(x << 3);
-    return (uint8_t)(200u + (x & 55u));
-  }
-  // t = 0 beside the ball (orange), then yellow, then white. The last stretch
-  // fades that white out so the tip does not end on a hard edge.
-  static inline void fireAt(uint8_t t, uint8_t &cr, uint8_t &cg, uint8_t &cb){
-    if (t < 80){
-      cr = 255;
-      cg = (uint8_t)(40u + (uint16_t)50u * t / 80u); // 40..89, orange
-      cb = 0;
-    } else if (t < 150){
-      uint8_t u = (uint8_t)(t - 80);
-      cr = 255;
-      cg = (uint8_t)(90u + (uint16_t)165u * u / 70u); // 90..255, into yellow
-      cb = 0;
-    } else if (t < 210){
-      uint8_t u = (uint8_t)(t - 150);
-      cr = 255;
-      cg = 255;
-      cb = (uint8_t)((uint16_t)255u * u / 60u); // yellow → white
-    } else {
-      uint8_t u = (uint8_t)(t - 210);
-      uint8_t s = (uint8_t)(255u - (uint16_t)255u * u / 45u);
-      cr = s;
-      cg = s;
-      cb = s;
-    }
-  }
-  static inline void addClamp(uint8_t &dst, uint8_t add){
-    uint16_t s = (uint16_t)dst + add;
-    dst = (s > 255u) ? 255 : (uint8_t)s;
-  }
-#endif
-
   static inline void render(){
     for (uint16_t i=0;i<LED_COUNT;i++){
       uint8_t r=0,g=0,b=0;
-#if LAVA_FIRE_TRAIL
-      uint8_t tr=0, tg=0, tb=0;
-#endif
       int32_t ledFix = (int32_t)i * (int32_t)FIX_SCALE;
 
       for (uint8_t bi=0; bi<2; ++bi){
@@ -1350,63 +1285,23 @@ namespace Lava {
         if (squashTimer[bi] > 0){ radFix = (RADIUS_FIX * SQUASH_SCALE_NUM) / SQUASH_SCALE_DEN; }
 
         int32_t distFix = centerFix - ledFix; if (distFix < 0) distFix = -distFix;
-        uint8_t onBall = 0;
         if (distFix <= radFix){
           int32_t span  = radFix - distFix;
           uint8_t level = (uint8_t)((span * MAX_BRIGHTNESS) / radFix);
           if (level > MAX_BRIGHTNESS) level = MAX_BRIGHTNESS;
-          if (level > 0){
-            uint8_t pr = (uint8_t)(((uint16_t)col[0] * level) / MAX_BRIGHTNESS);
-            uint8_t pg = (uint8_t)(((uint16_t)col[1] * level) / MAX_BRIGHTNESS);
-            uint8_t pb = (uint8_t)(((uint16_t)col[2] * level) / MAX_BRIGHTNESS);
-            // max blend so two blobs can overlap nicely; the ball replaces any trail
-            r = (pr > r) ? pr : r;
-            g = (pg > g) ? pg : g;
-            b = (pb > b) ? pb : b;
-            onBall = 1;
-          }
+          if (level == 0) continue;
+
+          uint8_t pr = (uint8_t)(((uint16_t)col[0] * level) / MAX_BRIGHTNESS);
+          uint8_t pg = (uint8_t)(((uint16_t)col[1] * level) / MAX_BRIGHTNESS);
+          uint8_t pb = (uint8_t)(((uint16_t)col[2] * level) / MAX_BRIGHTNESS);
+
+          // max blend so two blobs can overlap nicely
+          r = (pr > r) ? pr : r;
+          g = (pg > g) ? pg : g;
+          b = (pb > b) ? pb : b;
         }
-#if LAVA_FIRE_TRAIL
-        // Strip direction: bottom pos grows toward higher LEDs; top pos grows the other way.
-        if (!onBall && blob.vel != 0){
-          int8_t stripDir = (blob.vel > 0) ? (int8_t)1 : (int8_t)-1;
-          if (bi != 0) stripDir = (int8_t)(-stripDir);
-          int16_t spd = blob.vel;
-          if (spd < 0) spd = (int16_t)(-spd);
-          int32_t tailFix = ((int32_t)spd * (int32_t)FIX_SCALE * TAIL_LEDS_NUM) / TAIL_LEDS_DEN;
-          // Ball light ends near 3/4 of the radius. The tail starts there.
-          int32_t edge = (radFix * 3) / 4;
-          int32_t behind = (int32_t)stripDir * (centerFix - ledFix);
-          if (tailFix >= (int32_t)FIX_SCALE / 2 && behind > edge){
-            int32_t along = behind - edge;
-            if (along <= tailFix){
-              // Same 0..MAX_BRIGHTNESS steps as the ball. The last quarter would
-              // otherwise quantize to 0 and clip the white fade, so the tip stays
-              // at 1 until fireAt() itself reaches black.
-              uint8_t level = (uint8_t)(((tailFix - along) * MAX_BRIGHTNESS) / tailFix);
-              if (level > MAX_BRIGHTNESS) level = MAX_BRIGHTNESS;
-              if (level < 1) level = 1;
-              uint8_t t = (uint8_t)((along * 255) / tailFix);
-              uint8_t fr, fg, fb;
-              fireAt(t, fr, fg, fb);
-              uint8_t gain = flameGain(i, bi);
-              uint8_t pr = (uint8_t)(((uint16_t)fr * level) / MAX_BRIGHTNESS);
-              uint8_t pg = (uint8_t)(((uint16_t)fg * level) / MAX_BRIGHTNESS);
-              uint8_t pb = (uint8_t)(((uint16_t)fb * level) / MAX_BRIGHTNESS);
-              pr = (uint8_t)((uint16_t)pr * gain / 255u);
-              pg = (uint8_t)((uint16_t)pg * gain / 255u);
-              pb = (uint8_t)((uint16_t)pb * gain / 255u);
-              addClamp(tr, pr); addClamp(tg, pg); addClamp(tb, pb);
-            }
-          }
-        }
-#endif
       }
 
-#if LAVA_FIRE_TRAIL
-      // Ball colour wins on its own pixels. Overlapping trails already added into tr/tg/tb.
-      if (!(r | g | b)) { r = tr; g = tg; b = tb; }
-#endif
       // Remember framebuffer so Wave preroll can blend from Lava's last frame
       setPixelCalibratedRemember(i, r, g, b);
     }
