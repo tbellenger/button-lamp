@@ -1,0 +1,1170 @@
+{
+ "params": {
+  "T": 3.175,
+  "CLR": 0.3,
+  "CLR_D": 0.15,
+  "DOG_R": 1.1,
+  "MIN_FEAT": 2.032,
+  "MIN_PART": 25.4,
+  "S0": 2.01,
+  "S1": 154.9
+ },
+ "dxf": {
+  "side": {
+   "file": "dxf/as_ordered_S7872337/fj125_side_qty2_mm.dxf",
+   "entities": 1,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    250.0,
+    120.0
+   ],
+   "min_outer_dim": 120.0,
+   "cutouts": 0,
+   "area_mm2": 23494.5,
+   "ok": true
+  },
+  "back": {
+   "file": "dxf/as_ordered_S7872337/fj125_back_qty1_mm.dxf",
+   "entities": 3,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    210.0,
+    120.0
+   ],
+   "min_outer_dim": 120.0,
+   "cutouts": 2,
+   "area_mm2": 23914.1,
+   "ok": true
+  },
+  "top": {
+   "file": "dxf/as_ordered_S7872337/fj125_top_qty1_mm.dxf",
+   "entities": 6,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    122.0,
+    210.0
+   ],
+   "min_outer_dim": 122.0,
+   "cutouts": 5,
+   "area_mm2": 24721.2,
+   "ok": true
+  },
+  "slope": {
+   "file": "dxf/as_ordered_S7872337/fj125_slope_qty1_mm.dxf",
+   "entities": 6,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    152.89,
+    210.0
+   ],
+   "min_outer_dim": 152.89,
+   "cutouts": 5,
+   "area_mm2": 9771.9,
+   "ok": true
+  },
+  "front": {
+   "file": "dxf/as_ordered_S7872337/fj125_front_qty1_mm.dxf",
+   "entities": 1,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    210.0,
+    28.0
+   ],
+   "min_outer_dim": 28.0,
+   "cutouts": 0,
+   "area_mm2": 5770.8,
+   "ok": true
+  },
+  "bottom": {
+   "file": "dxf/as_ordered_S7872337/fj125_bottom_qty1_mm.dxf",
+   "entities": 23,
+   "types": [
+    "LWPOLYLINE"
+   ],
+   "layers": [
+    "0"
+   ],
+   "all_closed": true,
+   "simple": true,
+   "nested_ok": true,
+   "valid": true,
+   "bbox_mm": [
+    242.65,
+    202.65
+   ],
+   "min_outer_dim": 202.65,
+   "cutouts": 22,
+   "area_mm2": 48484.3,
+   "ok": true
+  }
+ },
+ "min_feature": {
+  "side": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 99,
+   "ok": true
+  },
+  "back": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 7.19,
+   "ok": true
+  },
+  "top": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 3.4,
+   "ok": true
+  },
+  "slope": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 3.4,
+   "ok": true
+  },
+  "front": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 99,
+   "ok": true
+  },
+  "bottom": {
+   "thin_webs": 0,
+   "narrow_cuts": 0,
+   "worst_web_area": 0,
+   "smallest_hole_dia": 3.2,
+   "ok": true
+  }
+ },
+ "solids": {
+  "side_L": {
+   "volume_cm3": 74.59,
+   "status": "Error.NoError"
+  },
+  "side_R": {
+   "volume_cm3": 74.59,
+   "status": "Error.NoError"
+  },
+  "back": {
+   "volume_cm3": 75.93,
+   "status": "Error.NoError"
+  },
+  "top": {
+   "volume_cm3": 78.49,
+   "status": "Error.NoError"
+  },
+  "slope": {
+   "volume_cm3": 31.03,
+   "status": "Error.NoError"
+  },
+  "front": {
+   "volume_cm3": 18.32,
+   "status": "Error.NoError"
+  },
+  "bottom": {
+   "volume_cm3": 153.94,
+   "status": "Error.NoError"
+  },
+  "block0": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  },
+  "block1": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  },
+  "block2": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  },
+  "block3": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  },
+  "block4": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  },
+  "block5": {
+   "volume_cm3": 7.2,
+   "status": "Error.NoError"
+  }
+ },
+ "interference_pairs": [],
+ "near_pairs_gap_mm": {
+  "side_L|back": 0.15,
+  "side_L|top": 0.15,
+  "side_L|slope": 0.15,
+  "side_L|front": 0.15,
+  "side_L|bottom": 0.5,
+  "side_L|block0": 0.0,
+  "side_L|block2": 0.0,
+  "side_L|block4": 0.0,
+  "side_R|back": 0.15,
+  "side_R|top": 0.15,
+  "side_R|slope": 0.15,
+  "side_R|front": 0.15,
+  "side_R|bottom": 0.5,
+  "side_R|block1": 0.0,
+  "side_R|block3": 0.0,
+  "side_R|block5": 0.0,
+  "back|top": 0.15,
+  "back|bottom": 0.5,
+  "back|block0": 0.0,
+  "back|block1": 0.0,
+  "top|slope": 0.157,
+  "slope|front": 0.154,
+  "front|bottom": 0.5,
+  "front|block2": 0.0,
+  "front|block3": 0.0,
+  "bottom|block0": 0.0,
+  "bottom|block1": 0.0,
+  "bottom|block2": 0.0,
+  "bottom|block3": 0.0,
+  "bottom|block4": 0.0,
+  "bottom|block5": 0.0
+ },
+ "clearance_violations": {},
+ "assembly_bbox": [
+  0.0,
+  0.0,
+  0.0,
+  250.0,
+  210.0,
+  120.0
+ ],
+ "assembly_size": [
+  250.0,
+  210.0,
+  120.0
+ ],
+ "joints": [
+  {
+   "src": "back",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "back",
+   "area": 56.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "back",
+   "area": 100.6,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "back",
+   "area": 69.4,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "back",
+   "area": 56.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "back",
+   "area": 100.6,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "back",
+   "area": 69.4,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "top",
+   "area": 70.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "top",
+   "area": 113.3,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "top",
+   "area": 63.0,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "top",
+   "area": 70.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "top",
+   "area": 113.3,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "top",
+   "area": 63.0,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_L",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "slope",
+   "area": 67.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "slope",
+   "area": 75.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "slope",
+   "area": 75.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "slope",
+   "area": 72.1,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "slope",
+   "dst": "side_R",
+   "area": 76.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 24.0,
+   "slot_len": 24.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "slope",
+   "area": 67.7,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "slope",
+   "area": 75.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "slope",
+   "area": 75.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "slope",
+   "area": 72.1,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "front",
+   "dst": "side_L",
+   "area": 38.1,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 12.0,
+   "slot_len": 12.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "front",
+   "area": 24.9,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_L",
+   "dst": "front",
+   "area": 32.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "front",
+   "dst": "side_R",
+   "area": 38.1,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 12.0,
+   "slot_len": 12.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "front",
+   "area": 24.9,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "side_R",
+   "dst": "front",
+   "area": 32.2,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": false,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "top",
+   "area": 88.9,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 28.0,
+   "slot_len": 28.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "top",
+   "area": 88.9,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 28.0,
+   "slot_len": 28.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "back",
+   "dst": "top",
+   "area": 88.9,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "tab_len": 28.0,
+   "slot_len": 28.3,
+   "tab_depth": 3.175,
+   "slot_depth": 3.325,
+   "len_clear": 0.3,
+   "depth_clear": 0.15,
+   "kind": "tab->slot",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "back",
+   "area": 71.5,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "back",
+   "area": 116.5,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "back",
+   "area": 116.5,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  },
+  {
+   "src": "top",
+   "dst": "back",
+   "area": 71.5,
+   "overlap_mm2": 0.0,
+   "gap_to_material": 0.15,
+   "within_outline": true,
+   "kind": "finger->gap",
+   "ok": true
+  }
+ ],
+ "orphan_slots": [],
+ "tab_count": 19,
+ "skin": {
+  "back (u=y, v=z)": {
+   "coverage_pct": 98.19,
+   "openings_ge3mm": [
+    {
+     "u0": 158.1,
+     "v0": 7.3,
+     "w": 20.0,
+     "h": 18.0,
+     "area": 360.0
+    },
+    {
+     "u0": 35.0,
+     "v0": 11.8,
+     "w": 10.0,
+     "h": 4.5,
+     "area": 40.6
+    }
+   ]
+  },
+  "top (u=x, v=y)": {
+   "coverage_pct": 99.35,
+   "openings_ge3mm": [
+    {
+     "u0": 23.8,
+     "v0": 88.3,
+     "w": 10.0,
+     "h": 10.0,
+     "area": 78.5
+    },
+    {
+     "u0": 97.4,
+     "v0": 65.2,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 97.4,
+     "v0": 141.4,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 21.2,
+     "v0": 65.2,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 21.2,
+     "v0": 141.4,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    }
+   ]
+  },
+  "front (u=y, v=z)": {
+   "coverage_pct": 99.84,
+   "openings_ge3mm": []
+  },
+  "bottom (u=x, v=y)": {
+   "coverage_pct": 97.83,
+   "openings_ge3mm": [
+    {
+     "u0": 3.2,
+     "v0": 3.2,
+     "w": 243.7,
+     "h": 203.7,
+     "area": 446.3
+    },
+    {
+     "u0": 185.0,
+     "v0": 48.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 185.0,
+     "v0": 60.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 185.0,
+     "v0": 36.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 185.0,
+     "v0": 24.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 173.0,
+     "v0": 48.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 173.0,
+     "v0": 60.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 173.0,
+     "v0": 36.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 173.0,
+     "v0": 24.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 161.0,
+     "v0": 48.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 161.0,
+     "v0": 36.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 161.0,
+     "v0": 60.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 161.0,
+     "v0": 24.0,
+     "w": 8.0,
+     "h": 8.0,
+     "area": 50.2
+    },
+    {
+     "u0": 235.1,
+     "v0": 11.5,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 235.1,
+     "v0": 195.1,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 123.3,
+     "v0": 11.5,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 123.3,
+     "v0": 195.1,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 11.5,
+     "v0": 11.5,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 11.5,
+     "v0": 195.1,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 75.0,
+     "v0": 164.0,
+     "w": 3.2,
+     "h": 3.2,
+     "area": 8.0
+    },
+    {
+     "u0": 75.0,
+     "v0": 136.0,
+     "w": 3.2,
+     "h": 3.2,
+     "area": 8.0
+    },
+    {
+     "u0": 24.2,
+     "v0": 179.2,
+     "w": 3.2,
+     "h": 3.2,
+     "area": 8.0
+    },
+    {
+     "u0": 22.9,
+     "v0": 130.9,
+     "w": 3.2,
+     "h": 3.2,
+     "area": 8.0
+    }
+   ]
+  },
+  "slope (u=s, v=y)": {
+   "coverage_pct": 31.79,
+   "openings_ge3mm": [
+    {
+     "u0": 17.1,
+     "v0": 16.9,
+     "w": 125.4,
+     "h": 176.2,
+     "area": 21752.5
+    },
+    {
+     "u0": 154.9,
+     "v0": 3.2,
+     "w": 2.0,
+     "h": 203.7,
+     "area": 414.8
+    },
+    {
+     "u0": 0.4,
+     "v0": 3.2,
+     "w": 1.7,
+     "h": 203.7,
+     "area": 336.1
+    },
+    {
+     "u0": 138.4,
+     "v0": 17.6,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 138.4,
+     "v0": 189.0,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 17.8,
+     "v0": 17.6,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    },
+    {
+     "u0": 17.8,
+     "v0": 189.0,
+     "w": 3.4,
+     "h": 3.4,
+     "area": 9.1
+    }
+   ]
+  },
+  "side_L (u=x, v=z)": {
+   "coverage_pct": 99.81,
+   "openings_ge3mm": []
+  }
+ },
+ "FAILS": []
+}

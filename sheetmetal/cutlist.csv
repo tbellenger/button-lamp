@@ -1,0 +1,9 @@
+set,material,part,qty,flat_w_mm,flat_h_mm,cut_len_mm,pierces,bends,file,dxf_ok
+sm_al063,5052-H32 aluminium .063in (1.60 mm),hood,1,423.4,210.0,2321,26,3,dxf/sm_al063_hood_qty1_mm.dxf,True
+sm_al063,5052-H32 aluminium .063in (1.60 mm),cheek_right,1,255.3,135.3,821,6,4,dxf/sm_al063_cheek_right_qty1_mm.dxf,True
+sm_al063,5052-H32 aluminium .063in (1.60 mm),cheek_left,1,255.3,135.3,821,6,4,dxf/sm_al063_cheek_left_qty1_mm.dxf,True
+sm_al063,5052-H32 aluminium .063in (1.60 mm),bottom,1,250.0,210.0,1304,21,0,dxf/sm_al063_bottom_qty1_mm.dxf,True
+sm_ms059,mild steel (CRS) .059in (1.50 mm),hood,1,423.2,210.0,2320,26,3,dxf/sm_ms059_hood_qty1_mm.dxf,True
+sm_ms059,mild steel (CRS) .059in (1.50 mm),cheek_right,1,255.3,135.0,830,6,4,dxf/sm_ms059_cheek_right_qty1_mm.dxf,True
+sm_ms059,mild steel (CRS) .059in (1.50 mm),cheek_left,1,255.3,135.0,830,6,4,dxf/sm_ms059_cheek_left_qty1_mm.dxf,True
+sm_ms059,mild steel (CRS) .059in (1.50 mm),bottom,1,250.0,210.0,1304,21,0,dxf/sm_ms059_bottom_qty1_mm.dxf,True
