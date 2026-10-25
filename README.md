@@ -1,6 +1,6 @@
 # Spiral Lamp / Button Box
 
-Tom's Arduino spiral lamp: an Arduino Uno R3 (ATmega328P) on a screw-terminal shield, driving a BTF FCOB strip (5 mm, 160 LEDs/m, cut to the full metre = 160 LEDs) from a 5 V 3 A supply. The panel has arcade buttons, a key switch, a mushroom stop switch, a toggle, and slide and rotary pots. `sketches/SpiralLamp_R4_FireTrail/` is the same lamp for an Uno R4 WiFi and a 5 V 2 A supply (section 3). `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` adds the web page and AppleMIDI (section 4). Sketch names are `SpiralLamp_<Board>_<FeatureTags>` (see Sketches).
+Tom's Arduino spiral lamp: an Arduino Uno R3 (ATmega328P) on a screw-terminal shield, driving a BTF FCOB strip (5 mm, 160 LEDs/m, cut to the full metre = 160 LEDs) from a 5 V 3 A supply. The panel has arcade buttons, a key switch, a mushroom stop switch, a toggle, and slide and rotary pots. `sketches/SpiralLamp_R4_FireTrail/` is the same lamp for an Uno R4 WiFi and a 5 V 2 A supply (section 3). `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` adds the web page and AppleMIDI (section 4). `sketches/MatrixLamp_R4_Wifi/` is the onboard 12×8 matrix only, with nothing wired to the board (section 5). Sketch names are `SpiralLamp_<Board>_<FeatureTags>` (see Sketches).
 
 Upload the sketches in `sketches/`. `original-plans/` is the purchased set (STLs, four original `.ino` versions, and PDFs), kept for reference.
 
@@ -125,9 +125,80 @@ Core 1.6.0, NeoPixel 1.15.5, AppleMIDI 3.5.0, MIDI Library 5.0.2:
 
 NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1024 B receive FIFO on the heap. The two AppleMIDI UDP sockets are inside the session object (counted in the globals above). Joining WiFi does not block the frame loop (`WiFi.setTimeout(0)`, status polled). One HTTP client; accepts are paced at 30 ms; each loop does one short read or one short write. A wedged coprocessor is capped at 800 ms per modem command after the radio has started.
 
+### 5. Onboard matrix lamp
+
+`sketches/MatrixLamp_R4_Wifi/` drives only the Uno R4 WiFi's built-in 12×8 red LED matrix. Nothing is wired to the board: no strip, no buttons, no pots. Copy `secrets.example.h` to `secrets.h` in that folder and put the network in `WIFI_SSID` / `WIFI_PASS`. `secrets.h` is gitignored. A missing `secrets.h`, or an empty `WIFI_SSID`, skips WiFi. The matrix still runs.
+
+Libraries: Boards Manager → **Arduino UNO R4 Boards** (compiled with 1.6.0). Board: Arduino UNO R4 WiFi. `Arduino_LED_Matrix` and `WiFiS3` ship with the core. Do not add a separate WiFi library. Serial Monitor at 115200. The boot line is `Matrix Lamp R4 WiFi starting`. On connect it prints the IP. Open `http://<that-ip>/`. There is no mDNS in this core: `matrix-lamp.local` will not resolve. The DHCP hostname is `matrix-lamp`.
+
+The loop never blocks on the radio (`WiFi.setTimeout(0)`, status polled), same shape as section 4. One HTTP client on port 80. Accepts are paced at 30 ms. Each pass does one short read or one short write, so the matrix and the page stay live together.
+
+What the matrix plays:
+
+- Before any frame is posted, and after a return to fire: scroll the WiFi IP, then **10 seconds** of fire, then the IP, then the fire, and so on.
+- Until WiFi has an address, that scroll slot is a waiting animation instead of an IP. The 10-second slot still runs.
+- A posted frame does not stop the loop. It **replaces the fire** in the 10-second slot: IP scroll, then 10 seconds of that frame, then the IP, then the frame, and so on.
+- Each new POST of LED data shows that frame immediately and restarts the 10 seconds. When they end, the IP scrolls, then the frame shows again.
+
+Core 1.6.0's `Arduino_LED_Matrix` is 1-bit (`loadFrame` / `renderBitmap`). It has no `setGrayscaleBits` and no grayscale `draw()`. The sketch includes that header for the matrix pin map and runs its own timer: one LED at a time, Bresenham duty over levels 0..15.
+
+`y` is the row, 0 at the top, 7 at the bottom. `x` is the column, 0 at the left. That is the same order as `renderBitmap`. A level is 0..15. A value 16..255 is an 8-bit brightness mapped with `(v * 15 + 127) / 255`. `on: false` forces that LED off. `on: true` with no brightness is level 15.
+
+The page is a 12×8 grid. Click or drag to paint with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post a full frame. **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. The stored frame is kept, so the next paint sends it again.
+
+`GET /api/state` returns JSON:
+
+| Field | Meaning |
+|---|---|
+| `mode` | `fire` or `custom`. This is the 10-second slot, not a mode that stops the IP scroll. |
+| `phase` | `scroll` or `show` |
+| `wifi` | `off`, `joining`, or `connected` |
+| `ip` | Dotted address, or `0.0.0.0` |
+| `rssi` | dBm, or 0 when offline |
+| `remainingMs` | Milliseconds left in the 10-second slot, otherwise 0 |
+| `leds` | Stored frame, 8 rows of 12 levels, 0..15. Not a live copy of the fire. |
+
+`mode` value `loop` is accepted on input and means `fire`.
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/` | The page |
+| `GET` | `/api/state` | The JSON above |
+| `POST` | `/api/frame`, `/api/leds` | Store LED data and show it now, restarting the 10 seconds. A body that is only `{"mode":"fire"}` or `{"mode":"loop"}` returns the 10-second slot to the fire. `{"mode":"custom"}` shows the stored frame now. If the body also has pixels, the pixels win. |
+| `POST` | `/api/mode` | `{"mode":"fire"}`, `{"mode":"loop"}`, `{"mode":"custom"}`, or `?mode=` with the same tokens. `fire` / `loop` show the fire now and keep the stored frame. |
+| `POST` | `/api/reset` | Same as mode `fire`. No body. |
+| `DELETE` | `/api/frame` | Clear the stored frame and show the fire now. |
+
+Frame bodies (any one of these):
+
+- `{"x":0,"y":7,"on":true,"brightness":15}` one pixel. `x` is 0..11, `y` is 0..7.
+- `{"pixels":[{"x":1,"y":2,"on":true,"brightness":8}]}` sparse updates, merged into the stored frame.
+- `{"leds":[...]}` or `{"frame":[...]}` or a bare array. Either 96 levels, or 8 rows of 12. Numbers only.
+- `{"leds":[{"on":true,"brightness":4}, ...]}` objects without `x`/`y`, applied in order from LED 0. Up to 96.
+
+A bad body returns 400 and changes nothing. `error` is `json`, `pixel`, `mode`, or `method`. A body that does not fit returns 413 `full`.
+
+```text
+curl -s http://<ip>/api/state
+curl -s -X POST http://<ip>/api/frame -H 'Content-Type: application/json' \
+  -d '{"x":0,"y":7,"on":true,"brightness":15}'
+curl -s -X POST http://<ip>/api/leds -H 'Content-Type: application/json' \
+  -d '{"pixels":[{"x":1,"y":1,"on":false}]}'
+curl -s -X POST http://<ip>/api/mode -H 'Content-Type: application/json' -d '{"mode":"fire"}'
+curl -s -X POST 'http://<ip>/api/mode?mode=loop'
+curl -s -X POST http://<ip>/api/reset
+curl -s -X DELETE http://<ip>/api/frame
+```
+
+```text
+arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
+```
+
+Core 1.6.0, with `secrets.h` present: 80256 B flash (30% of 262144), 15552 B globals (47% of 32768), 17216 B left for locals. An empty `WIFI_SSID` is 160 B smaller. The request buffer is 6144 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. Flash moves a little with the length of the SSID and password.
+
 ## Sketches
 
-Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: **FireTrail**, **WiFi**, **MIDI** (a later tag such as Mic would go after those). Fixes and improvements land in the existing sketch; git history is the version. A different feature set is a new folder, and the folder name matches the `.ino`. `_Base` is the known-good fallback with no feature tags.
+Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: **FireTrail**, **WiFi**, **MIDI** (a later tag such as Mic would go after those). Fixes and improvements land in the existing sketch; git history is the version. A different feature set is a new folder, and the folder name matches the `.ino`. `_Base` is the known-good fallback with no feature tags. `MatrixLamp_R4_Wifi` is the onboard matrix and is not part of that chain.
 
 | Sketch | Board | LEDs default | Lava | FireTrail | WiFi web UI | MIDI (AppleMIDI) | Notes |
 |---|---|---|---|---|---|---|---|
@@ -135,6 +206,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. No mDNS. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire or a posted frame. |
 
 ## Layout
 
@@ -146,6 +218,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `sketches/SpiralLamp_R3_FireTrail/` | Same lamp, plus a fire tail on the lava balls (was `SpiralLamp_v2`) |
 | `sketches/SpiralLamp_R4_FireTrail/` | FireTrail lamp on the Uno R4 WiFi, radio unused (was `SpiralLamp_R4_v0`) |
 | `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` | R4 lamp plus the web page and AppleMIDI Music mode |
+| `sketches/MatrixLamp_R4_Wifi/` | Onboard 12×8 matrix: IP scroll, 10 s fire or a posted frame, page on port 80 |
 | `tools/lava_harness/` | Host build of the lava effect (`v2`/`firetrail` default, `clean`/`base`, `r4`/`r4-firetrail`) |
 | `docs/wiring.md` | Authoritative wiring |
 | `docs/issues.md` | What was wrong in the purchased plans |
