@@ -6,8 +6,11 @@
    WiFi is a station on the UNO R4 WiFi coprocessor (WiFiS3, built into the
    Renesas core). Credentials live in secrets.h (copy secrets.example.h; the
    real file is gitignored). Joining does not stall the LED loop: WiFi.setTimeout(0),
-   then status is polled. A missing network or a dropped link leaves the lamp
-   on its panel modes. The IP is printed on Serial at 115200. There is no mDNS
+   then status is polled. status() can be WL_CONNECTED before DHCP, so the page
+   and AppleMIDI wait until localIP() is a non-zero address. Another begin()
+   is not sent for 22 s, so that handshake is not aborted. A missing network
+   or a dropped link leaves the lamp on its panel modes. The IP is printed on
+   Serial at 115200. There is no mDNS
    in this core (multicast is not delivered to the RA4M1); spiral-lamp.local
    will not resolve. The DHCP hostname is spiral-lamp.
 

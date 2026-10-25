@@ -27,7 +27,8 @@
 static const uint32_t WIFI_ACCEPT_MS = 30;
 static const uint32_t WIFI_STATUS_ONLINE_MS = 1000;
 static const uint32_t WIFI_STATUS_JOIN_MS = 250;
-static const uint32_t WIFI_RETRY_MS = 8000;
+static const uint32_t WIFI_RETRY_MS = 22000;
+static const uint32_t WIFI_IP_POLL_MS = 3000;
 static const uint16_t HTTP_READ_MAX = 64;
 static const uint16_t HTTP_WRITE_MAX = 192;
 static const uint32_t HTTP_READ_TIMEOUT_MS = 400;
@@ -57,6 +58,7 @@ static int16_t g_rssi = 0;
 static uint32_t g_lastStatus = 0;
 static uint32_t g_lastAccept = 0;
 static uint32_t g_lastRssi = 0;
+static uint32_t g_lastIpPoll = 0;
 static uint32_t g_joinSince = 0;
 static uint8_t g_serverUp = 0;
 
@@ -534,12 +536,21 @@ static void wifiBegin(){
   else WiFi.begin(WIFI_SSID, WIFI_PASS);
   g_joinSince = millis();
 }
-static void noteConnected(){
-  IPAddress ip = WiFi.localIP();
+// Core 1.6.0 reports WL_CONNECTED when the radio associates. DHCP may still
+// be pending, and localIP() is 0.0.0.0 until it finishes (also on a modem
+// timeout). Do not treat that as the lamp's address.
+static bool ipReady(const IPAddress& ip) {
+  if (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0) return false;
+  if (ip[0] == 0) return false;
+  return true;
+}
+static void rememberIp(const IPAddress& ip) {
   g_ip[0] = ip[0];
   g_ip[1] = ip[1];
   g_ip[2] = ip[2];
   g_ip[3] = ip[3];
+}
+static void noteConnected(){
   g_rssi = (int16_t)WiFi.RSSI();
   g_lastRssi = millis();
   Serial.print(F("WiFi "));
@@ -569,26 +580,51 @@ static void wifiDrop(uint32_t now){
   // Retry on the next status poll, not in this same modem burst.
   g_joinSince = now - WIFI_RETRY_MS;
 }
+static void adoptIp(const IPAddress& ip){
+  bool changed = ip[0] != g_ip[0] || ip[1] != g_ip[1] || ip[2] != g_ip[2] || ip[3] != g_ip[3];
+  if (changed) rememberIp(ip);
+  if (g_wifi != WIFI_ONLINE){
+    g_wifi = WIFI_ONLINE;
+    noteConnected();
+  } else if (changed){
+    Serial.print(F("WiFi IP "));
+    Serial.print(g_ip[0]); Serial.print('.');
+    Serial.print(g_ip[1]); Serial.print('.');
+    Serial.print(g_ip[2]); Serial.print('.');
+    Serial.println(g_ip[3]);
+  }
+  if (!g_serverUp){
+    g_server.begin();
+    g_serverUp = g_server ? 1 : 0;
+  }
+}
 static void wifiPollStatus(uint32_t now){
   uint8_t st = WiFi.status();
   if (st == WL_CONNECTED){
-    if (g_wifi != WIFI_ONLINE){
-      g_wifi = WIFI_ONLINE;
-      noteConnected();
-    } else if ((uint32_t)(now - g_lastRssi) >= 5000){
-      g_rssi = (int16_t)WiFi.RSSI();
-      g_lastRssi = now;
+    bool refresh = (g_wifi != WIFI_ONLINE) || g_ip[0] == 0 ||
+                   (uint32_t)(now - g_lastIpPoll) >= WIFI_IP_POLL_MS;
+    if (refresh){
+      g_lastIpPoll = now;
+      IPAddress ip = WiFi.localIP();
+      if (ipReady(ip)) adoptIp(ip);
     }
-    if (!g_serverUp){
-      g_server.begin();
-      g_serverUp = g_server ? 1 : 0;
+    if (g_wifi == WIFI_ONLINE && g_ip[0] != 0){
+      if ((uint32_t)(now - g_lastRssi) >= 5000){
+        g_rssi = (int16_t)WiFi.RSSI();
+        g_lastRssi = now;
+      }
+      if (!g_serverUp){
+        g_server.begin();
+        g_serverUp = g_server ? 1 : 0;
+      }
+      return;
     }
-    return;
-  }
-  if (g_wifi == WIFI_ONLINE){
+  } else if (g_wifi == WIFI_ONLINE){
     wifiDrop(now);
     return;
   }
+  // Associated with no address yet still counts as joining. Waiting 22 s
+  // before another begin() keeps DHCP from being reset mid-handshake.
   if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) wifiBegin();
 }
 

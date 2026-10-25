@@ -120,10 +120,10 @@ Core 1.6.0, NeoPixel 1.15.5, AppleMIDI 3.5.0, MIDI Library 5.0.2:
 
 | `LED_COUNT` | Flash | Globals |
 |---|---|---|
-| 160 | 116432 B (44% of 262144) | 15356 B (46% of 32768), 17412 B left for locals |
-| 320 | 116400 B (44% of 262144) | 15916 B (48% of 32768), 16852 B left for locals |
+| 160 | 116720 B (44% of 262144) | 15356 B (46% of 32768), 17412 B left for locals |
+| 320 | 116720 B (44% of 262144) | 15916 B (48% of 32768), 16852 B left for locals |
 
-NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1024 B receive FIFO on the heap. The two AppleMIDI UDP sockets are inside the session object (counted in the globals above). Joining WiFi does not block the frame loop (`WiFi.setTimeout(0)`, status polled). One HTTP client; accepts are paced at 30 ms; each loop does one short read or one short write. A wedged coprocessor is capped at 800 ms per modem command after the radio has started.
+NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1024 B receive FIFO on the heap. The two AppleMIDI UDP sockets are inside the session object (counted in the globals above). Joining WiFi does not block the frame loop (`WiFi.setTimeout(0)`, status polled). In core 1.6.0, `WiFi.status()` can be `WL_CONNECTED` as soon as the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The lamp stays in joining, and does not start the page or AppleMIDI, until that address is non-zero. It re-reads the address every few seconds and updates it if DHCP changes it. A new `WiFi.begin()` waits 22 seconds, so a slow lease is not aborted. One HTTP client; accepts are paced at 30 ms; each loop does one short read or one short write. A wedged coprocessor is capped at 800 ms per modem command after the radio has started.
 
 ### 5. Onboard matrix lamp
 
@@ -131,43 +131,51 @@ NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1
 
 Libraries: Boards Manager → **Arduino UNO R4 Boards** (compiled with 1.6.0). Board: Arduino UNO R4 WiFi. `Arduino_LED_Matrix` and `WiFiS3` ship with the core. Do not add a separate WiFi library. Serial Monitor at 115200. The boot line is `Matrix Lamp R4 WiFi starting`. On connect it prints the IP. Open `http://<that-ip>/`. There is no mDNS in this core: `matrix-lamp.local` will not resolve. The DHCP hostname is `matrix-lamp`.
 
-The loop never blocks on the radio (`WiFi.setTimeout(0)`, status polled), same shape as section 4. One HTTP client on port 80. Accepts are paced at 30 ms. Each pass does one short read or one short write, so the matrix and the page stay live together.
+The loop never blocks on the radio after the first join. `setup` calls `WiFi.begin()` with the library defaults (10 s connect wait, 10 s modem command timeout) **before** the matrix timer starts. Core 1.6.0's `begin()` returns as soon as `WiFi.status()` is `WL_CONNECTED`, which can be the moment the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The sketch does not treat that as online. It stays on the joining animation, keeps polling `localIP()`, and only then scrolls the address and starts the page. A `0.0.0.0` read after a real address is already stored is ignored, because a modem timeout returns the same value. Another `WiFi.begin()` waits 22 seconds so DHCP is not reset mid-handshake. Once an address is stored, `setTimeout(0)` and `modem.timeout(800)` bound later polls. One HTTP client on port 80. Accepts are paced at 30 ms. Each pass does one short read or one short write, so the matrix and the page stay live together.
 
 What the matrix plays:
 
 - Before any frame is posted, and after a return to fire: scroll the WiFi IP, then **10 seconds** of fire, then the IP, then the fire, and so on.
-- Until WiFi has an address, that scroll slot is a waiting animation instead of an IP. The 10-second slot still runs.
+- Until DHCP has given a non-zero address, that scroll slot is a waiting animation instead of an IP. It does not scroll `0.0.0.0`. The 10-second slot still runs.
 - A posted frame does not stop the loop. It **replaces the fire** in the 10-second slot: IP scroll, then 10 seconds of that frame, then the IP, then the frame, and so on.
-- Each new POST of LED data shows that frame immediately and restarts the 10 seconds. When they end, the IP scrolls, then the frame shows again.
+- A posted animation does the same, stepping `frames[0 .. N-1]` every `interval` milliseconds and wrapping until the 10 seconds end.
+- Each new POST of LED data or an animation shows that picture immediately and restarts the 10 seconds. When they end, the IP scrolls, then the picture shows again.
 
-Core 1.6.0's `Arduino_LED_Matrix` is 1-bit (`loadFrame` / `renderBitmap`). It has no `setGrayscaleBits` and no grayscale `draw()`. The sketch includes that header for the matrix pin map and runs its own timer: one LED at a time, Bresenham duty over levels 0..15.
+Core 1.6.0's `Arduino_LED_Matrix` is 1-bit (`loadFrame` / `renderBitmap`) and its own timer is 10 kHz. It has no grayscale `draw()`. The sketch includes that header for the matrix pin map and runs its own timer at **24 kHz**: one LED at a time, Bresenham duty over levels 0..15. That is a 250 Hz scan of the 96 LEDs. The old 96 kHz tick did not leave a full UART byte time (115200 baud on the link to the ESP32-S3) between interrupts, which is enough to make `localIP()` and `begin()` time out.
 
 `y` is the row, 0 at the top, 7 at the bottom. `x` is the column, 0 at the left. That is the same order as `renderBitmap`. A level is 0..15. A value 16..255 is an 8-bit brightness mapped with `(v * 15 + 127) / 255`. `on: false` forces that LED off. `on: true` with no brightness is level 15.
 
-The page is a 12×8 grid. Click or drag to paint with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post a full frame. **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. The stored frame is kept, so the next paint sends it again.
+The page is a 12×8 grid. Click or drag to paint the current frame with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post that one frame. Under the grid is a frame strip: Previous, Next, Add frame, Duplicate, Delete, and Play / Pause (the preview stays in the browser). Interval is 20–5000 ms, default 100. **Send animation** posts the strip. **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. Reset keeps the stored picture, so the next paint or Send animation can send it again.
+
+The fire in that slot is a few hot tongues on the bottom row, cooler neighbours and gaps beside them, and flames that thin out. Rows 5–6 stay in the bright and middle of the range, rows 3–4 are mostly dark with a lick now and then, and the top two rows stay off. Row 2 only throws a rare dim spark.
 
 `GET /api/state` returns JSON:
 
 | Field | Meaning |
 |---|---|
-| `mode` | `fire` or `custom`. This is the 10-second slot, not a mode that stops the IP scroll. |
+| `mode` | `fire`, `custom`, or `animation`. This is the 10-second slot, not a mode that stops the IP scroll. |
 | `phase` | `scroll` or `show` |
-| `wifi` | `off`, `joining`, or `connected` |
-| `ip` | Dotted address, or `0.0.0.0` |
+| `wifi` | `off`, `joining`, or `connected`. `connected` means a non-zero DHCP address, not just association. |
+| `ip` | Dotted address, or `0.0.0.0` while DHCP has not finished |
 | `rssi` | dBm, or 0 when offline |
 | `remainingMs` | Milliseconds left in the 10-second slot, otherwise 0 |
-| `leds` | Stored frame, 8 rows of 12 levels, 0..15. Not a live copy of the fire. |
+| `frameCount` | Stored frames. 0 after boot and after DELETE. 1 for a single posted frame. |
+| `interval` | Frame interval in ms. Default 100. Clamped to 20–5000. |
+| `frame` | Index of the animation frame in the 10-second slot, otherwise 0 |
+| `leds` | Current frame, 8 rows of 12 levels, 0..15. During fire this is the stored frame, not a live copy of the fire. During an animation it is the frame on screen. |
+| `frames` | Stored frames, same shape as `leds`. Empty when nothing is stored. |
+| `durations` | Per-frame interval in ms, one entry per stored frame. |
 
-`mode` value `loop` is accepted on input and means `fire`.
+`mode` value `loop` is accepted on input and means `fire`. `animation` resumes a stored animation from frame 0. It is an error if none is stored.
 
 | Method | Path | What it does |
 |---|---|---|
 | `GET` | `/` | The page |
 | `GET` | `/api/state` | The JSON above |
-| `POST` | `/api/frame`, `/api/leds` | Store LED data and show it now, restarting the 10 seconds. A body that is only `{"mode":"fire"}` or `{"mode":"loop"}` returns the 10-second slot to the fire. `{"mode":"custom"}` shows the stored frame now. If the body also has pixels, the pixels win. |
-| `POST` | `/api/mode` | `{"mode":"fire"}`, `{"mode":"loop"}`, `{"mode":"custom"}`, or `?mode=` with the same tokens. `fire` / `loop` show the fire now and keep the stored frame. |
+| `POST` | `/api/frame`, `/api/leds`, `/api/animation` | Store LED data or an animation and show it now, restarting the 10 seconds. A body with `frames` is an animation on any of these paths. A single frame (no `frames` key) is mode `custom`. A body that is only `{"mode":"fire"}` or `{"mode":"loop"}` returns the 10-second slot to the fire. `{"mode":"custom"}` shows the stored frame now. `{"mode":"animation"}` restarts the stored animation. If the body also has `frames` or pixels, those win. |
+| `POST` | `/api/mode` | `{"mode":"fire"}`, `{"mode":"loop"}`, `{"mode":"custom"}`, `{"mode":"animation"}`, or `?mode=` with the same tokens. `fire` / `loop` show the fire now and keep the stored picture. |
 | `POST` | `/api/reset` | Same as mode `fire`. No body. |
-| `DELETE` | `/api/frame` | Clear the stored frame and show the fire now. |
+| `DELETE` | `/api/frame`, `/api/animation` | Clear the stored picture and show the fire now. |
 
 Frame bodies (any one of these):
 
@@ -176,7 +184,21 @@ Frame bodies (any one of these):
 - `{"leds":[...]}` or `{"frame":[...]}` or a bare array. Either 96 levels, or 8 rows of 12. Numbers only.
 - `{"leds":[{"on":true,"brightness":4}, ...]}` objects without `x`/`y`, applied in order from LED 0. Up to 96.
 
-A bad body returns 400 and changes nothing. `error` is `json`, `pixel`, `mode`, or `method`. A body that does not fit returns 413 `full`.
+Animation bodies (on `POST /api/frame`, `/api/leds`, or `/api/animation`):
+
+- `frames`: 1 to 16 frames. Each frame is 96 levels, or 8 rows of 12, or pixel objects, same rules as one frame. A frame may also be `{"leds":[...],"duration":80}` (or `interval` / `intervalMs` on that frame).
+- `interval` or `intervalMs`: milliseconds between frames. Default 100. Values are clamped to 20–5000 (`intervalMs` wins if both are sent). A missing per-frame duration uses that interval. One frame plays as a still image for the whole 10 seconds.
+
+16 numeric frames fit in the 6144-byte request buffer (about 5 KB). A frame made of 96 `{on, brightness}` objects is much larger, so only a few of those fit; the board answers 413 `full` when the body does not. A 17th frame is rejected and nothing is stored.
+
+A bad body returns 400 and changes nothing. `error` is `json`, `pixel`, `mode`, `frames`, `interval`, or `method`. A body that does not fit returns 413 `full`.
+
+Host checks, from this folder's parent:
+
+```text
+g++ -std=c++17 -DFRAME_JSON_TEST -x c++ sketches/MatrixLamp_R4_Wifi/frame_json.h -o /tmp/frame_json_test && /tmp/frame_json_test
+g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ sketches/MatrixLamp_R4_Wifi/matrix_fire.h -o /tmp/matrix_fire_test && /tmp/matrix_fire_test
+```
 
 ```text
 curl -s http://<ip>/api/state
@@ -186,15 +208,18 @@ curl -s -X POST http://<ip>/api/leds -H 'Content-Type: application/json' \
   -d '{"pixels":[{"x":1,"y":1,"on":false}]}'
 curl -s -X POST http://<ip>/api/mode -H 'Content-Type: application/json' -d '{"mode":"fire"}'
 curl -s -X POST 'http://<ip>/api/mode?mode=loop'
+curl -s -X POST http://<ip>/api/animation -H 'Content-Type: application/json' \
+  -d '{"interval":120,"frames":[[[15,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]],[[0,0,0,0,0,0,0,0,0,0,0,15],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]]]}'
 curl -s -X POST http://<ip>/api/reset
 curl -s -X DELETE http://<ip>/api/frame
+curl -s -X DELETE http://<ip>/api/animation
 ```
 
 ```text
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, with `secrets.h` present: 80256 B flash (30% of 262144), 15552 B globals (47% of 32768), 17216 B left for locals. An empty `WIFI_SSID` is 160 B smaller. The request buffer is 6144 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, with `secrets.h` present: 88952 B flash (33% of 262144), 22516 B globals (68% of 32768), 10252 B left for locals. An empty `WIFI_SSID` is 248 B smaller in flash; globals stay 22516 B. The request buffer and the state JSON are each 6144 B. The core keeps an 8 KB heap and a 1 KB main stack, and those still fit. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -206,7 +231,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. No mDNS. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire or a posted frame. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire, a posted frame, or an animation. |
 
 ## Layout
 
@@ -218,7 +243,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `sketches/SpiralLamp_R3_FireTrail/` | Same lamp, plus a fire tail on the lava balls (was `SpiralLamp_v2`) |
 | `sketches/SpiralLamp_R4_FireTrail/` | FireTrail lamp on the Uno R4 WiFi, radio unused (was `SpiralLamp_R4_v0`) |
 | `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` | R4 lamp plus the web page and AppleMIDI Music mode |
-| `sketches/MatrixLamp_R4_Wifi/` | Onboard 12×8 matrix: IP scroll, 10 s fire or a posted frame, page on port 80 |
+| `sketches/MatrixLamp_R4_Wifi/` | Onboard 12×8 matrix: IP scroll, 10 s fire, frame, or animation, page on port 80 |
 | `tools/lava_harness/` | Host build of the lava effect (`v2`/`firetrail` default, `clean`/`base`, `r4`/`r4-firetrail`) |
 | `docs/wiring.md` | Authoritative wiring |
 | `docs/issues.md` | What was wrong in the purchased plans |

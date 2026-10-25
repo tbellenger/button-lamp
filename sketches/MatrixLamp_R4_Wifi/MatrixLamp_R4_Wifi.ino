@@ -11,27 +11,37 @@
    A posted frame does not stop the loop. It replaces the fire:
      scroll the IP, then 10 seconds of that frame,
      scroll the IP, then 10 seconds of that frame, ...
-   Each POST shows the new frame immediately and restarts the 10 seconds.
-   POST /api/reset, DELETE /api/frame, or {"mode":"fire"} (alias "loop")
-   puts the 10-second slot back on the fire. DELETE also clears the stored
-   frame. Reset and mode fire keep it.
+   A posted animation does the same with frames[0..N-1], stepping every
+   interval milliseconds and wrapping for the whole 10-second slot.
+   Each POST shows the new picture immediately and restarts the 10 seconds.
+   POST /api/reset, DELETE /api/frame, DELETE /api/animation, or
+   {"mode":"fire"} (alias "loop") puts the 10-second slot back on the fire.
+   DELETE also clears the stored picture. Reset and mode fire keep it.
 
-   Core 1.6.0 Arduino_LED_Matrix is 1-bit (loadFrame / renderBitmap). It has
-   no setGrayscaleBits and no grayscale draw(). This sketch includes that
-   header for the charlieplex map (turnLed) and runs its own timer: one LED
-   at a time, Bresenham duty across levels 0..15.
+   Core 1.6.0 Arduino_LED_Matrix is 1-bit (loadFrame / renderBitmap) and its
+   own timer runs at 10 kHz. It has no grayscale draw(). This sketch includes
+   that header for the charlieplex map (turnLed) and runs its own timer at
+   24 kHz: one LED at a time, Bresenham duty across levels 0..15. That is a
+   250 Hz scan of the 96 LEDs. 96 kHz left too little time for the modem UART
+   (Serial2 at 115200) to finish a byte between ticks.
 
-   WiFi follows SpiralLamp_R4_FireTrail_WiFi_MIDI: WiFiS3, secrets.h,
-   WiFi.setTimeout(0), status polled, one client, short reads and writes.
+   WiFi is WiFiS3 plus secrets.h. The first WiFi.begin() in setup uses the
+   library defaults (10 s connect wait, 10 s modem command timeout) and runs
+   before the matrix timer starts. After that, WiFi.setTimeout(0) and
+   modem.timeout(800) keep the loop bounded. status() can report WL_CONNECTED
+   as soon as the radio associates, while localIP() is still 0.0.0.0, so the
+   lamp stays in the joining animation until the address is non-zero. A new
+   begin() is not sent for 22 s, so DHCP is not reset mid-handshake.
    No mDNS in this core. DHCP hostname is matrix-lamp.
 
    y = 0 is the top row, x = 0 is the left column (renderBitmap order).
    Brightness 0..15 is a matrix level. 16..255 maps to 0..15.
 
    Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0, with secrets.h
-   present: 80256 B flash (30% of 262144), 15552 B globals (47% of 32768),
-   17216 B left for locals. An empty WIFI_SSID is 160 B smaller.
-   The HTTP buffer is 6144 B of the globals.
+   present: 88952 B flash (33% of 262144), 22516 B globals (68% of 32768),
+   10252 B left for locals. An empty WIFI_SSID is 248 B smaller in flash.
+   The request buffer and the state JSON are each 6144 B. The core's 8 KB
+   heap and 1 KB main stack still fit above the globals.
 */
 
 #include <Arduino.h>
@@ -41,6 +51,7 @@
 #include <string.h>
 #include "Arduino_LED_Matrix.h"
 #include "frame_json.h"
+#include "matrix_fire.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -59,17 +70,20 @@ static const uint32_t SHOW_MS = 10000;
 static const uint32_t LINK_MS = 4000;
 static const uint32_t SCROLL_MS = 80;
 static const uint32_t FIRE_MS = 70;
-static const float MATRIX_TICK_HZ = 96000.0f;
+// 24000/96 = 250 Hz scan. Dim levels span several scans; 96 kHz starved the modem.
+static const float MATRIX_TICK_HZ = 24000.0f;
 
 static const uint32_t WIFI_ACCEPT_MS = 30;
 static const uint32_t WIFI_STATUS_ONLINE_MS = 1000;
 static const uint32_t WIFI_STATUS_JOIN_MS = 250;
-static const uint32_t WIFI_RETRY_MS = 8000;
+static const uint32_t WIFI_RETRY_MS = 22000;
+static const uint32_t WIFI_IP_POLL_MS = 3000;
 static const int HTTP_READ_MAX = 160;
 static const int HTTP_WRITE_MAX = 192;
 static const uint32_t HTTP_READ_TIMEOUT_MS = 1200;
 static const uint32_t MODEM_CMD_BUDGET_MS = 800;
 static const int REQ_CAP = 6144;
+static const int JSON_CAP = 6144;
 
 enum WifiPhase : uint8_t { WIFI_OFF = 0, WIFI_JOINING = 1, WIFI_ONLINE = 2 };
 enum HttpPhase : uint8_t { PH_IDLE = 0, PH_READ = 1, PH_WRITE = 2 };
@@ -94,6 +108,13 @@ static volatile uint8_t g_disp[MATRIX_N];
 static uint8_t g_acc[MATRIX_N];
 static uint8_t g_heat[MATRIX_N];
 static uint8_t g_custom[MATRIX_N];
+static uint8_t g_anim[FRAME_ANIM_MAX * MATRIX_N];
+static uint16_t g_animDur[FRAME_ANIM_MAX];
+static uint8_t g_animCount = 0;
+static uint8_t g_animIndex = 0;
+static uint16_t g_interval = FRAME_INTERVAL_DEFAULT;
+static uint32_t g_animLast = 0;
+static uint8_t g_stored = FRAME_FIRE;
 static FspTimer g_matrixTimer;
 
 static WifiPhase g_wifi = WIFI_OFF;
@@ -109,7 +130,7 @@ static uint16_t g_hdrOff = 0;
 static const char* g_body = 0;
 static uint16_t g_bodyLen = 0;
 static uint16_t g_bodyOff = 0;
-static char g_json[768];
+static char g_json[JSON_CAP];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
@@ -117,6 +138,7 @@ static int16_t g_rssi = 0;
 static uint32_t g_lastStatus = 0;
 static uint32_t g_lastAccept = 0;
 static uint32_t g_lastRssi = 0;
+static uint32_t g_lastIpPoll = 0;
 static uint32_t g_joinSince = 0;
 static uint8_t g_serverUp = 0;
 
@@ -148,6 +170,13 @@ input[type=range]{width:100%;height:2rem;accent-color:#ff3a2a}
 .row{display:flex;gap:.5rem;margin-top:.7rem}
 button{font:inherit;flex:1;background:#2c1410;color:#f7eee9;border:1px solid #7d4036;border-radius:.65rem;padding:.75rem .4rem;min-height:2.9rem}
 button.primary{background:#9a2a1c;border-color:#e15a48;margin-top:.55rem;width:100%}
+button.on{background:#5a241c;border-color:#ffb4a8}
+.strip{display:flex;gap:.35rem;overflow-x:auto;padding:.2rem 0 .45rem;-webkit-overflow-scrolling:touch}
+.strip button{flex:0 0 auto;width:auto;min-height:0;padding:.28rem .32rem;margin:0}
+.mini{display:grid;grid-template-columns:repeat(12,3px);grid-auto-rows:3px;gap:1px;margin-top:.22rem}
+.mini i{display:block;width:3px;height:3px;background:#2a1210}
+input[type=number]{font:inherit;display:block;width:6.2rem;margin-top:.45rem;background:#2c1410;color:#f7eee9;border:1px solid #7d4036;border-radius:.55rem;padding:.45rem .55rem}
+.frameLabel{margin:.85rem 0 .15rem;font-size:.85rem;color:#e4c4b8}
 pre{background:#1b0c09;border-radius:.65rem;padding:.7rem;white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace;margin:1rem 0 0}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
@@ -159,8 +188,26 @@ pre{background:#1b0c09;border-radius:.65rem;padding:.7rem;white-space:pre-wrap;f
 <button type=button id=clear>Clear</button>
 <button type=button id=fill>Fill</button>
 </div>
+<p class=frameLabel id=framelabel>Frame 1 of 1</p>
+<div class=strip id=strip></div>
+<div class=row>
+<button type=button id=prev>Previous</button>
+<button type=button id=next>Next</button>
+</div>
+<div class=row>
+<button type=button id=add>Add frame</button>
+<button type=button id=dup>Duplicate</button>
+<button type=button id=del>Delete</button>
+</div>
+<div class=row>
+<button type=button id=play>Play</button>
+</div>
+<label for=iv>Interval <span id=ivv>100</span> ms</label>
+<input id=iv type=range min=20 max=5000 step=10 value=100>
+<input id=ivn type=number min=20 max=5000 step=10 value=100>
+<button type=button class=primary id=send>Send animation</button>
 <button type=button class=primary id=fire>Resume fire</button>
-<p class=note>Click or drag. The brush is 0–15; click a lit pixel again to turn it off. A posted frame replaces the fire for 10 seconds, then the IP scrolls, then that frame shows again. Resume fire puts the 10-second slot back on the fire. The IP scroll keeps running.</p>
+<p class=note>Click or drag to paint this frame. The brush is 0–15; click a lit pixel again to turn it off. Painting posts that one frame, which replaces the fire for 10 seconds, then the IP scrolls, then the frame shows again. Add frame, duplicate, and delete build a strip. Play previews it here. Send animation loops those frames, at the interval, through the same 10-second slot. Resume fire puts that slot back on the fire. The IP scroll keeps running.</p>
 <pre id=st>loading</pre>
 <script>
 var grid=document.getElementById('grid');
@@ -194,27 +241,126 @@ function look(el,lv){
 for(var i=0;i<cells.length;i++) look(cells[i],0);
 br.oninput=function(){brv.textContent=br.value;};
 var dirty=0,seeded=0,painting=null,gestured=0,busy=0,wait=0,pend=null,hold=0;
+var MAXF=16, cur=0, playing=0, playTimer=0;
+function blank(){
+  var f=[];
+  for(var yb=0;yb<8;yb++){
+    f[yb]=[];
+    for(var xb=0;xb<12;xb++) f[yb][xb]=0;
+  }
+  return f;
+}
+function copyFrame(src){
+  var f=blank();
+  for(var yc=0;yc<8;yc++) for(var xc=0;xc<12;xc++){
+    var lv=src&&src[yc]?(src[yc][xc]|0):0;
+    if(lv<0) lv=0;
+    if(lv>15) lv=15;
+    f[yc][xc]=lv;
+  }
+  return f;
+}
+var frames=[blank()];
+var iv=document.getElementById('iv');
+var ivn=document.getElementById('ivn');
+var ivv=document.getElementById('ivv');
+function clampIv(n){
+  n=Math.round(+n);
+  if(!(n>=20)) n=20;
+  if(n>5000) n=5000;
+  return n;
+}
+function setIv(n){
+  n=clampIv(n);
+  iv.value=n; ivn.value=n; ivv.textContent=String(n);
+  if(playing) schedulePlay();
+}
+iv.oninput=function(){setIv(iv.value);};
+ivn.onchange=function(){setIv(ivn.value);};
+function dot(lv){
+  if(!lv) return '#2a1210';
+  return 'rgba(255,48,32,'+(0.25+0.75*lv/15).toFixed(2)+')';
+}
+function renderStrip(){
+  var strip=document.getElementById('strip');
+  strip.innerHTML='';
+  for(var i=0;i<frames.length;i++){
+    var b=document.createElement('button');
+    b.type='button';
+    b.className=i===cur?'on':'';
+    b.dataset.i=i;
+    b.appendChild(document.createTextNode(String(i+1)));
+    var mini=document.createElement('span');
+    mini.className='mini';
+    for(var y=0;y<8;y++) for(var x=0;x<12;x++){
+      var px=document.createElement('i');
+      px.style.background=dot(frames[i][y][x]);
+      mini.appendChild(px);
+    }
+    b.appendChild(mini);
+    strip.appendChild(b);
+  }
+  document.getElementById('framelabel').textContent='Frame '+(cur+1)+' of '+frames.length;
+}
+function storeFrame(){
+  for(var y=0;y<8;y++) for(var x=0;x<12;x++) frames[cur][y][x]=levels[y][x];
+}
+function paintAll(){
+  for(var y=0;y<8;y++) for(var x=0;x<12;x++) look(cell(x,y), levels[y][x]);
+}
+function loadFrame(i){
+  if(i<0) i=frames.length-1;
+  if(i>=frames.length) i=0;
+  cur=i;
+  for(var y=0;y<8;y++) for(var x=0;x<12;x++) levels[y][x]=frames[cur][y][x];
+  paintAll();
+  renderStrip();
+}
+function pause(){
+  playing=0;
+  clearTimeout(playTimer);
+  var b=document.getElementById('play');
+  b.textContent='Play';
+  b.className='';
+}
+function schedulePlay(){
+  clearTimeout(playTimer);
+  if(!playing) return;
+  playTimer=setTimeout(function(){
+    if(!playing) return;
+    storeFrame();
+    loadFrame(cur+1);
+    schedulePlay();
+  }, clampIv(iv.value));
+}
 function show(s){
   if(!s||!s.mode) return;
-  if(!seeded && !dirty && s.leds && s.leds.length===8){
+  if(!seeded && !dirty){
     seeded=1;
-    for(var y2=0;y2<8;y2++){
-      if(!s.leds[y2]||s.leds[y2].length!==12) continue;
-      for(var x2=0;x2<12;x2++){
-        var lv=s.leds[y2][x2]|0;
-        if(lv<0) lv=0;
-        if(lv>15) lv=15;
-        levels[y2][x2]=lv;
-        look(cell(x2,y2),lv);
-      }
-    }
+    if(s.frames && s.frames.length) adopt(s.frames, s.interval, s.frame);
+    else if(s.leds && s.leds.length===8) adopt([s.leds], s.interval||100, 0);
   }
   var what=s.phase==='show'
-    ? (s.mode==='custom'?'custom frame':'fire')
+    ? (s.mode==='animation' ? ('animation '+((s.frame|0)+1)+'/'+(s.frameCount||1))
+       : (s.mode==='custom'?'custom frame':'fire'))
     : (s.wifi==='connected'?'scrolling IP':'waiting for WiFi');
   var left=s.phase==='show' ? ('  '+(s.remainingMs/1000).toFixed(1)+'s left') : '';
+  var extra=(s.frameCount?('\n'+s.frameCount+' frames @ '+(s.interval||0)+' ms'):'');
   link.textContent=(s.ip||'0.0.0.0')+'   '+(s.wifi||'');
-  st.textContent=what+left+'\n10s phase '+s.mode+'\nrssi '+s.rssi;
+  st.textContent=what+left+'\n10s slot '+s.mode+extra+'\nrssi '+s.rssi;
+}
+function adopt(list, interval, index){
+  var next=[];
+  for(var i=0;i<list.length && next.length<MAXF;i++) next.push(copyFrame(list[i]));
+  if(!next.length) return;
+  frames=next;
+  if(interval) setIv(interval);
+  var fi=index|0;
+  if(fi<0||fi>=frames.length) fi=0;
+  cur=fi;
+  for(var y=0;y<8;y++) for(var x=0;x<12;x++) levels[y][x]=frames[cur][y][x];
+  paintAll();
+  renderStrip();
 }
 function queue(method,path,body){
   pend={m:method,p:path,b:body};
@@ -255,6 +401,7 @@ grid.addEventListener('pointerdown',function(ev){
   var el=ev.target.closest?ev.target.closest('b'):null;
   if(!el||el.dataset.x==null) return;
   ev.preventDefault();
+  pause();
   var brush=+br.value;
   var lv=levels[+el.dataset.y][+el.dataset.x];
   painting=(brush===0||lv===brush)?0:brush;
@@ -270,24 +417,73 @@ grid.addEventListener('pointermove',function(ev){
 function endGesture(){
   if(painting===null) return;
   painting=null;
+  storeFrame();
+  renderStrip();
   if(gestured) flushNow();
 }
 grid.addEventListener('pointerup',endGesture);
 grid.addEventListener('pointercancel',endGesture);
 function setAll(lv){
   dirty=1;
+  pause();
   for(var y3=0;y3<8;y3++) for(var x3=0;x3<12;x3++){
     levels[y3][x3]=lv;
     look(cell(x3,y3),lv);
   }
+  storeFrame();
+  renderStrip();
   flushNow();
 }
 document.getElementById('clear').onclick=function(){setAll(0);};
 document.getElementById('fill').onclick=function(){setAll(+br.value);};
+document.getElementById('strip').onclick=function(ev){
+  var b=ev.target.closest?ev.target.closest('button'):null;
+  if(!b||b.dataset.i==null) return;
+  pause();
+  storeFrame();
+  loadFrame(+b.dataset.i);
+};
+document.getElementById('prev').onclick=function(){pause(); storeFrame(); loadFrame(cur-1);};
+document.getElementById('next').onclick=function(){pause(); storeFrame(); loadFrame(cur+1);};
+document.getElementById('add').onclick=function(){
+  pause(); storeFrame();
+  if(frames.length>=MAXF){ link.textContent='16 frames max'; return; }
+  frames.splice(cur+1,0,blank());
+  loadFrame(cur+1);
+};
+document.getElementById('dup').onclick=function(){
+  pause(); storeFrame();
+  if(frames.length>=MAXF){ link.textContent='16 frames max'; return; }
+  frames.splice(cur+1,0,copyFrame(frames[cur]));
+  loadFrame(cur+1);
+};
+document.getElementById('del').onclick=function(){
+  pause();
+  if(frames.length===1){ frames[0]=blank(); loadFrame(0); return; }
+  frames.splice(cur,1);
+  if(cur>=frames.length) cur=frames.length-1;
+  loadFrame(cur);
+};
+document.getElementById('play').onclick=function(){
+  if(playing){ pause(); return; }
+  storeFrame();
+  playing=1;
+  this.textContent='Pause';
+  this.className='on';
+  schedulePlay();
+};
+document.getElementById('send').onclick=function(){
+  pause();
+  storeFrame();
+  clearTimeout(hold);
+  queue('POST','/api/animation', JSON.stringify({interval:clampIv(iv.value), frames:frames}));
+};
 document.getElementById('fire').onclick=function(){
+  pause();
   clearTimeout(hold);
   queue('POST','/api/reset',null);
 };
+renderStrip();
 function poll(){
   if(busy||wait) return;
   fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});
@@ -329,43 +525,6 @@ static void matrixBegin() {
 
 static void blit(const uint8_t* src) {
   for (int i = 0; i < MATRIX_N; i++) g_disp[i] = src[i];
-}
-
-static void stepFire() {
-  static int8_t wind = 0;
-  static uint8_t windTick = 0;
-  if (++windTick >= 10) {
-    windTick = 0;
-    int next = (int)wind + (int)random(0, 3) - 1;
-    if (next < -1) next = -1;
-    if (next > 1) next = 1;
-    wind = (int8_t)next;
-  }
-  uint8_t row[MATRIX_W];
-  for (int y = 0; y < MATRIX_H - 1; y++) {
-    for (int x = 0; x < MATRIX_W; x++) {
-      int sx = x + (int)wind;
-      if (sx < 0) sx = 0;
-      if (sx > MATRIX_W - 1) sx = MATRIX_W - 1;
-      int xm = (x == 0) ? 0 : x - 1;
-      int xp = (x == MATRIX_W - 1) ? MATRIX_W - 1 : x + 1;
-      int below = g_heat[(y + 1) * MATRIX_W + sx];
-      int left = g_heat[(y + 1) * MATRIX_W + xm];
-      int right = g_heat[(y + 1) * MATRIX_W + xp];
-      int v = (below * 2 + left + right) / 4;
-      v -= (int)random(0, 2);
-      if (y < 3) v -= (int)random(0, 2);
-      if (v < 0) v = 0;
-      if (v > 15) v = 15;
-      row[x] = (uint8_t)v;
-    }
-    memcpy(g_heat + y * MATRIX_W, row, MATRIX_W);
-  }
-  for (int x = 0; x < MATRIX_W; x++) {
-    int v = 11 + (int)random(0, 5);
-    if (random(0, 8) == 0) v = (int)random(0, 6);
-    g_heat[(MATRIX_H - 1) * MATRIX_W + x] = (uint8_t)v;
-  }
 }
 
 static int textWidth(const char* s) {
@@ -450,13 +609,23 @@ static void enterScroll(uint32_t now) {
   tickScroll(now);
 }
 
+static const uint8_t* animAt(uint8_t i) {
+  if (g_animCount == 0) return g_custom;
+  if (i >= g_animCount) i = 0;
+  return g_anim + (size_t)i * MATRIX_N;
+}
+
 static void enterShow(uint32_t now) {
   g_phase = PHASE_SHOW;
   g_phaseStart = now;
   if (g_kind == FRAME_FIRE) {
-    stepFire();
+    matrixFireStep(g_heat);
     blit(g_heat);
     g_lastFire = now;
+  } else if (g_kind == FRAME_ANIMATION && g_animCount > 0) {
+    g_animIndex = 0;
+    g_animLast = now;
+    blit(animAt(0));
   } else {
     blit(g_custom);
   }
@@ -493,8 +662,24 @@ static void tickScroll(uint32_t now) {
 static void tickShow(uint32_t now) {
   if (g_kind == FRAME_FIRE && (uint32_t)(now - g_lastFire) >= FIRE_MS) {
     g_lastFire = now;
-    stepFire();
+    matrixFireStep(g_heat);
     blit(g_heat);
+  } else if (g_kind == FRAME_ANIMATION && g_animCount > 0) {
+    uint8_t guard = 0;
+    while (guard < 8) {
+      uint16_t dur = g_animDur[g_animIndex];
+      if (dur < FRAME_INTERVAL_MIN) dur = g_interval;
+      if ((uint32_t)(now - g_animLast) < dur) break;
+      g_animLast += dur;
+      g_animIndex = (uint8_t)((g_animIndex + 1) % g_animCount);
+      guard++;
+    }
+    if (guard) {
+      uint16_t dur = g_animDur[g_animIndex];
+      if (dur < FRAME_INTERVAL_MIN) dur = g_interval;
+      if ((uint32_t)(now - g_animLast) >= dur) g_animLast = now;
+      blit(animAt(g_animIndex));
+    }
   }
   if ((uint32_t)(now - g_phaseStart) >= SHOW_MS) enterScroll(now);
 }
@@ -507,6 +692,41 @@ static void showFireNow(uint32_t now) {
 static void showCustomNow(uint32_t now) {
   g_kind = FRAME_CUSTOM;
   enterShow(now);
+}
+
+static void showAnimationNow(uint32_t now) {
+  g_kind = FRAME_ANIMATION;
+  enterShow(now);
+}
+
+static void clearPicture() {
+  memset(g_custom, 0, sizeof g_custom);
+  g_animCount = 0;
+  g_animIndex = 0;
+  g_interval = FRAME_INTERVAL_DEFAULT;
+  g_stored = FRAME_FIRE;
+}
+
+static void storeSingleFrame() {
+  memcpy(g_anim, g_custom, MATRIX_N);
+  g_animCount = 1;
+  g_animDur[0] = g_interval;
+  g_animIndex = 0;
+  g_stored = FRAME_CUSTOM;
+}
+
+static bool applyKind(uint8_t kind, uint32_t now) {
+  if (kind == FRAME_CUSTOM) {
+    showCustomNow(now);
+    return true;
+  }
+  if (kind == FRAME_ANIMATION) {
+    if (g_stored != FRAME_ANIMATION || g_animCount < 1) return false;
+    showAnimationNow(now);
+    return true;
+  }
+  showFireNow(now);
+  return true;
 }
 
 static bool matchHdr(const char* p, const char* key) {
@@ -541,8 +761,40 @@ static int contentLength(const char* req) {
   return 0;
 }
 
+static bool jadd(char* b, size_t n, size_t* i, const char* s) {
+  size_t k = strlen(s);
+  if (*i + k >= n) return false;
+  memcpy(b + *i, s, k);
+  *i += k;
+  b[*i] = 0;
+  return true;
+}
+
+static bool jnum(char* b, size_t n, size_t* i, unsigned v) {
+  char tmp[8];
+  int k = snprintf(tmp, sizeof tmp, "%u", v);
+  if (k < 0 || (size_t)k >= sizeof tmp) return false;
+  return jadd(b, n, i, tmp);
+}
+
+static bool jframe(char* b, size_t n, size_t* i, const uint8_t* leds) {
+  if (!jadd(b, n, i, "[")) return false;
+  for (int y = 0; y < MATRIX_H; y++) {
+    if (y && !jadd(b, n, i, ",")) return false;
+    if (!jadd(b, n, i, "[")) return false;
+    for (int x = 0; x < MATRIX_W; x++) {
+      if (x && !jadd(b, n, i, ",")) return false;
+      if (!jnum(b, n, i, leds[y * MATRIX_W + x])) return false;
+    }
+    if (!jadd(b, n, i, "]")) return false;
+  }
+  return jadd(b, n, i, "]");
+}
+
 static int buildState(char* b, size_t n, bool ok, const char* err, uint32_t now) {
-  const char* mode = (g_kind == FRAME_CUSTOM) ? "custom" : "fire";
+  const char* mode = "fire";
+  if (g_kind == FRAME_CUSTOM) mode = "custom";
+  else if (g_kind == FRAME_ANIMATION) mode = "animation";
   const char* phase = (g_phase == PHASE_SHOW) ? "show" : "scroll";
   const char* wifi = (g_wifi == WIFI_ONLINE) ? "connected" :
                      (g_wifi == WIFI_JOINING) ? "joining" : "off";
@@ -551,36 +803,33 @@ static int buildState(char* b, size_t n, bool ok, const char* err, uint32_t now)
     uint32_t elapsed = now - g_phaseStart;
     remaining = (elapsed >= SHOW_MS) ? 0 : (unsigned)(SHOW_MS - elapsed);
   }
+  unsigned frameIndex = (g_kind == FRAME_ANIMATION) ? g_animIndex : 0;
+  const uint8_t* shown = g_custom;
+  if (g_kind == FRAME_ANIMATION && g_animCount > 0) shown = animAt(g_animIndex);
   int w = snprintf(b, n,
     "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\",\"phase\":\"%s\","
-    "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,\"remainingMs\":%u,\"leds\":[",
+    "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,\"remainingMs\":%u,"
+    "\"frameCount\":%u,\"interval\":%u,\"frame\":%u,\"leds\":",
     ok ? "true" : "false",
     err ? err : "",
     mode, phase, wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
-    (int)g_rssi, remaining);
+    (int)g_rssi, remaining,
+    (unsigned)g_animCount, (unsigned)g_interval, frameIndex);
   if (w < 0 || (size_t)w >= n) return -1;
   size_t i = (size_t)w;
-  for (int y = 0; y < MATRIX_H; y++) {
-    if (i + 1 >= n) return -1;
-    b[i++] = '[';
-    for (int x = 0; x < MATRIX_W; x++) {
-      char num[8];
-      int k = snprintf(num, sizeof num, "%u%s",
-                       (unsigned)g_custom[y * MATRIX_W + x],
-                       (x < MATRIX_W - 1) ? "," : "");
-      if (k < 0 || i + (size_t)k >= n) return -1;
-      memcpy(b + i, num, (size_t)k);
-      i += (size_t)k;
-    }
-    if (i + 2 >= n) return -1;
-    b[i++] = ']';
-    if (y < MATRIX_H - 1) b[i++] = ',';
+  if (!jframe(b, n, &i, shown)) return -1;
+  if (!jadd(b, n, &i, ",\"frames\":[")) return -1;
+  for (uint8_t f = 0; f < g_animCount; f++) {
+    if (f && !jadd(b, n, &i, ",")) return -1;
+    if (!jframe(b, n, &i, animAt(f))) return -1;
   }
-  if (i + 2 >= n) return -1;
-  b[i++] = ']';
-  b[i++] = '}';
-  b[i] = 0;
+  if (!jadd(b, n, &i, "],\"durations\":[")) return -1;
+  for (uint8_t f = 0; f < g_animCount; f++) {
+    if (f && !jadd(b, n, &i, ",")) return -1;
+    if (!jnum(b, n, &i, g_animDur[f])) return -1;
+  }
+  if (!jadd(b, n, &i, "]}")) return -1;
   return (int)i;
 }
 
@@ -637,23 +886,47 @@ static bool modeFromRequest(const char* query, const char* body, uint8_t* kind) 
   return frameParseModeToken(m + 1, kind);
 }
 
-static void handleFrame(const char* body, uint32_t now) {
+static void handlePicture(const char* body, uint32_t now) {
+  body = body ? body : "";
+  if (frameFindTopKey(body, "frames")) {
+    uint16_t durs[FRAME_ANIM_MAX];
+    uint8_t count = 0;
+    uint16_t interval = FRAME_INTERVAL_DEFAULT;
+    const char* err = 0;
+    // g_json is free until the response is built. Parser leaves it unchanged on failure.
+    if (!frameParseAnimation(body, (uint8_t*)g_json, durs, &count, &interval, &err) || count < 1) {
+      httpJson(false, err ? err : "frames", now);
+      return;
+    }
+    memcpy(g_anim, g_json, (size_t)count * MATRIX_N);
+    memcpy(g_animDur, durs, (size_t)count * sizeof(uint16_t));
+    g_animCount = count;
+    g_interval = interval;
+    g_stored = FRAME_ANIMATION;
+    memcpy(g_custom, g_anim, MATRIX_N);
+    showAnimationNow(now);
+    httpJson(true, 0, now);
+    return;
+  }
   bool pix = false;
   bool hasMode = false;
   uint8_t kind = FRAME_FIRE;
   const char* err = 0;
   uint8_t temp[MATRIX_N];
   memcpy(temp, g_custom, sizeof temp);
-  if (!frameParseBody(body ? body : "", temp, &pix, &hasMode, &kind, &err)) {
+  if (!frameParseBody(body, temp, &pix, &hasMode, &kind, &err)) {
     httpJson(false, err ? err : "json", now);
     return;
   }
   if (pix) {
     memcpy(g_custom, temp, sizeof g_custom);
+    storeSingleFrame();
     showCustomNow(now);
   } else if (hasMode) {
-    if (kind == FRAME_CUSTOM) showCustomNow(now);
-    else showFireNow(now);
+    if (!applyKind(kind, now)) {
+      httpJson(false, "frames", now);
+      return;
+    }
   } else {
     httpJson(false, "json", now);
     return;
@@ -712,8 +985,9 @@ static void httpHandle(uint32_t now, const char* body) {
     httpJson(true, 0, now);
     return;
   }
-  if (!strcmp(path, "/api/frame") && !strcmp(method, "DELETE")) {
-    memset(g_custom, 0, sizeof g_custom);
+  if ((!strcmp(path, "/api/frame") || !strcmp(path, "/api/animation")) &&
+      !strcmp(method, "DELETE")) {
+    clearPicture();
     showFireNow(now);
     httpJson(true, 0, now);
     return;
@@ -725,14 +999,16 @@ static void httpHandle(uint32_t now, const char* body) {
       httpJson(false, "mode", now);
       return;
     }
-    if (kind == FRAME_CUSTOM) showCustomNow(now);
-    else showFireNow(now);
+    if (!applyKind(kind, now)) {
+      httpJson(false, "frames", now);
+      return;
+    }
     httpJson(true, 0, now);
     return;
   }
-  if (!strcmp(path, "/api/frame") || !strcmp(path, "/api/leds")) {
+  if (!strcmp(path, "/api/frame") || !strcmp(path, "/api/leds") || !strcmp(path, "/api/animation")) {
     if (strcmp(method, "POST")) { httpJson(false, "method", now); return; }
-    handleFrame(body, now);
+    handlePicture(body, now);
     return;
   }
   static const char MISS[] = "not found\n";
@@ -821,12 +1097,23 @@ static void wifiBegin() {
   g_joinSince = millis();
 }
 
-static void noteConnected() {
-  IPAddress ip = WiFi.localIP();
+// Core 1.6.0: status() is WL_CONNECTED once the radio associates. localIP()
+// stays 0.0.0.0 until DHCP finishes, and a failed modem read looks the same.
+static bool ipReady(const IPAddress& ip) {
+  if (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0) return false;
+  if (ip[0] == 0) return false;
+  return true;
+}
+
+static void rememberIp(const IPAddress& ip) {
   g_ip[0] = ip[0];
   g_ip[1] = ip[1];
   g_ip[2] = ip[2];
   g_ip[3] = ip[3];
+  buildIpText();
+}
+
+static void noteConnected() {
   g_rssi = (int16_t)WiFi.RSSI();
   g_lastRssi = millis();
   Serial.print(F("WiFi "));
@@ -841,6 +1128,25 @@ static void noteConnected() {
   Serial.print(g_ip[3]);
   Serial.println(F("/"));
   Serial.println(F("mDNS off: matrix-lamp.local will not resolve. DHCP name is matrix-lamp."));
+}
+
+static void adoptIp(const IPAddress& ip) {
+  bool changed = ip[0] != g_ip[0] || ip[1] != g_ip[1] || ip[2] != g_ip[2] || ip[3] != g_ip[3];
+  if (changed) rememberIp(ip);
+  if (g_wifi != WIFI_ONLINE) {
+    g_wifi = WIFI_ONLINE;
+    noteConnected();
+  } else if (changed) {
+    Serial.print(F("WiFi IP "));
+    Serial.print(g_ip[0]); Serial.print('.');
+    Serial.print(g_ip[1]); Serial.print('.');
+    Serial.print(g_ip[2]); Serial.print('.');
+    Serial.println(g_ip[3]);
+  }
+  if (!g_serverUp) {
+    g_server.begin();
+    g_serverUp = g_server ? 1 : 0;
+  }
 }
 
 static void wifiDrop(uint32_t now) {
@@ -860,23 +1166,32 @@ static void wifiDrop(uint32_t now) {
 static void wifiPollStatus(uint32_t now) {
   uint8_t st = WiFi.status();
   if (st == WL_CONNECTED) {
-    if (g_wifi != WIFI_ONLINE) {
-      g_wifi = WIFI_ONLINE;
-      noteConnected();
-    } else if ((uint32_t)(now - g_lastRssi) >= 5000) {
-      g_rssi = (int16_t)WiFi.RSSI();
-      g_lastRssi = now;
+    bool refresh = (g_wifi != WIFI_ONLINE) || g_ip[0] == 0 ||
+                   (uint32_t)(now - g_lastIpPoll) >= WIFI_IP_POLL_MS;
+    if (refresh) {
+      g_lastIpPoll = now;
+      IPAddress ip = WiFi.localIP();
+      // Ignore a 0.0.0.0 read once we already have an address: localIP()
+      // returns that on a modem timeout as well as before DHCP.
+      if (ipReady(ip)) adoptIp(ip);
     }
-    if (!g_serverUp) {
-      g_server.begin();
-      g_serverUp = g_server ? 1 : 0;
+    if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
+      if ((uint32_t)(now - g_lastRssi) >= 5000) {
+        g_rssi = (int16_t)WiFi.RSSI();
+        g_lastRssi = now;
+      }
+      if (!g_serverUp) {
+        g_server.begin();
+        g_serverUp = g_server ? 1 : 0;
+      }
+      return;
     }
-    return;
-  }
-  if (g_wifi == WIFI_ONLINE) {
+  } else if (g_wifi == WIFI_ONLINE) {
     wifiDrop(now);
     return;
   }
+  // Still joining, or associated with no address yet. Do not call begin()
+  // again until WIFI_RETRY_MS, or the DHCP handshake is aborted.
   if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) wifiBegin();
 }
 
@@ -889,12 +1204,20 @@ static void webSetup() {
     return;
   }
   g_wifi = WIFI_JOINING;
-  WiFi.setTimeout(0);
+  Serial.println(F("WiFi joining"));
+  // WiFi.begin() waits while _timeout is the default 10 s, and only for
+  // WL_CONNECTED — not for an address. modem.begin() restores a 10 s command
+  // timeout; leave that in place for this first attempt. The matrix timer
+  // is not running yet, so the wait does not fight the LED ISR.
   WiFi.status();
-  modem.timeout(MODEM_CMD_BUDGET_MS);
   WiFi.setHostname("matrix-lamp");
   wifiBegin();
-  Serial.println(F("WiFi joining"));
+  if (WiFi.status() == WL_CONNECTED) {
+    IPAddress ip = WiFi.localIP();
+    if (ipReady(ip)) adoptIp(ip);
+  }
+  WiFi.setTimeout(0);
+  modem.timeout(MODEM_CMD_BUDGET_MS);
 }
 
 static void webPoll(uint32_t now) {
@@ -924,9 +1247,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
   randomSeed((uint32_t)micros() ^ (uint32_t)analogRead(A0));
-  for (uint8_t i = 0; i < 40; i++) stepFire();
-  // Bring the radio up before the matrix ISR, so the modem's first
-  // commands are not sharing the CPU with a 96 kHz tick.
+  for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
+  // Radio first, then the 24 kHz matrix timer. The first WiFi.begin() can
+  // block; later polls must not.
   webSetup();
   matrixBegin();
   enterScroll(millis());
