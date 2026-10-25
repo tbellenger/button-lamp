@@ -12,15 +12,18 @@
 //   The next press cycles from the colour just set (same order as Lava).
 //   Fire trail has no switch. The web value sticks. LAVA_FIRE_TRAIL is boot.
 //
-// mDNS is not started. WiFiS3 in the UNO R4 core 1.6.0 has no mDNS responder.
-// The coprocessor does not hand multicast to the RA4M1, so a UDP responder
-// on port 5353 would not see queries. setHostname("spiral-lamp") is DHCP only.
+// mDNS (sketches/common/mdns_responder.h) answers spirallamp.local and
+// spiral-lamp.local on UDP 5353. DHCP hostname is spirallamp, so
+// http://spirallamp/ works on routers that publish that name.
+// spiral-lamp without .local is not a second DHCP name.
+// The AppleMIDI session is still not advertised over Bonjour.
 
 #ifndef LAMP_WIFI_H
 #define LAMP_WIFI_H
 
 #include <WiFiS3.h>
 #include <Modem.h>
+#include "mdns_responder.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -564,11 +567,13 @@ static void noteConnected(){
   Serial.print(g_ip[2]); Serial.print('.');
   Serial.print(g_ip[3]);
   Serial.println(F("/"));
-  Serial.println(F("mDNS off: spiral-lamp.local will not resolve. DHCP name is spiral-lamp."));
+  Serial.println(F("http://spirallamp.local/  and  http://spiral-lamp.local/"));
+  Serial.println(F("DHCP name spirallamp (http://spirallamp/ if the router publishes it)."));
   Music::onWifiUp();
 }
 static void wifiDrop(uint32_t now){
   Serial.println(F("WiFi dropped"));
+  mdnsServiceStop();
   Music::onWifiDown();
   g_wifi = WIFI_JOINING;
   g_server.end();
@@ -586,12 +591,14 @@ static void adoptIp(const IPAddress& ip){
   if (g_wifi != WIFI_ONLINE){
     g_wifi = WIFI_ONLINE;
     noteConnected();
+    mdnsServiceArm(millis());
   } else if (changed){
     Serial.print(F("WiFi IP "));
     Serial.print(g_ip[0]); Serial.print('.');
     Serial.print(g_ip[1]); Serial.print('.');
     Serial.print(g_ip[2]); Serial.print('.');
     Serial.println(g_ip[3]);
+    mdnsServiceArm(millis());
   }
   if (!g_serverUp){
     g_server.begin();
@@ -639,7 +646,7 @@ static void webSetup(){
   WiFi.setTimeout(0);
   WiFi.status();                 // starts the modem (and its soft-reset)
   modem.timeout(MODEM_CMD_BUDGET_MS);
-  WiFi.setHostname("spiral-lamp");
+  WiFi.setHostname("spirallamp");
   wifiBegin();
   Serial.println(F("WiFi joining"));
 }
@@ -658,6 +665,13 @@ static void webPoll(uint32_t now){
       g_http = PH_READ;
       return;
     }
+  }
+  if (g_wifi == WIFI_ONLINE && g_ip[0] != 0){
+    static const char* const kMdnsNames[] = {
+      "spirallamp.local",
+      "spiral-lamp.local"
+    };
+    mdnsServicePoll(now, g_ip, kMdnsNames, 2);
   }
   uint32_t period = (g_wifi == WIFI_ONLINE) ? WIFI_STATUS_ONLINE_MS : WIFI_STATUS_JOIN_MS;
   if ((uint32_t)(now - g_lastStatus) >= period){

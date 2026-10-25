@@ -10,9 +10,9 @@
    and AppleMIDI wait until localIP() is a non-zero address. Another begin()
    is not sent for 22 s, so that handshake is not aborted. A missing network
    or a dropped link leaves the lamp on its panel modes. The IP is printed on
-   Serial at 115200. There is no mDNS
-   in this core (multicast is not delivered to the RA4M1); spiral-lamp.local
-   will not resolve. The DHCP hostname is spiral-lamp.
+   Serial at 115200. mDNS answers spirallamp.local and spiral-lamp.local.
+   The DHCP hostname is spirallamp. The AppleMIDI session is not advertised
+   over Bonjour; add it by IP, or set MAC_SESSION_IP.
 
    The page is http://<ip>/ on port 80 (one client, short reads and writes).
    GET /api/state and GET /api/set?key=value. A web brightness or speed holds
@@ -54,13 +54,14 @@
        on D13, and LED_BUILTIN aliases it.
 
    Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0, Adafruit NeoPixel 1.15.5,
-   AppleMIDI 3.5.0, MIDI Library 5.0.2.
+   AppleMIDI 3.5.0, MIDI Library 5.0.2. Sizes below include a short secrets.h.
    LED_COUNT 160:
-       116432 B flash (44% of 262144), 15356 B globals (46% of 32768).
-       17412 B remain for locals. NeoPixel mallocs 480 B. WiFiClient adds a 1024 B FIFO.
+       118816 B flash (45% of 262144), 15892 B globals (48% of 32768).
+       16876 B remain for locals. NeoPixel mallocs 480 B. WiFiClient adds a 1024 B FIFO.
+       The mDNS socket (about 1.5 KB) is malloc'd while WiFi is up.
    LED_COUNT 320:
-       116400 B flash (44% of 262144), 15916 B globals (48% of 32768).
-       16852 B remain for locals. NeoPixel mallocs 960 B.
+       118768 B flash (45% of 262144), 16452 B globals (50% of 32768).
+       16316 B remain for locals. NeoPixel mallocs 960 B.
 
    Based on "Version 4 – Exact YouTube Version" from the Alexjulness plans. Fixes (see issues.md):
      - All pins / LED count / colour order / brightness cap in ONE config block below.

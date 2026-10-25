@@ -32,16 +32,21 @@
    as soon as the radio associates, while localIP() is still 0.0.0.0, so the
    lamp stays in the joining animation until the address is non-zero. A new
    begin() is not sent for 22 s, so DHCP is not reset mid-handshake.
-   No mDNS in this core. DHCP hostname is matrix-lamp.
+   mDNS answers matrixlamp.local and matrix-lamp.local (UDP 5353).
+   DHCP hostname is matrixlamp, so http://matrixlamp/ works on routers
+   that publish the DHCP name. matrix-lamp is mDNS only.
 
    y = 0 is the top row, x = 0 is the left column (renderBitmap order).
    Brightness 0..15 is a matrix level. 16..255 maps to 0..15.
 
-   Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0, with secrets.h
-   present: 88952 B flash (33% of 262144), 22516 B globals (68% of 32768),
-   10252 B left for locals. An empty WIFI_SSID is 248 B smaller in flash.
-   The request buffer and the state JSON are each 6144 B. The core's 8 KB
-   heap and 1 KB main stack still fit above the globals.
+   Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0. Empty WIFI_SSID
+   (no secrets.h): 94416 B flash (36% of 262144), 23048 B globals (70% of
+   32768), 9720 B left for locals. secrets.h with a short SSID and password
+   is 94624 B flash; globals stay 23048 B. The request buffer and the state
+   JSON are each 6144 B. The mDNS packet buffer is 512 B. The core's 8 KB
+   heap and 1 KB main stack still fit above the globals. The mDNS socket
+   (WiFiUDP, about 1.5 KB) is malloc'd while WiFi is up, next to the
+   client's 1024 B FIFO.
 */
 
 #include <Arduino.h>
@@ -52,6 +57,7 @@
 #include "Arduino_LED_Matrix.h"
 #include "frame_json.h"
 #include "matrix_fire.h"
+#include "mdns_responder.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -1127,7 +1133,8 @@ static void noteConnected() {
   Serial.print(g_ip[2]); Serial.print('.');
   Serial.print(g_ip[3]);
   Serial.println(F("/"));
-  Serial.println(F("mDNS off: matrix-lamp.local will not resolve. DHCP name is matrix-lamp."));
+  Serial.println(F("http://matrixlamp.local/  and  http://matrix-lamp.local/"));
+  Serial.println(F("DHCP name matrixlamp (http://matrixlamp/ if the router publishes it)."));
 }
 
 static void adoptIp(const IPAddress& ip) {
@@ -1136,12 +1143,14 @@ static void adoptIp(const IPAddress& ip) {
   if (g_wifi != WIFI_ONLINE) {
     g_wifi = WIFI_ONLINE;
     noteConnected();
+    mdnsServiceArm(millis());
   } else if (changed) {
     Serial.print(F("WiFi IP "));
     Serial.print(g_ip[0]); Serial.print('.');
     Serial.print(g_ip[1]); Serial.print('.');
     Serial.print(g_ip[2]); Serial.print('.');
     Serial.println(g_ip[3]);
+    mdnsServiceArm(millis());
   }
   if (!g_serverUp) {
     g_server.begin();
@@ -1151,6 +1160,7 @@ static void adoptIp(const IPAddress& ip) {
 
 static void wifiDrop(uint32_t now) {
   Serial.println(F("WiFi dropped"));
+  mdnsServiceStop();
   g_ip[0] = g_ip[1] = g_ip[2] = g_ip[3] = 0;
   g_rssi = 0;
   g_wifi = WIFI_JOINING;
@@ -1210,7 +1220,7 @@ static void webSetup() {
   // timeout; leave that in place for this first attempt. The matrix timer
   // is not running yet, so the wait does not fight the LED ISR.
   WiFi.status();
-  WiFi.setHostname("matrix-lamp");
+  WiFi.setHostname("matrixlamp");
   wifiBegin();
   if (WiFi.status() == WL_CONNECTED) {
     IPAddress ip = WiFi.localIP();
@@ -1235,6 +1245,13 @@ static void webPoll(uint32_t now) {
       g_http = PH_READ;
       return;
     }
+  }
+  if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
+    static const char* const kMdnsNames[] = {
+      "matrixlamp.local",
+      "matrix-lamp.local"
+    };
+    mdnsServicePoll(now, g_ip, kMdnsNames, 2);
   }
   uint32_t period = (g_wifi == WIFI_ONLINE) ? WIFI_STATUS_ONLINE_MS : WIFI_STATUS_JOIN_MS;
   if ((uint32_t)(now - g_lastStatus) >= period) {

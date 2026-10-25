@@ -1,7 +1,8 @@
 // Music mode for SpiralLamp_R4_FireTrail_WiFi_MIDI.
 // AppleMIDI (rtpMIDI) on WiFiS3 UDP. Control port 5004, data port 5005.
-// The UNO R4 core has no mDNS, so the Mac adds the lamp by IP, or this
-// sketch calls sendInvite() when secrets.h sets MAC_SESSION_IP.
+// The MIDI session is not advertised over Bonjour (hostname mDNS is separate,
+// in mdns_responder.h). The Mac adds the lamp by IP, or this sketch calls
+// sendInvite() when secrets.h sets MAC_SESSION_IP.
 //
 // Included once from the sketch, before lamp_wifi.h.
 
