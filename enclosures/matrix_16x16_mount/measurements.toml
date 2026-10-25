@@ -1,0 +1,79 @@
+[matrix_pcb_size]
+value = 160.0
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 256-LED flexible FPCB (B01DC0IOCK) published outer dimension 160.0 x 160.0 mm"
+
+[matrix_pcb_thickness]
+value = 2.5
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 flexible FPCB (~0.5 mm) plus 5050 SMD LED package (1.6 mm) and solder relief = 2.5 mm"
+
+[pixel_pitch]
+value = 10.0
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 matrix grid pitch: 160.0 mm / 16 = 10.0 mm center-to-center"
+
+[led_package_size]
+value = 5.0
+unit = "mm"
+how = "5050 SMD RGB LED package 5.0 x 5.0 mm"
+
+[diffuser_size]
+value = 162.0
+unit = "mm"
+how = "Akamino polycarbonate sheet scored and snapped to 162.0 x 162.0 mm square"
+
+[diffuser_sheet_thickness]
+value = 1.0
+unit = "mm"
+how = "Akamino 0.039 in (1.0 mm) polycarbonate sheet"
+
+[top_deck_flange_size]
+value = 92.0
+unit = "mm"
+how = "Button Lamp top-deck spiral cage flange outline 92.0 x 92.0 mm from plywood/src/spiral.py and top_backer_plate.stl"
+
+[top_deck_bolt_spacing]
+value = 76.2
+unit = "mm"
+how = "Button Lamp top-deck 4-bolt square spacing 76.2 mm (3.000 in, +/-38.1 mm from center) verified in fj125_top_qty1_mm.dxf, sm_al063_hood_qty1_mm.dxf, and spiral.py"
+
+[top_deck_wire_offset_x]
+value = 11.71
+unit = "mm"
+how = "Button Lamp top-deck Ø10.0 mm wire hole lateral offset from bolt center (116.712 - 105.0 = +11.712 mm) verified in fj125_top_qty1_mm.dxf and sm.py"
+
+[top_deck_wire_offset_y]
+value = 32.24
+unit = "mm"
+how = "Button Lamp top-deck Ø10.0 mm wire hole rear offset from bolt center (61.0 - 28.761 = 32.239 mm toward back) verified in fj125_top_qty1_mm.dxf and sm.py"
+
+[top_deck_wire_hole_dia]
+value = 10.0
+unit = "mm"
+how = "Button Lamp top-deck wire pass-through hole diameter 10.0 mm verified in fj125_top_qty1_mm.dxf and sm.py"
+
+[m3_clearance]
+value = 3.4
+unit = "mm"
+how = "nurb fastener table, M3 medium clearance hole, ISO 273 (matches Ø3.4 mm holes in fj125_top_qty1_mm.dxf)"
+
+[m3_head_dia]
+value = 6.0
+unit = "mm"
+how = "nurb fastener table, M3 socket cap head 5.5 mm + 0.5 mm clearance, ISO 4762"
+
+[m3_head_depth]
+value = 3.2
+unit = "mm"
+how = "nurb fastener table, M3 socket cap head height 3.0 mm + 0.2 mm layer slack, ISO 4762"
+
+[m3_nut_across_corners]
+value = 6.3
+unit = "mm"
+how = "nurb fastener table, M3 hex nut 6.1 mm across corners + 0.2 mm clearance, ISO 4032"
+
+[m3_nut_thickness]
+value = 2.6
+unit = "mm"
+how = "nurb fastener table, M3 hex nut 2.4 mm thickness + 0.2 mm clearance, ISO 4032"

@@ -16,6 +16,8 @@ There are three casings, all the same 250 × 210 × 120 mm wedge:
 
 The two laser-cut versions share one control layout (`plywood/fingerjoint/src/controls.py`, measured from the printed Switch Panel). Both have a 12.2 mm DC jack hole on the back for a 5 V 10 A supply, and keep the USB window for the Uno R4 WiFi's USB-C. The spiral holder is unchanged for now.
 
+A 3D-printable, support-free 16×16 WS2812B LED matrix and 162×162 mm polycarbonate diffuser attachment swaps onto the 3" 4-bolt top deck in place of the spiral holder: [enclosures/matrix_16x16_mount/](enclosures/matrix_16x16_mount/).
+
 The strip is the BTF FCOB 160/m 5 mm strip, left at **1000 mm / 160 LEDs** (it was cut a bit long for the old 900 mm / 144 LED plan), in the 13 mm JARBIH silicone tube. `LED_COUNT` is 160. The coil is sized for that metre: 1037 mm of tube, 4.75 turns.
 
 ## Quick start
@@ -253,3 +255,4 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `plywood/` | Plywood enclosure and tube spiral ([readme](plywood/README.md), [plan](plywood/PLAN.pdf)) |
 | `plywood/fingerjoint/` | Laser-cut finger-joint birch casing: v2 control slope, as-ordered set, retrofit faceplate ([readme](plywood/fingerjoint/README.md)) |
 | `sheetmetal/` | Bent sheet-metal casing, aluminium and steel DXFs ([readme](sheetmetal/README.md)) |
+| `enclosures/matrix_16x16_mount/` | 3D-printable support-free 16×16 WS2812B matrix and 162×162 mm polycarbonate diffuser on the 3" 4-bolt top deck ([readme](enclosures/matrix_16x16_mount/README.md)) |
