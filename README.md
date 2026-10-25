@@ -83,7 +83,7 @@ Libraries, Arduino IDE:
 - **Adafruit NeoPixel 1.12.1 or newer** (compiled with 1.15.5). `WiFiS3` ships with the core. Do not add a separate WiFi library.
 - **AppleMIDI** (lathoub/Arduino-AppleMIDI-Library) **3.5.x** (compiled with 3.5.0) and its dependency **MIDI Library** (compiled with 5.0.2).
 
-Serial Monitor at 115200. The boot line is `Spiral Lamp R4 FireTrail WiFi MIDI starting`. On connect it prints the IP. Open `http://<that-ip>/`. There is no mDNS in this core: `spiral-lamp.local` will not resolve. The DHCP hostname is `spiral-lamp`.
+Serial Monitor at 115200. The boot line is `Spiral Lamp R4 FireTrail WiFi MIDI starting`. On connect it prints the IP. Open `http://spirallamp.local/` or `http://spiral-lamp.local/` (or `http://<that-ip>/`). The DHCP hostname is `spirallamp`, so `http://spirallamp/` works on a router that publishes DHCP names. `spiral-lamp` without `.local` is not a second DHCP name. The AppleMIDI session is still not advertised over Bonjour.
 
 The page selects the mode (including Music and Lava), master brightness, knob position (speed), lava top and bottom colour, chaos, and the fire trail. Live status includes WiFi and MIDI. `GET /api/state` returns the same fields as JSON. `GET /api/set?key=value&...` applies keys left to right and returns that state (`ok` false on the first bad key; earlier keys stick).
 
@@ -102,7 +102,7 @@ Music on the panel: toggle ON (D6), rocker OFF (D7), rainbow key OFF (D5), wave 
 
 Each note-on starts a glow at the bottom LED and travels up the coil (32 slots, no per-note heap). Pitch class picks one of 12 hues. Velocity sets brightness and how long the tail is (about 12% of the strip at velocity 127). Note-off fades that pulse over about 400 ms, so a held note is longer. Channel 10 flashes the whole coil and does not travel. CC1 scales travel speed (0 ≈ 0.5×, 64 = 1×, 127 = 2×) on top of the A1 knob. CC7 scales Music brightness on top of the A0 fader. Neither CC takes the pot away from the panel or the page.
 
-AppleMIDI listens on UDP **5004** (data port **5005**). The session name is `Spiral Lamp`. The R4 does not advertise over Bonjour.
+AppleMIDI listens on UDP **5004** (data port **5005**). The session name is `Spiral Lamp`. The hostname resolves over mDNS, but the MIDI session itself is not advertised over Bonjour.
 
 1. Audio MIDI Setup → MIDI Studio → double-click **Network**.
 2. Enable **Session 1** (this is Logic's **Network Session 1**). Its port is 5004.
@@ -122,18 +122,18 @@ Core 1.6.0, NeoPixel 1.15.5, AppleMIDI 3.5.0, MIDI Library 5.0.2:
 
 | `LED_COUNT` | Flash | Globals |
 |---|---|---|
-| 160 | 116720 B (44% of 262144) | 15356 B (46% of 32768), 17412 B left for locals |
-| 320 | 116720 B (44% of 262144) | 15916 B (48% of 32768), 16852 B left for locals |
+| 160 | 118816 B (45% of 262144) | 15892 B (48% of 32768), 16876 B left for locals |
+| 320 | 118768 B (45% of 262144) | 16452 B (50% of 32768), 16316 B left for locals |
 
-NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1024 B receive FIFO on the heap. The two AppleMIDI UDP sockets are inside the session object (counted in the globals above). Joining WiFi does not block the frame loop (`WiFi.setTimeout(0)`, status polled). In core 1.6.0, `WiFi.status()` can be `WL_CONNECTED` as soon as the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The lamp stays in joining, and does not start the page or AppleMIDI, until that address is non-zero. It re-reads the address every few seconds and updates it if DHCP changes it. A new `WiFi.begin()` waits 22 seconds, so a slow lease is not aborted. One HTTP client; accepts are paced at 30 ms; each loop does one short read or one short write. A wedged coprocessor is capped at 800 ms per modem command after the radio has started.
+NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1024 B receive FIFO on the heap. The mDNS socket is a `WiFiUDP` (about 1.5 KB) malloc'd while WiFi is up; the 512 B packet buffer is in the globals above. The two AppleMIDI UDP sockets are inside the session object (counted in the globals above). Joining WiFi does not block the frame loop (`WiFi.setTimeout(0)`, status polled). The same mDNS responder as the matrix lamp (`sketches/common/mdns_responder.h`) answers `spirallamp.local` and `spiral-lamp.local` without blocking the LED loop. In core 1.6.0, `WiFi.status()` can be `WL_CONNECTED` as soon as the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The lamp stays in joining, and does not start the page or AppleMIDI, until that address is non-zero. It re-reads the address every few seconds and updates it if DHCP changes it. A new `WiFi.begin()` waits 22 seconds, so a slow lease is not aborted. One HTTP client; accepts are paced at 30 ms; each loop does one short read or one short write. A wedged coprocessor is capped at 800 ms per modem command after the radio has started.
 
 ### 5. Onboard matrix lamp
 
 `sketches/MatrixLamp_R4_Wifi/` drives only the Uno R4 WiFi's built-in 12×8 red LED matrix. Nothing is wired to the board: no strip, no buttons, no pots. Copy `secrets.example.h` to `secrets.h` in that folder and put the network in `WIFI_SSID` / `WIFI_PASS`. `secrets.h` is gitignored. A missing `secrets.h`, or an empty `WIFI_SSID`, skips WiFi. The matrix still runs.
 
-Libraries: Boards Manager → **Arduino UNO R4 Boards** (compiled with 1.6.0). Board: Arduino UNO R4 WiFi. `Arduino_LED_Matrix` and `WiFiS3` ship with the core. Do not add a separate WiFi library. Serial Monitor at 115200. The boot line is `Matrix Lamp R4 WiFi starting`. On connect it prints the IP. Open `http://<that-ip>/`. There is no mDNS in this core: `matrix-lamp.local` will not resolve. The DHCP hostname is `matrix-lamp`.
+Libraries: Boards Manager → **Arduino UNO R4 Boards** (compiled with 1.6.0). Board: Arduino UNO R4 WiFi. `Arduino_LED_Matrix` and `WiFiS3` ship with the core. Do not add a separate WiFi library. Serial Monitor at 115200. The boot line is `Matrix Lamp R4 WiFi starting`. On connect it prints the IP. Open `http://matrixlamp.local/` or `http://matrix-lamp.local/` (or `http://<that-ip>/`). The DHCP hostname is `matrixlamp`, so `http://matrixlamp/` works on a router that publishes DHCP names. `matrix-lamp` without `.local` is mDNS only.
 
-The loop never blocks on the radio after the first join. `setup` calls `WiFi.begin()` with the library defaults (10 s connect wait, 10 s modem command timeout) **before** the matrix timer starts. Core 1.6.0's `begin()` returns as soon as `WiFi.status()` is `WL_CONNECTED`, which can be the moment the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The sketch does not treat that as online. It stays on the joining animation, keeps polling `localIP()`, and only then scrolls the address and starts the page. A `0.0.0.0` read after a real address is already stored is ignored, because a modem timeout returns the same value. Another `WiFi.begin()` waits 22 seconds so DHCP is not reset mid-handshake. Once an address is stored, `setTimeout(0)` and `modem.timeout(800)` bound later polls. One HTTP client on port 80. Accepts are paced at 30 ms. Each pass does one short read or one short write, so the matrix and the page stay live together.
+The loop never blocks on the radio after the first join. `setup` calls `WiFi.begin()` with the library defaults (10 s connect wait, 10 s modem command timeout) **before** the matrix timer starts. Core 1.6.0's `begin()` returns as soon as `WiFi.status()` is `WL_CONNECTED`, which can be the moment the radio associates, while `WiFi.localIP()` is still `0.0.0.0`. The sketch does not treat that as online. It stays on the joining animation, keeps polling `localIP()`, and only then scrolls the address and starts the page. A `0.0.0.0` read after a real address is already stored is ignored, because a modem timeout returns the same value. Another `WiFi.begin()` waits 22 seconds so DHCP is not reset mid-handshake. Once an address is stored, `setTimeout(0)` and `modem.timeout(800)` bound later polls. One HTTP client on port 80. Accepts are paced at 30 ms. Each pass does one short read or one short write, so the matrix and the page stay live together. `sketches/common/mdns_responder.h` then joins `224.0.0.251:5353` and answers A queries for both `.local` names (cache-flush, TTL 120 seconds). An AAAA question gets an NSEC record and no IPv6 address, so macOS and iOS do not wait on AAAA. Replies go to the multicast group, or unicast when the query's QU bit is set or the source port is not 5353. The poll is every 50 ms and does not run during an HTTP read or write. Connecting sends a gratuitous announcement, then one more a second later. The spiral lamp uses the same header.
 
 What the matrix plays:
 
@@ -149,7 +149,7 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit (`loadFrame` / `renderBitmap`) and it
 
 The page is a 12×8 grid. Click or drag to paint the current frame with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post that one frame. Under the grid is a frame strip: Previous, Next, Add frame, Duplicate, Delete, and Play / Pause (the preview stays in the browser). Interval is 20–5000 ms, default 100. **Send animation** posts the strip. **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. Reset keeps the stored picture, so the next paint or Send animation can send it again.
 
-The fire in that slot is a few hot tongues on the bottom row, cooler neighbours and gaps beside them, and flames that thin out. Rows 5–6 stay in the bright and middle of the range, rows 3–4 are mostly dark with a lick now and then, and the top two rows stay off. Row 2 only throws a rare dim spark.
+The fire in that slot is a solid hot ember bed on the bottom row (every pixel stays in 12–15) with two or three wide flames rising from it. Rows 5–6 are full and bright, rows 3–4 are the tapering bodies, rows 1–2 are tips, and the top row stays dark except for a rare lick that reaches y = 0.
 
 `GET /api/state` returns JSON:
 
@@ -200,6 +200,7 @@ Host checks, from this folder's parent:
 ```text
 g++ -std=c++17 -DFRAME_JSON_TEST -x c++ sketches/MatrixLamp_R4_Wifi/frame_json.h -o /tmp/frame_json_test && /tmp/frame_json_test
 g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ sketches/MatrixLamp_R4_Wifi/matrix_fire.h -o /tmp/matrix_fire_test && /tmp/matrix_fire_test
+g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_test && /tmp/mdns_test
 ```
 
 ```text
@@ -221,7 +222,7 @@ curl -s -X DELETE http://<ip>/api/animation
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, with `secrets.h` present: 88952 B flash (33% of 262144), 22516 B globals (68% of 32768), 10252 B left for locals. An empty `WIFI_SSID` is 248 B smaller in flash; globals stay 22516 B. The request buffer and the state JSON are each 6144 B. The core keeps an 8 KB heap and a 1 KB main stack, and those still fit. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, empty `WIFI_SSID` (no `secrets.h`): 94416 B flash (36% of 262144), 23048 B globals (70% of 32768), 9720 B left for locals. A `secrets.h` with a short SSID and password is 94624 B flash; globals stay 23048 B. The request buffer and the state JSON are each 6144 B. The mDNS packet buffer is 512 B. The core keeps an 8 KB heap and a 1 KB main stack, and those still fit above the globals. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -232,8 +233,8 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_Base` | Uno R3 | 160 | yes | no | no | no | Known-good fallback. Stays dark until the rocker (D7) is on. |
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
-| `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. No mDNS. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire, a posted frame, or an animation. |
+| `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire, a posted frame, or an animation. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 
