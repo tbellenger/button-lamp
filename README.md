@@ -147,7 +147,7 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit (`loadFrame` / `renderBitmap`) and it
 
 `y` is the row, 0 at the top, 7 at the bottom. `x` is the column, 0 at the left. That is the same order as `renderBitmap`. A level is 0..15. A value 16..255 is an 8-bit brightness mapped with `(v * 15 + 127) / 255`. `on: false` forces that LED off. `on: true` with no brightness is level 15.
 
-The page is a 12×8 grid. Click or drag to paint the current frame with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post that one frame. Under the grid is a frame strip: Previous, Next, Add frame, Duplicate, Delete, and Play / Pause (the preview stays in the browser). Interval is 20–5000 ms, default 100. **Send animation** posts the strip. **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. Reset keeps the stored picture, so the next paint or Send animation can send it again.
+The page is a 12×8 grid. Click or drag to paint the current frame with the 0–15 brush (click a lit pixel at the current brush level to turn it off). Clear and Fill post that one frame. Under the grid is a frame strip of up to 128 frames: Previous, Next, Add frame, Duplicate, Delete, and Play / Pause (the preview stays in the browser). Interval is 20–5000 ms, default 100. **Send animation** posts the strip as a packed binary body (`Content-Type: application/octet-stream`, format A below). **Resume fire** posts `POST /api/reset` and puts the 10-second slot back on the fire. The IP scroll keeps going. Reset keeps the stored picture, so the next paint or Send animation can send it again. Loading `GET /api/state` reads `frames` as 96-character hex strings (or 8 strings of 12 hex digits) back into the strip. `leds` stays an 8×12 array of integers, so older clients that only read `leds` still work.
 
 The fire in that slot is a solid hot ember bed on the bottom row (every pixel stays in 12–15) with two or three wide flames rising from it. Rows 5–6 are full and bright, rows 3–4 are the tapering bodies, rows 1–2 are tips, and the top row stays dark except for a rare lick that reaches y = 0.
 
@@ -162,10 +162,11 @@ The fire in that slot is a solid hot ember bed on the bottom row (every pixel st
 | `rssi` | dBm, or 0 when offline |
 | `remainingMs` | Milliseconds left in the 10-second slot, otherwise 0 |
 | `frameCount` | Stored frames. 0 after boot and after DELETE. 1 for a single posted frame. |
+| `maxFrames` | 128. The most frames one animation can store. |
 | `interval` | Frame interval in ms. Default 100. Clamped to 20–5000. |
 | `frame` | Index of the animation frame in the 10-second slot, otherwise 0 |
 | `leds` | Current frame, 8 rows of 12 levels, 0..15. During fire this is the stored frame, not a live copy of the fire. During an animation it is the frame on screen. |
-| `frames` | Stored frames, same shape as `leds`. Empty when nothing is stored. |
+| `frames` | Stored frames, one 96-character lowercase hex string each. Each digit is a level 0..15, 12 columns × 8 rows, same order as `leds`. Empty when nothing is stored. |
 | `durations` | Per-frame interval in ms, one entry per stored frame. |
 
 `mode` value `loop` is accepted on input and means `fire`. `animation` resumes a stored animation from frame 0. It is an error if none is stored.
@@ -174,24 +175,37 @@ The fire in that slot is a solid hot ember bed on the bottom row (every pixel st
 |---|---|---|
 | `GET` | `/` | The page |
 | `GET` | `/api/state` | The JSON above |
-| `POST` | `/api/frame`, `/api/leds`, `/api/animation` | Store LED data or an animation and show it now, restarting the 10 seconds. A body with `frames` is an animation on any of these paths. A single frame (no `frames` key) is mode `custom`. A body that is only `{"mode":"fire"}` or `{"mode":"loop"}` returns the 10-second slot to the fire. `{"mode":"custom"}` shows the stored frame now. `{"mode":"animation"}` restarts the stored animation. If the body also has `frames` or pixels, those win. |
+| `POST` | `/api/frame`, `/api/leds`, `/api/animation` | Store LED data or an animation and show it now, restarting the 10 seconds. A JSON body with `frames` is an animation on any of these paths. A single frame (no `frames` key) is mode `custom`. A body that is only `{"mode":"fire"}` or `{"mode":"loop"}` returns the 10-second slot to the fire. `{"mode":"custom"}` shows the stored frame now. `{"mode":"animation"}` restarts the stored animation. If the body also has `frames` or pixels, those win. `POST /api/animation` also accepts the raw binary packet below. |
+| `POST` | `/api/animation.bin` | Same as a binary `POST /api/animation`. |
 | `POST` | `/api/mode` | `{"mode":"fire"}`, `{"mode":"loop"}`, `{"mode":"custom"}`, `{"mode":"animation"}`, or `?mode=` with the same tokens. `fire` / `loop` show the fire now and keep the stored picture. |
 | `POST` | `/api/reset` | Same as mode `fire`. No body. |
 | `DELETE` | `/api/frame`, `/api/animation` | Clear the stored picture and show the fire now. |
 
-Frame bodies (any one of these):
+Frame bodies (any one of these). A number 0..15 is the level. A number 16..255 still maps with `(v * 15 + 127) / 255`. A hex digit is the level itself, 0..15, and is not scaled.
 
 - `{"x":0,"y":7,"on":true,"brightness":15}` one pixel. `x` is 0..11, `y` is 0..7.
 - `{"pixels":[{"x":1,"y":2,"on":true,"brightness":8}]}` sparse updates, merged into the stored frame.
-- `{"leds":[...]}` or `{"frame":[...]}` or a bare array. Either 96 levels, or 8 rows of 12. Numbers only.
+- `{"leds":[...]}` or `{"frame":[...]}` or a bare array. Either 96 levels, or 8 rows of 12. Numbers only, or the hex shapes below.
 - `{"leds":[{"on":true,"brightness":4}, ...]}` objects without `x`/`y`, applied in order from LED 0. Up to 96.
+- Eight row strings, each exactly 12 hex digits (`0`-`9`, `a`-`f`, `A`-`F`): `{"rows":["000ff0000ff0","00f55f00f55f", ...]}` or a bare array of those eight strings. `leds`, `frame`, or one element of `frames` can be that array too.
+- One 96-character hex string, the whole frame in row order: `{"hex":"000ff0000ff000f55f00f55f..."}` or a bare JSON string. Spaces, tabs, newlines, and the separators `:`, `-`, and `,` are skipped. The string must contain exactly 96 hex digits. A `\` is rejected.
 
-Animation bodies (on `POST /api/frame`, `/api/leds`, or `/api/animation`):
+Animation bodies (JSON, on `POST /api/frame`, `/api/leds`, or `/api/animation`):
 
-- `frames`: 1 to 16 frames. Each frame is 96 levels, or 8 rows of 12, or pixel objects, same rules as one frame. A frame may also be `{"leds":[...],"duration":80}` (or `interval` / `intervalMs` on that frame).
+- `frames`: 1 to 128 frames. Each frame is any single-frame shape above: 96 numbers, 8 rows of 12 numbers, pixel objects, 8 hex row strings, a 96-character hex string, or an object `{"leds":[...]}`, `{"frame":[...]}`, `{"pixels":[...]}`, `{"hex":"..."}`, or `{"rows":[...]}`. A frame object may also set `duration`, `interval`, or `intervalMs`.
 - `interval` or `intervalMs`: milliseconds between frames. Default 100. Values are clamped to 20–5000 (`intervalMs` wins if both are sent). A missing per-frame duration uses that interval. One frame plays as a still image for the whole 10 seconds.
+- Example: `{"interval":80,"frames":["<96 hex>","<96 hex>"]}`.
 
-16 numeric frames fit in the 6144-byte request buffer (about 5 KB). A frame made of 96 `{on, brightness}` objects is much larger, so only a few of those fit; the board answers 413 `full` when the body does not. A 17th frame is rejected and nothing is stored.
+A 129th frame is rejected and nothing is stored. About 60 frames of 96-digit hex fit in one JSON body. A frame made of 96 `{on, brightness}` objects is much larger, so only a few of those fit; the board answers 413 `full` when the body does not.
+
+Raw binary (on `POST /api/animation` or `POST /api/animation.bin`). The body is binary when the path is `/api/animation.bin`, the `Content-Type` is `application/octet-stream`, or the first byte is not `{`, `[`, `"`, or whitespace (a bare hex string and JSON that starts with a space stay JSON).
+
+Both formats start with 4 bytes: magic, `frameCount` (1..128), then `intervalMs` as a little-endian uint16, clamped to 20–5000. Pixels are packed two per byte, high nibble = pixel `2*i`, low nibble = pixel `2*i+1` (48 bytes per frame).
+
+- Format A, magic `'M'` (`0x4D`) or version `1` (`0x01`): the 4-byte header, then `frameCount * 48` packed bytes. Every frame uses `intervalMs`.
+- Format B, magic `'N'` (`0x4E`) or version `2` (`0x02`): the same header, then each frame is a little-endian uint16 `durationMs` (clamped to 20–5000) plus 48 packed bytes. 128 frames are 6404 bytes.
+
+Bytes after the packet are ignored. A short packet, a count of 0 or above 128, or a bad magic returns 400 and stores nothing. Request headers are dropped before the body is kept, so the 6404-byte packet fits in the 6720-byte buffer. The page sends format A.
 
 A bad body returns 400 and changes nothing. `error` is `json`, `pixel`, `mode`, `frames`, `interval`, or `method`. A body that does not fit returns 413 `full`.
 
@@ -213,6 +227,11 @@ curl -s -X POST http://<ip>/api/mode -H 'Content-Type: application/json' -d '{"m
 curl -s -X POST 'http://<ip>/api/mode?mode=loop'
 curl -s -X POST http://<ip>/api/animation -H 'Content-Type: application/json' \
   -d '{"interval":120,"frames":[[[15,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]],[[0,0,0,0,0,0,0,0,0,0,0,15],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]]]}'
+curl -s -X POST http://<ip>/api/animation -H 'Content-Type: application/json' \
+  -d '{"interval":80,"frames":["f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f"]}'
+python3 -c 'open("/tmp/anim.bin","wb").write(bytes([0x4D,1,100,0])+bytes([0xF0])+bytes(47))'
+curl -s -X POST http://<ip>/api/animation.bin -H 'Content-Type: application/octet-stream' \
+  --data-binary @/tmp/anim.bin
 curl -s -X POST http://<ip>/api/reset
 curl -s -X DELETE http://<ip>/api/frame
 curl -s -X DELETE http://<ip>/api/animation
@@ -222,7 +241,9 @@ curl -s -X DELETE http://<ip>/api/animation
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, empty `WIFI_SSID` (no `secrets.h`): 94416 B flash (36% of 262144), 23048 B globals (70% of 32768), 9720 B left for locals. A `secrets.h` with a short SSID and password is 94624 B flash; globals stay 23048 B. The request buffer and the state JSON are each 6144 B. The mDNS packet buffer is 512 B. The core keeps an 8 KB heap and a 1 KB main stack, and those still fit above the globals. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, empty `WIFI_SSID` (no `secrets.h`): 97416 B flash (37% of 262144), 22404 B globals (68% of 32768), 10364 B left for locals. Frames are nibble-packed, 48 bytes each, so 128 frames are 6144 B plus 256 B of durations. One 6720 B buffer holds the HTTP request and the start of the state response; `GET /api/state` then streams `frames` and `durations`, so those hex strings are not a second copy in SRAM. The mDNS packet buffer is 512 B.
+
+The core places an 8 KB heap immediately after BSS and a 1 KB main stack at the top of RAM. There is no linker check if they meet. Before this change the gap was about 200 bytes, with the request buffer and the state JSON each 6144 B (23048 B globals). Growing the shared buffer to 8192 B on top of the packed frames would close that gap and leave fewer than 10 KB in the "left for locals" figure. At 6720 B the gap is 864 bytes, globals are 22404 B, and 10364 B remain. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -234,7 +255,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire, a posted frame, or an animation. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 12×8 onboard | no | no | yes | no | No strip and no panel. IP scroll, then 10 s of fire, a posted frame, or an animation of up to 128 frames. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 

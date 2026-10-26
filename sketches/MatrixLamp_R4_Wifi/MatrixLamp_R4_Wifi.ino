@@ -39,14 +39,24 @@
    y = 0 is the top row, x = 0 is the left column (renderBitmap order).
    Brightness 0..15 is a matrix level. 16..255 maps to 0..15.
 
-   Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0. Empty WIFI_SSID
-   (no secrets.h): 94416 B flash (36% of 262144), 23048 B globals (70% of
-   32768), 9720 B left for locals. secrets.h with a short SSID and password
-   is 94624 B flash; globals stay 23048 B. The request buffer and the state
-   JSON are each 6144 B. The mDNS packet buffer is 512 B. The core's 8 KB
-   heap and 1 KB main stack still fit above the globals. The mDNS socket
-   (WiFiUDP, about 1.5 KB) is malloc'd while WiFi is up, next to the
-   client's 1024 B FIFO.
+   Frames are stored nibble-packed: 48 bytes per 12x8 frame, 128 frames
+   (6144 B) plus a uint16 duration each. The HTTP request buffer and the
+   state prefix share one buffer. Request headers are dropped before the
+   body is kept, so a 6404-byte binary animation fits even when the
+   browser's headers are long. GET /api/state streams; frames are 96-char
+   hex strings and are not held as a second copy in SRAM.
+
+   Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0, empty
+   WIFI_SSID (no secrets.h): 97416 B flash (37% of 262144), 22404 B
+   globals (68% of 32768), 10364 B left for locals. The shared HTTP
+   buffer is 6720 B. The mDNS packet buffer is 512 B. The core's 8 KB
+   heap starts at the end of BSS and the 1 KB main stack is fixed at
+   the top of RAM; 864 bytes remain between the heap end and the stack
+   start (the previous sketch had about 200). An 8192-byte HTTP buffer
+   on top of 128 packed frames would run that heap into the stack and
+   would leave fewer than 10 KB in the figure arduino-cli prints.
+   The mDNS socket (WiFiUDP, about 1.5 KB) is malloc'd while WiFi is
+   up, next to the client's 1024 B FIFO.
 */
 
 #include <Arduino.h>
@@ -88,8 +98,9 @@ static const int HTTP_READ_MAX = 160;
 static const int HTTP_WRITE_MAX = 192;
 static const uint32_t HTTP_READ_TIMEOUT_MS = 1200;
 static const uint32_t MODEM_CMD_BUDGET_MS = 800;
-static const int REQ_CAP = 6144;
-static const int JSON_CAP = 6144;
+// Body capacity is HTTP_CAP-1 (trailing NUL). 128 frames with per-frame
+// durations are 6404 bytes and fit after the request headers are dropped.
+static const int HTTP_CAP = 6720;
 
 enum WifiPhase : uint8_t { WIFI_OFF = 0, WIFI_JOINING = 1, WIFI_ONLINE = 2 };
 enum HttpPhase : uint8_t { PH_IDLE = 0, PH_READ = 1, PH_WRITE = 2 };
@@ -114,7 +125,7 @@ static volatile uint8_t g_disp[MATRIX_N];
 static uint8_t g_acc[MATRIX_N];
 static uint8_t g_heat[MATRIX_N];
 static uint8_t g_custom[MATRIX_N];
-static uint8_t g_anim[FRAME_ANIM_MAX * MATRIX_N];
+static uint8_t g_anim[FRAME_ANIM_MAX * FRAME_PACKED];
 static uint16_t g_animDur[FRAME_ANIM_MAX];
 static uint8_t g_animCount = 0;
 static uint8_t g_animIndex = 0;
@@ -127,8 +138,31 @@ static WifiPhase g_wifi = WIFI_OFF;
 static WiFiServer g_server(80);
 static WiFiClient g_client;
 static HttpPhase g_http = PH_IDLE;
-static char g_req[REQ_CAP];
+static char g_httpBuf[HTTP_CAP];
 static uint16_t g_reqLen = 0;
+static uint8_t g_gotHdr = 0;
+static uint16_t g_need = 0;
+static char g_method[8];
+static char g_path[32];
+static char g_query[32];
+static uint8_t g_octet = 0;
+static uint8_t g_stream = 0;
+static uint16_t g_streamLen = 0;
+static uint16_t g_streamOff = 0;
+static uint16_t g_chunkLen = 0;
+static uint16_t g_chunkOff = 0;
+static uint16_t g_prefixLen = 0;
+static uint8_t g_viewAnim = 0;
+static uint8_t g_viewIndex = 0;
+
+// Declared up here so the sketch prototype generator can see it.
+struct StateTake {
+  char* dst;
+  int cap;
+  int skip;
+  int pos;
+  int filled;
+};
 static uint32_t g_clientMs = 0;
 static char g_hdr[360];
 static uint16_t g_hdrLen = 0;
@@ -136,7 +170,6 @@ static uint16_t g_hdrOff = 0;
 static const char* g_body = 0;
 static uint16_t g_bodyLen = 0;
 static uint16_t g_bodyOff = 0;
-static char g_json[JSON_CAP];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
@@ -213,7 +246,7 @@ pre{background:#1b0c09;border-radius:.65rem;padding:.7rem;white-space:pre-wrap;f
 <input id=ivn type=number min=20 max=5000 step=10 value=100>
 <button type=button class=primary id=send>Send animation</button>
 <button type=button class=primary id=fire>Resume fire</button>
-<p class=note>Click or drag to paint this frame. The brush is 0–15; click a lit pixel again to turn it off. Painting posts that one frame, which replaces the fire for 10 seconds, then the IP scrolls, then the frame shows again. Add frame, duplicate, and delete build a strip. Play previews it here. Send animation loops those frames, at the interval, through the same 10-second slot. Resume fire puts that slot back on the fire. The IP scroll keeps running.</p>
+<p class=note>Click or drag to paint this frame. The brush is 0–15; click a lit pixel again to turn it off. Painting posts that one frame, which replaces the fire for 10 seconds, then the IP scrolls, then the frame shows again. Add frame, duplicate, and delete build a strip of up to 128 frames. Play previews it here. Send animation posts the strip as a packed binary body and loops those frames, at the interval, through the same 10-second slot. Resume fire puts that slot back on the fire. The IP scroll keeps running.</p>
 <pre id=st>loading</pre>
 <script>
 var grid=document.getElementById('grid');
@@ -247,7 +280,7 @@ function look(el,lv){
 for(var i=0;i<cells.length;i++) look(cells[i],0);
 br.oninput=function(){brv.textContent=br.value;};
 var dirty=0,seeded=0,painting=null,gestured=0,busy=0,wait=0,pend=null,hold=0;
-var MAXF=16, cur=0, playing=0, playTimer=0;
+var MAXF=128, cur=0, playing=0, playTimer=0;
 function blank(){
   var f=[];
   for(var yb=0;yb<8;yb++){
@@ -256,13 +289,51 @@ function blank(){
   }
   return f;
 }
+function hexVal(c){
+  var h=c.charCodeAt(0);
+  if(h>=48&&h<=57) return h-48;
+  if(h>=97&&h<=102) return h-87;
+  if(h>=65&&h<=70) return h-55;
+  return -1;
+}
 function copyFrame(src){
   var f=blank();
+  if(!src) return f;
+  if(typeof src==='string'){
+    var n=0;
+    for(var i=0;i<src.length&&n<96;i++){
+      var v=hexVal(src.charAt(i));
+      if(v<0) continue;
+      f[(n/12)|0][n%12]=v;
+      n++;
+    }
+    return f;
+  }
+  if(typeof src[0]==='string'){
+    for(var y=0;y<8;y++){
+      var row=src[y]||'', k=0;
+      for(var i=0;i<row.length&&k<12;i++){
+        var hv=hexVal(row.charAt(i));
+        if(hv<0) continue;
+        f[y][k++]=hv;
+      }
+    }
+    return f;
+  }
+  if(typeof src[0]==='number'){
+    for(var i2=0;i2<96&&i2<src.length;i2++){
+      var lv=src[i2]|0;
+      if(lv<0) lv=0;
+      if(lv>15) lv=15;
+      f[(i2/12)|0][i2%12]=lv;
+    }
+    return f;
+  }
   for(var yc=0;yc<8;yc++) for(var xc=0;xc<12;xc++){
-    var lv=src&&src[yc]?(src[yc][xc]|0):0;
-    if(lv<0) lv=0;
-    if(lv>15) lv=15;
-    f[yc][xc]=lv;
+    var lv2=src[yc]?(src[yc][xc]|0):0;
+    if(lv2<0) lv2=0;
+    if(lv2>15) lv2=15;
+    f[yc][xc]=lv2;
   }
   return f;
 }
@@ -368,15 +439,20 @@ function adopt(list, interval, index){
   paintAll();
   renderStrip();
 }
-function queue(method,path,body){
-  pend={m:method,p:path,b:body};
+function queue(method,path,body,type){
+  pend={m:method,p:path,b:body,t:type||''};
   wait=1;
   if(!busy) pump();
 }
 function pump(){
   if(!wait||!pend) return;
   var req=pend; wait=0; busy=1;
-  fetch(req.p,{method:req.m,headers:req.b?{'Content-Type':'application/json'}:{},body:req.b||undefined})
+  var opt={method:req.m};
+  if(req.b){
+    opt.body=req.b;
+    opt.headers={'Content-Type':req.t||'application/json'};
+  }
+  fetch(req.p,opt)
     .then(function(r){return r.json();})
     .then(show)
     .catch(function(){link.textContent='no response';})
@@ -453,13 +529,13 @@ document.getElementById('prev').onclick=function(){pause(); storeFrame(); loadFr
 document.getElementById('next').onclick=function(){pause(); storeFrame(); loadFrame(cur+1);};
 document.getElementById('add').onclick=function(){
   pause(); storeFrame();
-  if(frames.length>=MAXF){ link.textContent='16 frames max'; return; }
+  if(frames.length>=MAXF){ link.textContent=MAXF+' frames max'; return; }
   frames.splice(cur+1,0,blank());
   loadFrame(cur+1);
 };
 document.getElementById('dup').onclick=function(){
   pause(); storeFrame();
-  if(frames.length>=MAXF){ link.textContent='16 frames max'; return; }
+  if(frames.length>=MAXF){ link.textContent=MAXF+' frames max'; return; }
   frames.splice(cur+1,0,copyFrame(frames[cur]));
   loadFrame(cur+1);
 };
@@ -482,7 +558,25 @@ document.getElementById('send').onclick=function(){
   pause();
   storeFrame();
   clearTimeout(hold);
-  queue('POST','/api/animation', JSON.stringify({interval:clampIv(iv.value), frames:frames}));
+  var n=frames.length;
+  if(n<1) n=1;
+  if(n>MAXF) n=MAXF;
+  var ms=clampIv(iv.value);
+  var buf=new Uint8Array(4+48*n);
+  buf[0]=0x4D;
+  buf[1]=n;
+  buf[2]=ms&255;
+  buf[3]=(ms>>8)&255;
+  for(var f=0;f<n;f++){
+    var o=4+f*48;
+    for(var i=0;i<48;i++){
+      var a=i*2, b=a+1;
+      var hi=frames[f][(a/12)|0][a%12]&15;
+      var lo=frames[f][(b/12)|0][b%12]&15;
+      buf[o+i]=(hi<<4)|lo;
+    }
+  }
+  queue('POST','/api/animation', buf, 'application/octet-stream');
 };
 document.getElementById('fire').onclick=function(){
   pause();
@@ -615,10 +709,16 @@ static void enterScroll(uint32_t now) {
   tickScroll(now);
 }
 
-static const uint8_t* animAt(uint8_t i) {
-  if (g_animCount == 0) return g_custom;
+static const uint8_t* animPacked(uint8_t i) {
   if (i >= g_animCount) i = 0;
-  return g_anim + (size_t)i * MATRIX_N;
+  return g_anim + (size_t)i * FRAME_PACKED;
+}
+
+static void blitPacked(const uint8_t* src48) {
+  for (int i = 0; i < FRAME_PACKED; i++) {
+    g_disp[2 * i] = (uint8_t)(src48[i] >> 4);
+    g_disp[2 * i + 1] = (uint8_t)(src48[i] & 0x0f);
+  }
 }
 
 static void enterShow(uint32_t now) {
@@ -631,7 +731,7 @@ static void enterShow(uint32_t now) {
   } else if (g_kind == FRAME_ANIMATION && g_animCount > 0) {
     g_animIndex = 0;
     g_animLast = now;
-    blit(animAt(0));
+    blitPacked(animPacked(0));
   } else {
     blit(g_custom);
   }
@@ -684,7 +784,7 @@ static void tickShow(uint32_t now) {
       uint16_t dur = g_animDur[g_animIndex];
       if (dur < FRAME_INTERVAL_MIN) dur = g_interval;
       if ((uint32_t)(now - g_animLast) >= dur) g_animLast = now;
-      blit(animAt(g_animIndex));
+      blitPacked(animPacked(g_animIndex));
     }
   }
   if ((uint32_t)(now - g_phaseStart) >= SHOW_MS) enterScroll(now);
@@ -714,7 +814,7 @@ static void clearPicture() {
 }
 
 static void storeSingleFrame() {
-  memcpy(g_anim, g_custom, MATRIX_N);
+  packFrame(g_anim, g_custom);
   g_animCount = 1;
   g_animDur[0] = g_interval;
   g_animIndex = 0;
@@ -767,37 +867,124 @@ static int contentLength(const char* req) {
   return 0;
 }
 
-static bool jadd(char* b, size_t n, size_t* i, const char* s) {
-  size_t k = strlen(s);
-  if (*i + k >= n) return false;
-  memcpy(b + *i, s, k);
-  *i += k;
-  b[*i] = 0;
-  return true;
-}
-
-static bool jnum(char* b, size_t n, size_t* i, unsigned v) {
-  char tmp[8];
-  int k = snprintf(tmp, sizeof tmp, "%u", v);
-  if (k < 0 || (size_t)k >= sizeof tmp) return false;
-  return jadd(b, n, i, tmp);
-}
-
-static bool jframe(char* b, size_t n, size_t* i, const uint8_t* leds) {
-  if (!jadd(b, n, i, "[")) return false;
-  for (int y = 0; y < MATRIX_H; y++) {
-    if (y && !jadd(b, n, i, ",")) return false;
-    if (!jadd(b, n, i, "[")) return false;
-    for (int x = 0; x < MATRIX_W; x++) {
-      if (x && !jadd(b, n, i, ",")) return false;
-      if (!jnum(b, n, i, leds[y * MATRIX_W + x])) return false;
+static bool headerIsOctet(const char* req) {
+  const char* end = strstr(req, "\r\n\r\n");
+  if (!end) return false;
+  const char* p = req;
+  while (p < end) {
+    if (matchHdr(p, "content-type:")) {
+      p += 13;
+      while (*p == ' ' || *p == '\t') p++;
+      return matchHdr(p, "application/octet-stream");
     }
-    if (!jadd(b, n, i, "]")) return false;
+    while (p < end && !(*p == '\r' && (p + 1) < end && p[1] == '\n')) p++;
+    if (p < end && *p == '\r') p += 2;
   }
-  return jadd(b, n, i, "]");
+  return false;
 }
 
-static int buildState(char* b, size_t n, bool ok, const char* err, uint32_t now) {
+// State JSON is generated twice from the same snapshot: once to measure
+// Content-Length, then again in 192-byte slices while the socket drains.
+// "leds" stays an 8x12 integer array. "frames" are 96-char hex strings.
+// A 128-frame body is about 14 KB and is not stored in SRAM.
+static void takeAdd(StateTake* t, const char* s, int n) {
+  if (n <= 0) return;
+  int a = t->pos;
+  t->pos += n;
+  if (t->cap <= 0 || !t->dst || t->filled >= t->cap) return;
+  int lo = a > t->skip ? a : t->skip;
+  int hi = t->pos;
+  int lim = t->skip + t->cap;
+  if (hi > lim) hi = lim;
+  if (hi > lo) {
+    memcpy(t->dst + t->filled, s + (lo - a), (size_t)(hi - lo));
+    t->filled += hi - lo;
+  }
+}
+
+static bool takeDone(const StateTake* t) {
+  return t->cap > 0 && t->pos >= t->skip + t->cap;
+}
+
+static char hexCh(uint8_t v) {
+  return (char)(v < 10 ? ('0' + v) : ('a' + (v - 10)));
+}
+
+static uint8_t animPixel(int frame, int i) {
+  const uint8_t* p = g_anim + (size_t)frame * FRAME_PACKED;
+  uint8_t b = p[i >> 1];
+  return (uint8_t)((i & 1) ? (b & 0x0f) : (b >> 4));
+}
+
+static uint8_t viewPixel(int i) {
+  if (!g_viewAnim) return g_custom[i];
+  return animPixel(g_viewIndex, i);
+}
+
+static void emitLevel(StateTake* t, uint8_t v) {
+  char num[2];
+  int k = 0;
+  if (v >= 10) {
+    num[k++] = '1';
+    num[k++] = (char)('0' + (v - 10));
+  } else {
+    num[k++] = (char)('0' + v);
+  }
+  takeAdd(t, num, k);
+}
+
+static void emitLeds(StateTake* t) {
+  takeAdd(t, "[", 1);
+  for (int y = 0; y < MATRIX_H; y++) {
+    if (takeDone(t)) return;
+    if (y) takeAdd(t, ",", 1);
+    takeAdd(t, "[", 1);
+    for (int x = 0; x < MATRIX_W; x++) {
+      if (x) takeAdd(t, ",", 1);
+      emitLevel(t, viewPixel(y * MATRIX_W + x));
+    }
+    takeAdd(t, "]", 1);
+  }
+  takeAdd(t, "]", 1);
+}
+
+static void emitFrames(StateTake* t) {
+  takeAdd(t, ",\"frames\":[", 11);
+  for (int f = 0; f < g_animCount; f++) {
+    if (takeDone(t)) return;
+    if (f) takeAdd(t, ",", 1);
+    char fr[98];
+    fr[0] = '"';
+    for (int i = 0; i < MATRIX_N; i++) fr[1 + i] = hexCh(animPixel(f, i));
+    fr[97] = '"';
+    takeAdd(t, fr, 98);
+  }
+}
+
+static void emitDurs(StateTake* t) {
+  takeAdd(t, "],\"durations\":[", 15);
+  for (int f = 0; f < g_animCount; f++) {
+    if (takeDone(t)) return;
+    if (f) takeAdd(t, ",", 1);
+    char num[8];
+    int k = snprintf(num, sizeof num, "%u", (unsigned)g_animDur[f]);
+    if (k < 0) k = 0;
+    takeAdd(t, num, k);
+  }
+  takeAdd(t, "]}", 2);
+}
+
+static void stateFeed(StateTake* t) {
+  takeAdd(t, g_httpBuf, (int)g_prefixLen);
+  if (takeDone(t)) return;
+  emitLeds(t);
+  if (takeDone(t)) return;
+  emitFrames(t);
+  if (takeDone(t)) return;
+  emitDurs(t);
+}
+
+static bool statePrepare(bool ok, const char* err, uint32_t now) {
   const char* mode = "fire";
   if (g_kind == FRAME_CUSTOM) mode = "custom";
   else if (g_kind == FRAME_ANIMATION) mode = "animation";
@@ -809,38 +996,49 @@ static int buildState(char* b, size_t n, bool ok, const char* err, uint32_t now)
     uint32_t elapsed = now - g_phaseStart;
     remaining = (elapsed >= SHOW_MS) ? 0 : (unsigned)(SHOW_MS - elapsed);
   }
-  unsigned frameIndex = (g_kind == FRAME_ANIMATION) ? g_animIndex : 0;
-  const uint8_t* shown = g_custom;
-  if (g_kind == FRAME_ANIMATION && g_animCount > 0) shown = animAt(g_animIndex);
-  int w = snprintf(b, n,
+  g_viewAnim = (g_kind == FRAME_ANIMATION && g_animCount > 0) ? 1 : 0;
+  g_viewIndex = g_viewAnim ? g_animIndex : 0;
+  int w = snprintf(g_httpBuf, 896,
     "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\",\"phase\":\"%s\","
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,\"remainingMs\":%u,"
-    "\"frameCount\":%u,\"interval\":%u,\"frame\":%u,\"leds\":",
+    "\"frameCount\":%u,\"maxFrames\":%u,\"interval\":%u,\"frame\":%u,\"leds\":",
     ok ? "true" : "false",
     err ? err : "",
     mode, phase, wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi, remaining,
-    (unsigned)g_animCount, (unsigned)g_interval, frameIndex);
-  if (w < 0 || (size_t)w >= n) return -1;
-  size_t i = (size_t)w;
-  if (!jframe(b, n, &i, shown)) return -1;
-  if (!jadd(b, n, &i, ",\"frames\":[")) return -1;
-  for (uint8_t f = 0; f < g_animCount; f++) {
-    if (f && !jadd(b, n, &i, ",")) return -1;
-    if (!jframe(b, n, &i, animAt(f))) return -1;
-  }
-  if (!jadd(b, n, &i, "],\"durations\":[")) return -1;
-  for (uint8_t f = 0; f < g_animCount; f++) {
-    if (f && !jadd(b, n, &i, ",")) return -1;
-    if (!jnum(b, n, &i, g_animDur[f])) return -1;
-  }
-  if (!jadd(b, n, &i, "]}")) return -1;
-  return (int)i;
+    (unsigned)g_animCount, (unsigned)FRAME_ANIM_MAX, (unsigned)g_interval,
+    (unsigned)g_viewIndex);
+  if (w < 0 || w >= 896) return false;
+  g_prefixLen = (uint16_t)w;
+  return true;
+}
+
+static int stateMeasure() {
+  StateTake t;
+  t.dst = 0;
+  t.cap = 0;
+  t.skip = 0;
+  t.pos = 0;
+  t.filled = 0;
+  stateFeed(&t);
+  return t.pos;
+}
+
+static int stateFill(char* dst, int cap, int skip) {
+  StateTake t;
+  t.dst = dst;
+  t.cap = cap;
+  t.skip = skip;
+  t.pos = 0;
+  t.filled = 0;
+  stateFeed(&t);
+  return t.filled;
 }
 
 static void httpBegin(int code, const char* reason, const char* type,
                       const char* body, uint16_t len) {
+  g_stream = 0;
   int n = snprintf(g_hdr, sizeof g_hdr,
     "HTTP/1.1 %d %s\r\n"
     "Content-Type: %s\r\n"
@@ -868,14 +1066,24 @@ static void httpBegin(int code, const char* reason, const char* type,
 }
 
 static void httpJson(bool ok, const char* err, uint32_t now) {
-  int n = buildState(g_json, sizeof g_json, ok, err, now);
-  if (n < 0) {
-    n = snprintf(g_json, sizeof g_json, "{\"ok\":false,\"error\":\"full\"}");
-    ok = false;
+  static const char FULL[] = "{\"ok\":false,\"error\":\"full\"}";
+  if (!statePrepare(ok, err, now)) {
+    httpBegin(500, "Error", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
+    return;
   }
-  if (n < 0) n = 0;
+  int n = stateMeasure();
+  if (n <= 0 || n > 65535) {
+    httpBegin(500, "Error", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
+    return;
+  }
   httpBegin(ok ? 200 : 400, ok ? "OK" : "Bad Request",
-            "application/json", g_json, (uint16_t)n);
+            "application/json", 0, (uint16_t)n);
+  if (g_hdrLen == 0) return;
+  g_stream = 1;
+  g_streamLen = (uint16_t)n;
+  g_streamOff = 0;
+  g_chunkLen = 0;
+  g_chunkOff = 0;
 }
 
 static bool modeFromRequest(const char* query, const char* body, uint8_t* kind) {
@@ -895,21 +1103,18 @@ static bool modeFromRequest(const char* query, const char* body, uint8_t* kind) 
 static void handlePicture(const char* body, uint32_t now) {
   body = body ? body : "";
   if (frameFindTopKey(body, "frames")) {
-    uint16_t durs[FRAME_ANIM_MAX];
     uint8_t count = 0;
     uint16_t interval = FRAME_INTERVAL_DEFAULT;
     const char* err = 0;
-    // g_json is free until the response is built. Parser leaves it unchanged on failure.
-    if (!frameParseAnimation(body, (uint8_t*)g_json, durs, &count, &interval, &err) || count < 1) {
+    // Validates before writing, so a bad body leaves g_anim alone.
+    if (!frameParseAnimation(body, g_anim, g_animDur, &count, &interval, &err) || count < 1) {
       httpJson(false, err ? err : "frames", now);
       return;
     }
-    memcpy(g_anim, g_json, (size_t)count * MATRIX_N);
-    memcpy(g_animDur, durs, (size_t)count * sizeof(uint16_t));
     g_animCount = count;
     g_interval = interval;
     g_stored = FRAME_ANIMATION;
-    memcpy(g_custom, g_anim, MATRIX_N);
+    unpackFrame(g_custom, g_anim);
     showAnimationNow(now);
     httpJson(true, 0, now);
     return;
@@ -947,25 +1152,59 @@ static void readToken(const char*& p, char* dst, size_t n) {
   while (*p && *p != ' ' && *p != '\r' && *p != '\n') p++;
 }
 
-static void httpHandle(uint32_t now, const char* body) {
-  const char* p = g_req;
-  char method[8];
-  readToken(p, method, sizeof method);
-  if (*p == ' ') p++;
+static bool captureRoute(const char* req) {
+  const char* p = req;
+  readToken(p, g_method, sizeof g_method);
+  if (*p != ' ') return false;
+  p++;
   char raw[72];
   readToken(p, raw, sizeof raw);
-  char path[48];
-  char query[40];
-  path[0] = 0;
-  query[0] = 0;
+  g_query[0] = 0;
   char* qmark = strchr(raw, '?');
   if (qmark) {
     *qmark = 0;
-    strncpy(query, qmark + 1, sizeof query - 1);
-    query[sizeof query - 1] = 0;
+    strncpy(g_query, qmark + 1, sizeof g_query - 1);
+    g_query[sizeof g_query - 1] = 0;
   }
-  strncpy(path, raw, sizeof path - 1);
-  path[sizeof path - 1] = 0;
+  strncpy(g_path, raw, sizeof g_path - 1);
+  g_path[sizeof g_path - 1] = 0;
+  return g_method[0] && g_path[0];
+}
+
+static void handleBinary(const uint8_t* body, int len, uint32_t now) {
+  uint8_t count = 0;
+  uint16_t interval = FRAME_INTERVAL_DEFAULT;
+  const char* err = 0;
+  if (len < 0) len = 0;
+  if (!frameParseBinary(body, (size_t)len, g_anim, g_animDur, &count, &interval, &err) || count < 1) {
+    httpJson(false, err ? err : "frames", now);
+    return;
+  }
+  g_animCount = count;
+  g_interval = interval;
+  g_stored = FRAME_ANIMATION;
+  unpackFrame(g_custom, g_anim);
+  showAnimationNow(now);
+  httpJson(true, 0, now);
+}
+
+// Path /api/animation.bin and Content-Type application/octet-stream are
+// binary. Otherwise a body whose first byte is not JSON ('{', '[', '"',
+// or whitespace) is the raw packet too.
+static bool bodyIsBinary(const char* path, int octet, const char* body, int len) {
+  if (path && strcmp(path, "/api/animation.bin") == 0) return true;
+  if (octet) return true;
+  if (!body || len <= 0) return false;
+  unsigned char c = (unsigned char)body[0];
+  if (c == '{' || c == '[' || c == '"' || c == ' ' || c == '\t' || c == '\r' || c == '\n')
+    return false;
+  return true;
+}
+
+static void httpHandle(uint32_t now, const char* body, int bodyLen) {
+  const char* method = g_method;
+  const char* path = g_path;
+  const char* query = g_query;
 
   if (!strcmp(method, "OPTIONS")) {
     httpBegin(204, "No Content", "text/plain", "", 0);
@@ -1012,61 +1251,82 @@ static void httpHandle(uint32_t now, const char* body) {
     httpJson(true, 0, now);
     return;
   }
-  if (!strcmp(path, "/api/frame") || !strcmp(path, "/api/leds") || !strcmp(path, "/api/animation")) {
+  if (!strcmp(path, "/api/frame") || !strcmp(path, "/api/leds") ||
+      !strcmp(path, "/api/animation") || !strcmp(path, "/api/animation.bin")) {
     if (strcmp(method, "POST")) { httpJson(false, "method", now); return; }
-    handlePicture(body, now);
+    if (bodyIsBinary(path, g_octet, body, bodyLen)) handleBinary((const uint8_t*)body, bodyLen, now);
+    else handlePicture(body, now);
     return;
   }
   static const char MISS[] = "not found\n";
   httpBegin(404, "Not Found", "text/plain; charset=utf-8", MISS, (uint16_t)(sizeof MISS - 1));
 }
 
+static void httpStop() {
+  g_client.stop();
+  g_http = PH_IDLE;
+  g_gotHdr = 0;
+  g_stream = 0;
+}
+
 static void httpRead(uint32_t now) {
   int avail = g_client.available();
   if (avail > 0) {
     if (avail > HTTP_READ_MAX) avail = HTTP_READ_MAX;
-    int room = (int)sizeof g_req - 1 - (int)g_reqLen;
+    int room = (int)sizeof g_httpBuf - 1 - (int)g_reqLen;
     if (avail > room) avail = room;
     if (avail > 0) {
-      uint8_t tmp[HTTP_READ_MAX];
-      int n = g_client.read(tmp, (size_t)avail);
+      int n = g_client.read((uint8_t*)g_httpBuf + g_reqLen, (size_t)avail);
       if (n > 0) {
-        memcpy(g_req + g_reqLen, tmp, (size_t)n);
         g_reqLen = (uint16_t)(g_reqLen + n);
-        g_req[g_reqLen] = 0;
+        g_httpBuf[g_reqLen] = 0;
       }
     }
   }
-  char* hdrEnd = strstr(g_req, "\r\n\r\n");
   bool timed = (uint32_t)(now - g_clientMs) >= HTTP_READ_TIMEOUT_MS;
-  if (!hdrEnd) {
-    if (timed || g_reqLen >= (sizeof g_req) - 1) {
-      g_client.stop();
-      g_http = PH_IDLE;
+  if (!g_gotHdr) {
+    char* hdrEnd = strstr(g_httpBuf, "\r\n\r\n");
+    if (!hdrEnd) {
+      if (timed || g_reqLen >= (sizeof g_httpBuf) - 1) httpStop();
+      return;
     }
-    return;
-  }
-  int headerBytes = (int)(hdrEnd - g_req) + 4;
-  int cl = contentLength(g_req);
-  if (cl < 0) {
-    httpJson(false, "json", now);
-    return;
-  }
-  if (headerBytes + cl >= (int)sizeof g_req) {
-    static const char FULL[] = "{\"ok\":false,\"error\":\"full\"}";
-    httpBegin(413, "Payload Too Large", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
-    return;
-  }
-  if ((int)g_reqLen < headerBytes + cl) {
-    if (timed) {
-      g_client.stop();
-      g_http = PH_IDLE;
+    int headerBytes = (int)(hdrEnd - g_httpBuf) + 4;
+    int cl = contentLength(g_httpBuf);
+    if (cl < 0) {
+      httpJson(false, "json", now);
+      return;
     }
+    // The body is kept on its own, so header size does not shrink it.
+    // 128 packed frames with per-frame durations are 6404 bytes.
+    if (cl >= (int)sizeof g_httpBuf) {
+      static const char FULL[] = "{\"ok\":false,\"error\":\"full\"}";
+      httpBegin(413, "Payload Too Large", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
+      return;
+    }
+    g_octet = headerIsOctet(g_httpBuf) ? 1 : 0;
+    if (!captureRoute(g_httpBuf)) {
+      httpJson(false, "method", now);
+      return;
+    }
+    int have = (int)g_reqLen - headerBytes;
+    if (have < 0) have = 0;
+    if (have > cl) have = cl;
+    memmove(g_httpBuf, g_httpBuf + headerBytes, (size_t)have);
+    g_reqLen = (uint16_t)have;
+    g_httpBuf[g_reqLen] = 0;
+    g_need = (uint16_t)cl;
+    g_gotHdr = 1;
+  }
+  if ((int)g_reqLen < (int)g_need) {
+    if (timed) httpStop();
     return;
   }
-  g_req[headerBytes + cl] = 0;
-  httpHandle(now, g_req + headerBytes);
+  g_httpBuf[g_need] = 0;
+  g_gotHdr = 0;
+  httpHandle(now, g_httpBuf, (int)g_need);
 }
+
+static char* httpChunk() { return g_httpBuf + 1024; }
 
 static void httpWrite() {
   if (g_hdrOff < g_hdrLen) {
@@ -1074,11 +1334,37 @@ static void httpWrite() {
     if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
     size_t w = g_client.write((const uint8_t*)g_hdr + g_hdrOff, n);
     if (w == 0) {
-      if (++g_fail > 8) { g_client.stop(); g_http = PH_IDLE; }
+      if (++g_fail > 8) httpStop();
       return;
     }
     g_fail = 0;
     g_hdrOff = (uint16_t)(g_hdrOff + w);
+    return;
+  }
+  if (g_stream) {
+    if (g_chunkOff >= g_chunkLen) {
+      if (g_streamOff >= g_streamLen) {
+        httpStop();
+        return;
+      }
+      int n = stateFill(httpChunk(), HTTP_WRITE_MAX, (int)g_streamOff);
+      if (n <= 0) {
+        httpStop();
+        return;
+      }
+      g_chunkLen = (uint16_t)n;
+      g_chunkOff = 0;
+    }
+    uint16_t n = (uint16_t)(g_chunkLen - g_chunkOff);
+    if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
+    size_t w = g_client.write((const uint8_t*)httpChunk() + g_chunkOff, n);
+    if (w == 0) {
+      if (++g_fail > 8) httpStop();
+      return;
+    }
+    g_fail = 0;
+    g_chunkOff = (uint16_t)(g_chunkOff + w);
+    g_streamOff = (uint16_t)(g_streamOff + w);
     return;
   }
   if (g_body && g_bodyOff < g_bodyLen) {
@@ -1086,15 +1372,14 @@ static void httpWrite() {
     if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
     size_t w = g_client.write((const uint8_t*)g_body + g_bodyOff, n);
     if (w == 0) {
-      if (++g_fail > 8) { g_client.stop(); g_http = PH_IDLE; }
+      if (++g_fail > 8) httpStop();
       return;
     }
     g_fail = 0;
     g_bodyOff = (uint16_t)(g_bodyOff + w);
     return;
   }
-  g_client.stop();
-  g_http = PH_IDLE;
+  httpStop();
 }
 
 static void wifiBegin() {
@@ -1240,7 +1525,10 @@ static void webPoll(uint32_t now) {
     if (incoming) {
       g_client = incoming;
       g_reqLen = 0;
-      g_req[0] = 0;
+      g_gotHdr = 0;
+      g_need = 0;
+      g_stream = 0;
+      g_httpBuf[0] = 0;
       g_clientMs = now;
       g_http = PH_READ;
       return;
