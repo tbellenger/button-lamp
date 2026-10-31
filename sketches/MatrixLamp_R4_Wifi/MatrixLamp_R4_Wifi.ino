@@ -1,71 +1,51 @@
 /* ========= MatrixLamp_R4_Wifi =========
-   Standalone Uno R4 WiFi sketch. Nothing is wired up: no NeoPixel strip,
-   no buttons, no pots. The picture is the board's 12x8 red LED matrix.
+   Uno R4 WiFi plus a BTF-LIGHTING WS2812B 16x16 panel (256 LEDs).
 
-   Loop, always, and it does not block the page:
-     scroll the WiFi IP, then 10 seconds of fire,
-     scroll the IP, then 10 seconds of fire, ...
-   Until the radio has an address, that scroll slot is a waiting animation.
-   The IP is printed on Serial at 115200 when it connects.
+   Data is D6, through a 330 ohm resistor (220–470 is fine), NEO_GRB at
+   800 kHz. The panel runs from its own 5 V supply. The Arduino and the
+   panel must share ground. A 1000 µF capacitor across the panel 5 V and
+   GND, at the panel, takes the switch-on surge.
 
-   A posted frame does not stop the loop. It replaces the fire:
-     scroll the IP, then 10 seconds of that frame,
-     scroll the IP, then 10 seconds of that frame, ...
-   A posted animation does the same with frames[0..N-1], stepping every
-   interval milliseconds and wrapping for the whole 10-second slot.
-   Each POST shows the new picture immediately and restarts the 10 seconds.
-   POST /api/reset, DELETE /api/frame, DELETE /api/animation, or
-   {"mode":"fire"} (alias "loop") puts the 10-second slot back on the fire.
-   DELETE also clears the stored picture. Reset and mode fire keep it.
+   The picture is the 16x16 panel: fire, a solid colour, or a rainbow.
+   The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
+   mark until DHCP has a real address). There is no frame upload and no
+   animation buffer.
 
-   Core 1.6.0 Arduino_LED_Matrix is 1-bit (loadFrame / renderBitmap) and its
-   own timer runs at 10 kHz. It has no grayscale draw(). This sketch includes
-   that header for the charlieplex map (turnLed) and runs its own timer at
-   24 kHz: one LED at a time, Bresenham duty across levels 0..15. That is a
-   250 Hz scan of the 96 LEDs. 96 kHz left too little time for the modem UART
-   (Serial2 at 115200) to finish a byte between ticks.
+   Orientation, if the picture is mirrored or rotated, is the four
+   PANEL_* settings below. They are the only thing to edit for that.
 
-   WiFi is WiFiS3 plus secrets.h. The first WiFi.begin() in setup uses the
-   library defaults (10 s connect wait, 10 s modem command timeout) and runs
-   before the matrix timer starts. After that, WiFi.setTimeout(0) and
-   modem.timeout(800) keep the loop bounded. status() can report WL_CONNECTED
-   as soon as the radio associates, while localIP() is still 0.0.0.0, so the
-   lamp stays in the joining animation until the address is non-zero. A new
-   begin() is not sent for 22 s, so DHCP is not reset mid-handshake.
+   Brightness starts at 20 of 255. BRIGHTNESS_CAP and POWER_BUDGET_MA
+   keep a full-white frame inside a small supply. The page cannot raise
+   brightness past that cap.
+
+   WiFi is WiFiS3 plus secrets.h. The first WiFi.begin() in setup uses
+   the library defaults and runs before the matrix timer starts. After
+   that, WiFi.setTimeout(0) and modem.timeout(800) keep the loop bounded.
+   status() can report WL_CONNECTED as soon as the radio associates,
+   while localIP() is still 0.0.0.0, so the lamp stays offline until the
+   address is non-zero. A new begin() is not sent for 22 s.
    mDNS answers matrixlamp.local and matrix-lamp.local (UDP 5353).
-   DHCP hostname is matrixlamp, so http://matrixlamp/ works on routers
-   that publish the DHCP name. matrix-lamp is mDNS only.
+   DHCP hostname is matrixlamp.
 
-   y = 0 is the top row, x = 0 is the left column (renderBitmap order).
-   Brightness 0..15 is a matrix level. 16..255 maps to 0..15.
+   The page is the same shape as the spiral lamp's
+   (sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/): mode, brightness,
+   speed, intensity, colour buttons. GET /api/state and GET /api/set.
 
-   Frames are stored nibble-packed: 48 bytes per 12x8 frame, 128 frames
-   (6144 B) plus a uint16 duration each. The HTTP request buffer and the
-   state prefix share one buffer. Request headers are dropped before the
-   body is kept, so a 6404-byte binary animation fits even when the
-   browser's headers are long. GET /api/state streams; frames are 96-char
-   hex strings and are not held as a second copy in SRAM.
+   Host check for the fire:
+     g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
-   Uno R4 WiFi (arduino:renesas_uno:unor4wifi), core 1.6.0, empty
-   WIFI_SSID (no secrets.h): 97416 B flash (37% of 262144), 22404 B
-   globals (68% of 32768), 10364 B left for locals. The shared HTTP
-   buffer is 6720 B. The mDNS packet buffer is 512 B. The core's 8 KB
-   heap starts at the end of BSS and the 1 KB main stack is fixed at
-   the top of RAM; 864 bytes remain between the heap end and the stack
-   start (the previous sketch had about 200). An 8192-byte HTTP buffer
-   on top of 128 packed frames would run that heap into the stack and
-   would leave fewer than 10 KB in the figure arduino-cli prints.
-   The mDNS socket (WiFiUDP, about 1.5 KB) is malloc'd while WiFi is
-   up, next to the client's 1024 B FIFO.
+   Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
+   85992 B flash (32% of 262144), 10900 B globals (33% of 32768),
+   21868 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
 #include <WiFiS3.h>
 #include <Modem.h>
+#include <Adafruit_NeoPixel.h>
 #include <stdio.h>
 #include <string.h>
 #include "Arduino_LED_Matrix.h"
-#include "frame_json.h"
 #include "matrix_fire.h"
 #include "mdns_responder.h"
 
@@ -79,14 +59,59 @@
 #define WIFI_PASS ""
 #endif
 
+// ---- Panel wiring. Edit these if the picture is the wrong way around. ----
+// Data pin. Tom's panel is on D6 and answers to NEO_GRB + NEO_KHZ800.
+static const uint8_t PANEL_PIN = 6;
+static const int PANEL_W = 16;
+static const int PANEL_H = 16;
+static const int PANEL_N = PANEL_W * PANEL_H;
+
+// Rows alternate direction, which is how these 16x16 panels are built.
+// false: every row is left to right.
+static const bool PANEL_SERPENTINE = true;
+// Which rows run backwards when PANEL_SERPENTINE is true.
+// true:  row 0 is left to right, row 1 is right to left (the usual one).
+// false: row 0 is right to left, row 1 is left to right.
+static const bool PANEL_SERPENTINE_ODD = true;
+// Mirror after rotation, before the serpentine index.
+static const bool PANEL_FLIP_X = false;
+static const bool PANEL_FLIP_Y = false;
+// Clockwise quarter-turns of the logical picture. 0, 1, 2, or 3.
+// The panel is square, so a 90 degree turn still maps every LED.
+static const uint8_t PANEL_ROTATE = 0;
+
+// ---- Power. 20 of 255 is plenty on this panel. Do not ship it at 255. ----
+// One WS2812B is about 60 mA at full white and brightness 255.
+// 256 * 60 mA = 15360 mA at brightness 255.
+// The cap is the lower of BRIGHTNESS_CAP and the budget:
+//   budget brightness = POWER_BUDGET_MA * 255 / (PANEL_N * LED_MA_FULL)
+// At 2500 mA that budget allows about 41, so BRIGHTNESS_CAP (40) wins.
+// Full white at 40 is about 2.4 A. Full white at the default 20 is about 1.2 A.
+// Fire is well under full white, so a USB port may still cope at 20, but a
+// small 5 V supply is the intended source.
+static const uint8_t BRIGHTNESS_DEFAULT = 20;
+static const uint8_t BRIGHTNESS_CAP = 40;
+static const uint16_t LED_MA_FULL = 60;
+static const uint16_t POWER_BUDGET_MA = 2500;
+
+static const uint8_t MODE_OFF = 0;
+static const uint8_t MODE_FIRE = 1;
+static const uint8_t MODE_SOLID = 2;
+static const uint8_t MODE_RAINBOW = 3;
+
+static const uint8_t COL_RED = 0;
+static const uint8_t COL_ORANGE = 1;
+static const uint8_t COL_YELLOW = 2;
+static const uint8_t COL_WHITE = 3;
+static const uint8_t COL_GREEN = 4;
+static const uint8_t COL_BLUE = 5;
+static const uint8_t COL_PURPLE = 6;
+static const uint8_t COL_COUNT = 7;
+
 static const int MATRIX_W = 12;
 static const int MATRIX_H = 8;
 static const int MATRIX_N = 96;
-static const uint32_t SHOW_MS = 10000;
-static const uint32_t LINK_MS = 4000;
 static const uint32_t SCROLL_MS = 80;
-static const uint32_t FIRE_MS = 70;
-// 24000/96 = 250 Hz scan. Dim levels span several scans; 96 kHz starved the modem.
 static const float MATRIX_TICK_HZ = 24000.0f;
 
 static const uint32_t WIFI_ACCEPT_MS = 30;
@@ -96,15 +121,20 @@ static const uint32_t WIFI_RETRY_MS = 22000;
 static const uint32_t WIFI_IP_POLL_MS = 3000;
 static const int HTTP_READ_MAX = 160;
 static const int HTTP_WRITE_MAX = 192;
-static const uint32_t HTTP_READ_TIMEOUT_MS = 1200;
+static const uint32_t HTTP_READ_TIMEOUT_MS = 800;
 static const uint32_t MODEM_CMD_BUDGET_MS = 800;
-// Body capacity is HTTP_CAP-1 (trailing NUL). 128 frames with per-frame
-// durations are 6404 bytes and fit after the request headers are dropped.
-static const int HTTP_CAP = 6720;
 
-enum WifiPhase : uint8_t { WIFI_OFF = 0, WIFI_JOINING = 1, WIFI_ONLINE = 2 };
-enum HttpPhase : uint8_t { PH_IDLE = 0, PH_READ = 1, PH_WRITE = 2 };
-enum LampPhase : uint8_t { PHASE_SCROLL = 0, PHASE_SHOW = 1 };
+static const uint8_t WIFI_OFF = 0;
+static const uint8_t WIFI_JOINING = 1;
+static const uint8_t WIFI_ONLINE = 2;
+static const uint8_t PH_IDLE = 0;
+static const uint8_t PH_READ = 1;
+static const uint8_t PH_WRITE = 2;
+
+static_assert(PANEL_W == MATRIX_FIRE_W, "panel width must match the fire sim");
+static_assert(PANEL_H == MATRIX_FIRE_H, "panel height must match the fire sim");
+static_assert(PANEL_W == PANEL_H, "PANEL_ROTATE assumes a square panel");
+static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
 
 // bit 0 = top row of a 5-row glyph. Drawn on matrix rows 1..5.
 static const uint8_t DIGITS[10][3] = {
@@ -121,55 +151,40 @@ static const uint8_t DIGITS[10][3] = {
 };
 static const uint8_t DOTCOL[1] = {0x10};
 
+static Adafruit_NeoPixel g_panel(PANEL_N, PANEL_PIN, NEO_GRB + NEO_KHZ800);
+
 static volatile uint8_t g_disp[MATRIX_N];
 static uint8_t g_acc[MATRIX_N];
-static uint8_t g_heat[MATRIX_N];
-static uint8_t g_custom[MATRIX_N];
-static uint8_t g_anim[FRAME_ANIM_MAX * FRAME_PACKED];
-static uint16_t g_animDur[FRAME_ANIM_MAX];
-static uint8_t g_animCount = 0;
-static uint8_t g_animIndex = 0;
-static uint16_t g_interval = FRAME_INTERVAL_DEFAULT;
-static uint32_t g_animLast = 0;
-static uint8_t g_stored = FRAME_FIRE;
+static volatile uint8_t g_scanLed = 0;
+static volatile uint8_t g_lit = 255;
+static uint8_t g_matrixOn = 0;
 static FspTimer g_matrixTimer;
 
-static WifiPhase g_wifi = WIFI_OFF;
+static uint8_t g_heat[MATRIX_FIRE_N];
+static uint8_t g_mode = MODE_FIRE;
+static uint8_t g_resume = MODE_FIRE;
+static uint8_t g_brightness = BRIGHTNESS_DEFAULT;
+static uint8_t g_speed = 50;
+static uint8_t g_intensity = 50;
+static uint8_t g_color = COL_ORANGE;
+static uint8_t g_hue = 0;
+static uint8_t g_dirty = 1;
+static uint32_t g_lastFrame = 0;
+
+static uint8_t g_wifi = WIFI_OFF;
 static WiFiServer g_server(80);
 static WiFiClient g_client;
-static HttpPhase g_http = PH_IDLE;
-static char g_httpBuf[HTTP_CAP];
+static uint8_t g_http = PH_IDLE;
+static char g_req[1024];
 static uint16_t g_reqLen = 0;
-static uint8_t g_gotHdr = 0;
-static uint16_t g_need = 0;
-static char g_method[8];
-static char g_path[32];
-static char g_query[32];
-static uint8_t g_octet = 0;
-static uint8_t g_stream = 0;
-static uint16_t g_streamLen = 0;
-static uint16_t g_streamOff = 0;
-static uint16_t g_chunkLen = 0;
-static uint16_t g_chunkOff = 0;
-static uint16_t g_prefixLen = 0;
-static uint8_t g_viewAnim = 0;
-static uint8_t g_viewIndex = 0;
-
-// Declared up here so the sketch prototype generator can see it.
-struct StateTake {
-  char* dst;
-  int cap;
-  int skip;
-  int pos;
-  int filled;
-};
 static uint32_t g_clientMs = 0;
-static char g_hdr[360];
+static char g_hdr[320];
 static uint16_t g_hdrLen = 0;
 static uint16_t g_hdrOff = 0;
 static const char* g_body = 0;
 static uint16_t g_bodyLen = 0;
 static uint16_t g_bodyOff = 0;
+static char g_json[640];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
@@ -181,14 +196,10 @@ static uint32_t g_lastIpPoll = 0;
 static uint32_t g_joinSince = 0;
 static uint8_t g_serverUp = 0;
 
-static LampPhase g_phase = PHASE_SCROLL;
-static uint8_t g_kind = FRAME_FIRE;
-static uint32_t g_phaseStart = 0;
-static uint32_t g_lastFire = 0;
 static bool g_scrollTrack = false;
 static int g_scrollX = -MATRIX_W;
 static uint32_t g_scrollLast = 0;
-static char g_ipText[16] = "0.0.0.0";
+static char g_ipText[16] = "";
 static int g_ipCols = 0;
 
 static const char PAGE[] = R"PAGE(<!DOCTYPE html>
@@ -197,395 +208,105 @@ static const char PAGE[] = R"PAGE(<!DOCTYPE html>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Matrix Lamp</title>
 <style>
-:root{color-scheme:dark}
-body{margin:0;background:#140806;color:#f7eee9;font:16px/1.35 system-ui,sans-serif}
-main{max-width:32rem;margin:0 auto;padding:1rem 1rem 2rem}
-h1{font-size:1.4rem;margin:0}
-.note{color:#d7b2a6;font-size:.88rem;margin:.35rem 0 .8rem}
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;touch-action:none;user-select:none}
-.grid b{display:block;aspect-ratio:1;border-radius:4px;background:#2a1210;box-shadow:inset 0 0 0 1px #5c2e28}
-label{display:flex;justify-content:space-between;margin:.95rem 0 .2rem;font-size:.85rem;color:#e4c4b8}
-input[type=range]{width:100%;height:2rem;accent-color:#ff3a2a}
-.row{display:flex;gap:.5rem;margin-top:.7rem}
-button{font:inherit;flex:1;background:#2c1410;color:#f7eee9;border:1px solid #7d4036;border-radius:.65rem;padding:.75rem .4rem;min-height:2.9rem}
-button.primary{background:#9a2a1c;border-color:#e15a48;margin-top:.55rem;width:100%}
-button.on{background:#5a241c;border-color:#ffb4a8}
-.strip{display:flex;gap:.35rem;overflow-x:auto;padding:.2rem 0 .45rem;-webkit-overflow-scrolling:touch}
-.strip button{flex:0 0 auto;width:auto;min-height:0;padding:.28rem .32rem;margin:0}
-.mini{display:grid;grid-template-columns:repeat(12,3px);grid-auto-rows:3px;gap:1px;margin-top:.22rem}
-.mini i{display:block;width:3px;height:3px;background:#2a1210}
-input[type=number]{font:inherit;display:block;width:6.2rem;margin-top:.45rem;background:#2c1410;color:#f7eee9;border:1px solid #7d4036;border-radius:.55rem;padding:.45rem .55rem}
-.frameLabel{margin:.85rem 0 .15rem;font-size:.85rem;color:#e4c4b8}
-pre{background:#1b0c09;border-radius:.65rem;padding:.7rem;white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace;margin:1rem 0 0}
+body{margin:0;background:#14120f;color:#f3efe6;font:18px/1.35 system-ui,sans-serif}
+main{max-width:28rem;margin:0 auto;padding:1rem 1rem 2.5rem}
+h1{font-size:1.45rem;margin:0 0 .2rem}
+label{display:block;margin:.85rem 0 .25rem;font-size:.85rem;color:#c8bba6}
+select,button{font:inherit;background:#2a241c;color:#f3efe6;border:1px solid #5c4d38;border-radius:.6rem;padding:.7rem;width:100%;box-sizing:border-box}
+button{margin:.3rem 0;min-height:2.9rem}
+.row{display:flex;gap:.5rem}
+.row button{flex:1;width:auto}
+input[type=range]{width:100%;height:2rem;accent-color:#e07030}
+pre{background:#0c0b09;border-radius:.6rem;padding:.7rem;white-space:pre-wrap;font:13px/1.45 ui-monospace,monospace}
+.note{color:#b5a892;font-size:.85rem}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
-<div class=grid id=grid></div>
-<label for=br>Brush <span id=brv>15</span></label>
-<input id=br type=range min=0 max=15 value=15>
+<label for=mode>Mode</label>
+<select id=mode>
+<option value=off>Off</option>
+<option value=fire>Fire</option>
+<option value=solid>Solid colour</option>
+<option value=rainbow>Rainbow</option>
+</select>
+<button type=button id=power>Turn off</button>
+<label for=br>Brightness <span id=brv>20</span></label>
+<input id=br type=range min=0 max=40 value=20>
+<label for=sp>Speed <span id=spv>50</span></label>
+<input id=sp type=range min=0 max=100 value=50>
+<label for=fi>Fire intensity <span id=fiv>50</span></label>
+<input id=fi type=range min=0 max=100 value=50>
+<label>Solid colour</label>
 <div class=row>
-<button type=button id=clear>Clear</button>
-<button type=button id=fill>Fill</button>
-</div>
-<p class=frameLabel id=framelabel>Frame 1 of 1</p>
-<div class=strip id=strip></div>
-<div class=row>
-<button type=button id=prev>Previous</button>
-<button type=button id=next>Next</button>
+<button type=button data-c=red>Red</button>
+<button type=button data-c=orange>Orange</button>
+<button type=button data-c=yellow>Yellow</button>
+<button type=button data-c=white>White</button>
 </div>
 <div class=row>
-<button type=button id=add>Add frame</button>
-<button type=button id=dup>Duplicate</button>
-<button type=button id=del>Delete</button>
+<button type=button data-c=green>Green</button>
+<button type=button data-c=blue>Blue</button>
+<button type=button data-c=purple>Purple</button>
 </div>
-<div class=row>
-<button type=button id=play>Play</button>
-</div>
-<label for=iv>Interval <span id=ivv>100</span> ms</label>
-<input id=iv type=range min=20 max=5000 step=10 value=100>
-<input id=ivn type=number min=20 max=5000 step=10 value=100>
-<button type=button class=primary id=send>Send animation</button>
-<button type=button class=primary id=fire>Resume fire</button>
-<p class=note>Click or drag to paint this frame. The brush is 0–15; click a lit pixel again to turn it off. Painting posts that one frame, which replaces the fire for 10 seconds, then the IP scrolls, then the frame shows again. Add frame, duplicate, and delete build a strip of up to 128 frames. Play previews it here. Send animation posts the strip as a packed binary body and loops those frames, at the interval, through the same 10-second slot. Resume fire puts that slot back on the fire. The IP scroll keeps running.</p>
 <pre id=st>loading</pre>
+<p class=note>Brightness is out of 255 and starts at 20, which is plenty on this panel. The slider stops at the cap (40, or lower if the power budget is tighter) so a USB port or a small 5 V supply is not asked for a full-white frame. Speed is the fire and the rainbow. Intensity is how tall and hot the fire is: 50 is the tuned flame, higher reaches further up the panel. The colour buttons switch to that solid colour. The board's 12×8 matrix scrolls the IP address. Serpentine, flip, and rotate are settings in the sketch, not on this page.</p>
 <script>
-var grid=document.getElementById('grid');
-var br=document.getElementById('br');
-var brv=document.getElementById('brv');
-var st=document.getElementById('st');
-var link=document.getElementById('link');
-var levels=[],cells=[];
-for(var y=0;y<8;y++){
-  levels[y]=[];
-  for(var x=0;x<12;x++){
-    levels[y][x]=0;
-    var el=document.createElement('b');
-    el.dataset.x=x;
-    el.dataset.y=y;
-    grid.appendChild(el);
-    cells.push(el);
-  }
-}
-function cell(x,y){return cells[y*12+x];}
-function look(el,lv){
-  if(!lv){
-    el.style.background='#2a1210';
-    el.style.boxShadow='inset 0 0 0 1px #5c2e28';
-  }else{
-    var a=(0.3+0.7*lv/15).toFixed(3);
-    el.style.background='rgba(255,48,32,'+a+')';
-    el.style.boxShadow='0 0 '+(2+Math.round(lv*0.7))+'px rgba(255,60,36,.95)';
-  }
-}
-for(var i=0;i<cells.length;i++) look(cells[i],0);
-br.oninput=function(){brv.textContent=br.value;};
-var dirty=0,seeded=0,painting=null,gestured=0,busy=0,wait=0,pend=null,hold=0;
-var MAXF=128, cur=0, playing=0, playTimer=0;
-function blank(){
-  var f=[];
-  for(var yb=0;yb<8;yb++){
-    f[yb]=[];
-    for(var xb=0;xb<12;xb++) f[yb][xb]=0;
-  }
-  return f;
-}
-function hexVal(c){
-  var h=c.charCodeAt(0);
-  if(h>=48&&h<=57) return h-48;
-  if(h>=97&&h<=102) return h-87;
-  if(h>=65&&h<=70) return h-55;
-  return -1;
-}
-function copyFrame(src){
-  var f=blank();
-  if(!src) return f;
-  if(typeof src==='string'){
-    var n=0;
-    for(var i=0;i<src.length&&n<96;i++){
-      var v=hexVal(src.charAt(i));
-      if(v<0) continue;
-      f[(n/12)|0][n%12]=v;
-      n++;
-    }
-    return f;
-  }
-  if(typeof src[0]==='string'){
-    for(var y=0;y<8;y++){
-      var row=src[y]||'', k=0;
-      for(var i=0;i<row.length&&k<12;i++){
-        var hv=hexVal(row.charAt(i));
-        if(hv<0) continue;
-        f[y][k++]=hv;
-      }
-    }
-    return f;
-  }
-  if(typeof src[0]==='number'){
-    for(var i2=0;i2<96&&i2<src.length;i2++){
-      var lv=src[i2]|0;
-      if(lv<0) lv=0;
-      if(lv>15) lv=15;
-      f[(i2/12)|0][i2%12]=lv;
-    }
-    return f;
-  }
-  for(var yc=0;yc<8;yc++) for(var xc=0;xc<12;xc++){
-    var lv2=src[yc]?(src[yc][xc]|0):0;
-    if(lv2<0) lv2=0;
-    if(lv2>15) lv2=15;
-    f[yc][xc]=lv2;
-  }
-  return f;
-}
-var frames=[blank()];
-var iv=document.getElementById('iv');
-var ivn=document.getElementById('ivn');
-var ivv=document.getElementById('ivv');
-function clampIv(n){
-  n=Math.round(+n);
-  if(!(n>=20)) n=20;
-  if(n>5000) n=5000;
-  return n;
-}
-function setIv(n){
-  n=clampIv(n);
-  iv.value=n; ivn.value=n; ivv.textContent=String(n);
-  if(playing) schedulePlay();
-}
-iv.oninput=function(){setIv(iv.value);};
-ivn.onchange=function(){setIv(ivn.value);};
-function dot(lv){
-  if(!lv) return '#2a1210';
-  return 'rgba(255,48,32,'+(0.25+0.75*lv/15).toFixed(2)+')';
-}
-function renderStrip(){
-  var strip=document.getElementById('strip');
-  strip.innerHTML='';
-  for(var i=0;i<frames.length;i++){
-    var b=document.createElement('button');
-    b.type='button';
-    b.className=i===cur?'on':'';
-    b.dataset.i=i;
-    b.appendChild(document.createTextNode(String(i+1)));
-    var mini=document.createElement('span');
-    mini.className='mini';
-    for(var y=0;y<8;y++) for(var x=0;x<12;x++){
-      var px=document.createElement('i');
-      px.style.background=dot(frames[i][y][x]);
-      mini.appendChild(px);
-    }
-    b.appendChild(mini);
-    strip.appendChild(b);
-  }
-  document.getElementById('framelabel').textContent='Frame '+(cur+1)+' of '+frames.length;
-}
-function storeFrame(){
-  for(var y=0;y<8;y++) for(var x=0;x<12;x++) frames[cur][y][x]=levels[y][x];
-}
-function paintAll(){
-  for(var y=0;y<8;y++) for(var x=0;x<12;x++) look(cell(x,y), levels[y][x]);
-}
-function loadFrame(i){
-  if(i<0) i=frames.length-1;
-  if(i>=frames.length) i=0;
-  cur=i;
-  for(var y=0;y<8;y++) for(var x=0;x<12;x++) levels[y][x]=frames[cur][y][x];
-  paintAll();
-  renderStrip();
-}
-function pause(){
-  playing=0;
-  clearTimeout(playTimer);
-  var b=document.getElementById('play');
-  b.textContent='Play';
-  b.className='';
-}
-function schedulePlay(){
-  clearTimeout(playTimer);
-  if(!playing) return;
-  playTimer=setTimeout(function(){
-    if(!playing) return;
-    storeFrame();
-    loadFrame(cur+1);
-    schedulePlay();
-  }, clampIv(iv.value));
+var mode=document.getElementById('mode'),br=document.getElementById('br'),sp=document.getElementById('sp');
+var fi=document.getElementById('fi'),st=document.getElementById('st'),brv=document.getElementById('brv');
+var spv=document.getElementById('spv'),fiv=document.getElementById('fiv'),link=document.getElementById('link');
+var power=document.getElementById('power');
+var pending='',busy=0;
+function send(q){pending=q;if(!busy)pump();}
+function pump(){
+  if(!pending)return;
+  var q=pending;pending='';busy=1;
+  fetch('/api/set?'+q).then(function(r){return r.json();}).then(show).catch(function(){}).then(function(){busy=0;pump();});
 }
 function show(s){
-  if(!s||!s.mode) return;
-  if(!seeded && !dirty){
-    seeded=1;
-    if(s.frames && s.frames.length) adopt(s.frames, s.interval, s.frame);
-    else if(s.leds && s.leds.length===8) adopt([s.leds], s.interval||100, 0);
-  }
-  var what=s.phase==='show'
-    ? (s.mode==='animation' ? ('animation '+((s.frame|0)+1)+'/'+(s.frameCount||1))
-       : (s.mode==='custom'?'custom frame':'fire'))
-    : (s.wifi==='connected'?'scrolling IP':'waiting for WiFi');
-  var left=s.phase==='show' ? ('  '+(s.remainingMs/1000).toFixed(1)+'s left') : '';
-  var extra=(s.frameCount?('\n'+s.frameCount+' frames @ '+(s.interval||0)+' ms'):'');
-  link.textContent=(s.ip||'0.0.0.0')+'   '+(s.wifi||'');
-  st.textContent=what+left+'\n10s slot '+s.mode+extra+'\nrssi '+s.rssi;
+  if(!s||!s.mode)return;
+  var ae=document.activeElement;
+  if(ae!==mode)mode.value=s.mode;
+  if(s.brightnessCap)br.max=s.brightnessCap;
+  if(ae!==br)br.value=s.brightness;
+  if(ae!==sp)sp.value=s.speed;
+  if(ae!==fi)fi.value=s.intensity;
+  brv.textContent=br.value;
+  spv.textContent=sp.value;
+  fiv.textContent=fi.value;
+  power.textContent=(s.mode==='off')?'Turn on':'Turn off';
+  link.textContent=s.wifi+'  '+s.ip+'   '+s.ledCount+' LEDs';
+  st.textContent=
+    'mode '+s.mode+'\n'+
+    'brightness '+s.brightness+' / '+s.brightnessCap+'\n'+
+    'speed '+s.speed+'   intensity '+s.intensity+'\n'+
+    'colour '+s.color+'\n'+
+    'wifi '+s.wifi+'   rssi '+s.rssi+'\n'+
+    'panel '+s.width+'x'+s.height+'   serpentine '+(s.serpentine?'on':'off')+'\n'+
+    'flipX '+(s.flipX?'on':'off')+'   flipY '+(s.flipY?'on':'off')+'   rotate '+s.rotate+'\n'+
+    'cap '+s.brightnessCap+'   budget '+s.powerBudgetMa+' mA';
 }
-function adopt(list, interval, index){
-  var next=[];
-  for(var i=0;i<list.length && next.length<MAXF;i++) next.push(copyFrame(list[i]));
-  if(!next.length) return;
-  frames=next;
-  if(interval) setIv(interval);
-  var fi=index|0;
-  if(fi<0||fi>=frames.length) fi=0;
-  cur=fi;
-  for(var y=0;y<8;y++) for(var x=0;x<12;x++) levels[y][x]=frames[cur][y][x];
-  paintAll();
-  renderStrip();
+mode.onchange=function(){send('mode='+encodeURIComponent(mode.value));};
+power.onclick=function(){send('power=toggle');};
+function slide(el,key,label){
+  var t=0,last=0;
+  el.oninput=function(){
+    label.textContent=el.value;
+    var now=Date.now();
+    if(now-last>200){last=now;send(key+'='+el.value);}
+    clearTimeout(t);
+    t=setTimeout(function(){last=Date.now();send(key+'='+el.value);},220);
+  };
+  el.onchange=function(){clearTimeout(t);send(key+'='+el.value);};
 }
-function queue(method,path,body,type){
-  pend={m:method,p:path,b:body,t:type||''};
-  wait=1;
-  if(!busy) pump();
+slide(br,'brightness',brv);
+slide(sp,'speed',spv);
+slide(fi,'intensity',fiv);
+var colours=document.querySelectorAll('button[data-c]');
+for(var ci=0;ci<colours.length;ci++){
+  colours[ci].onclick=function(){send('color='+this.getAttribute('data-c')+'&mode=solid');};
 }
-function pump(){
-  if(!wait||!pend) return;
-  var req=pend; wait=0; busy=1;
-  var opt={method:req.m};
-  if(req.b){
-    opt.body=req.b;
-    opt.headers={'Content-Type':req.t||'application/json'};
-  }
-  fetch(req.p,opt)
-    .then(function(r){return r.json();})
-    .then(show)
-    .catch(function(){link.textContent='no response';})
-    .then(function(){busy=0; if(wait) pump();});
-}
-function schedule(){
-  clearTimeout(hold);
-  hold=setTimeout(function(){queue('POST','/api/frame',JSON.stringify({leds:levels}));},45);
-}
-function flushNow(){
-  clearTimeout(hold);
-  queue('POST','/api/frame',JSON.stringify({leds:levels}));
-}
-function apply(el){
-  var x=+el.dataset.x, y=+el.dataset.y;
-  if(levels[y][x]===painting) return;
-  levels[y][x]=painting;
-  look(el,painting);
-  dirty=1; gestured=1;
-  schedule();
-}
-function atPoint(ev){
-  var el=document.elementFromPoint(ev.clientX,ev.clientY);
-  if(el&&el.dataset&&el.dataset.x!=null) return el;
-  return null;
-}
-grid.addEventListener('pointerdown',function(ev){
-  var el=ev.target.closest?ev.target.closest('b'):null;
-  if(!el||el.dataset.x==null) return;
-  ev.preventDefault();
-  pause();
-  var brush=+br.value;
-  var lv=levels[+el.dataset.y][+el.dataset.x];
-  painting=(brush===0||lv===brush)?0:brush;
-  gestured=0;
-  apply(el);
-  if(grid.setPointerCapture) grid.setPointerCapture(ev.pointerId);
-});
-grid.addEventListener('pointermove',function(ev){
-  if(painting===null) return;
-  var el=atPoint(ev);
-  if(el) apply(el);
-});
-function endGesture(){
-  if(painting===null) return;
-  painting=null;
-  storeFrame();
-  renderStrip();
-  if(gestured) flushNow();
-}
-grid.addEventListener('pointerup',endGesture);
-grid.addEventListener('pointercancel',endGesture);
-function setAll(lv){
-  dirty=1;
-  pause();
-  for(var y3=0;y3<8;y3++) for(var x3=0;x3<12;x3++){
-    levels[y3][x3]=lv;
-    look(cell(x3,y3),lv);
-  }
-  storeFrame();
-  renderStrip();
-  flushNow();
-}
-document.getElementById('clear').onclick=function(){setAll(0);};
-document.getElementById('fill').onclick=function(){setAll(+br.value);};
-document.getElementById('strip').onclick=function(ev){
-  var b=ev.target.closest?ev.target.closest('button'):null;
-  if(!b||b.dataset.i==null) return;
-  pause();
-  storeFrame();
-  loadFrame(+b.dataset.i);
-};
-document.getElementById('prev').onclick=function(){pause(); storeFrame(); loadFrame(cur-1);};
-document.getElementById('next').onclick=function(){pause(); storeFrame(); loadFrame(cur+1);};
-document.getElementById('add').onclick=function(){
-  pause(); storeFrame();
-  if(frames.length>=MAXF){ link.textContent=MAXF+' frames max'; return; }
-  frames.splice(cur+1,0,blank());
-  loadFrame(cur+1);
-};
-document.getElementById('dup').onclick=function(){
-  pause(); storeFrame();
-  if(frames.length>=MAXF){ link.textContent=MAXF+' frames max'; return; }
-  frames.splice(cur+1,0,copyFrame(frames[cur]));
-  loadFrame(cur+1);
-};
-document.getElementById('del').onclick=function(){
-  pause();
-  if(frames.length===1){ frames[0]=blank(); loadFrame(0); return; }
-  frames.splice(cur,1);
-  if(cur>=frames.length) cur=frames.length-1;
-  loadFrame(cur);
-};
-document.getElementById('play').onclick=function(){
-  if(playing){ pause(); return; }
-  storeFrame();
-  playing=1;
-  this.textContent='Pause';
-  this.className='on';
-  schedulePlay();
-};
-document.getElementById('send').onclick=function(){
-  pause();
-  storeFrame();
-  clearTimeout(hold);
-  var n=frames.length;
-  if(n<1) n=1;
-  if(n>MAXF) n=MAXF;
-  var ms=clampIv(iv.value);
-  var buf=new Uint8Array(4+48*n);
-  buf[0]=0x4D;
-  buf[1]=n;
-  buf[2]=ms&255;
-  buf[3]=(ms>>8)&255;
-  for(var f=0;f<n;f++){
-    var o=4+f*48;
-    for(var i=0;i<48;i++){
-      var a=i*2, b=a+1;
-      var hi=frames[f][(a/12)|0][a%12]&15;
-      var lo=frames[f][(b/12)|0][b%12]&15;
-      buf[o+i]=(hi<<4)|lo;
-    }
-  }
-  queue('POST','/api/animation', buf, 'application/octet-stream');
-};
-document.getElementById('fire').onclick=function(){
-  pause();
-  clearTimeout(hold);
-  queue('POST','/api/reset',null);
-};
-renderStrip();
 function poll(){
-  if(busy||wait) return;
+  if(busy||pending)return;
   fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});
 }
 setInterval(poll,1000);
@@ -594,17 +315,60 @@ poll();
 </main></body></html>
 )PAGE";
 
+static uint8_t brightnessLimit() {
+  uint32_t denom = (uint32_t)PANEL_N * (uint32_t)LED_MA_FULL;
+  uint32_t fromBudget = 255;
+  if (denom > 0) {
+    fromBudget = ((uint32_t)POWER_BUDGET_MA * 255ul) / denom;
+    if (fromBudget < 1) fromBudget = 1;
+  }
+  uint32_t cap = BRIGHTNESS_CAP;
+  if (fromBudget < cap) cap = fromBudget;
+  if (cap > 255) cap = 255;
+  return (uint8_t)cap;
+}
+
+static uint16_t panelIndex(int x, int y) {
+  uint8_t rot = (uint8_t)(PANEL_ROTATE & 3);
+  if (rot == 1) {
+    int nx = (PANEL_W - 1) - y;
+    y = x;
+    x = nx;
+  } else if (rot == 2) {
+    x = (PANEL_W - 1) - x;
+    y = (PANEL_H - 1) - y;
+  } else if (rot == 3) {
+    int ny = (PANEL_H - 1) - x;
+    x = y;
+    y = ny;
+  }
+  if (PANEL_FLIP_X) x = (PANEL_W - 1) - x;
+  if (PANEL_FLIP_Y) y = (PANEL_H - 1) - y;
+  if (x < 0) x = 0;
+  if (y < 0) y = 0;
+  if (x >= PANEL_W) x = PANEL_W - 1;
+  if (y >= PANEL_H) y = PANEL_H - 1;
+  if (PANEL_SERPENTINE) {
+    bool odd = (y & 1) != 0;
+    if (odd == PANEL_SERPENTINE_ODD) x = (PANEL_W - 1) - x;
+  }
+  return (uint16_t)(y * PANEL_W + x);
+}
+
 static void matrixIsr(timer_callback_args_t*) {
-  static uint8_t led = 0;
-  uint8_t a = (uint8_t)(g_acc[led] + g_disp[led]);
+  uint8_t led = g_scanLed;
+  uint8_t level = g_disp[led];
+  uint8_t a = (uint8_t)(g_acc[led] + level);
   bool on = false;
   if (a >= 15) {
     a = (uint8_t)(a - 15);
-    on = true;
+    on = level > 0;
   }
   g_acc[led] = a;
   turnLed((int)led, on);
+  g_lit = on ? led : (uint8_t)255;
   if (++led >= MATRIX_N) led = 0;
+  g_scanLed = led;
 }
 
 static void matrixBegin() {
@@ -620,11 +384,28 @@ static void matrixBegin() {
   ok = ok && g_matrixTimer.setup_overflow_irq();
   ok = ok && g_matrixTimer.open();
   ok = ok && g_matrixTimer.start();
+  g_matrixOn = ok ? 1 : 0;
   if (!ok) Serial.println(F("Matrix timer failed"));
 }
 
-static void blit(const uint8_t* src) {
-  for (int i = 0; i < MATRIX_N; i++) g_disp[i] = src[i];
+static void matrixPause() {
+  if (!g_matrixOn) return;
+  g_matrixTimer.stop();
+  if (g_lit != 255) {
+    turnLed((int)g_lit, false);
+    g_lit = 255;
+  }
+}
+
+static void matrixResume() {
+  if (!g_matrixOn) return;
+  g_matrixTimer.start();
+}
+
+static void panelShow() {
+  matrixPause();
+  g_panel.show();
+  matrixResume();
 }
 
 static int textWidth(const char* s) {
@@ -697,48 +478,8 @@ static void buildIpText() {
   g_ipCols = textWidth(g_ipText);
 }
 
-static void enterShow(uint32_t now);
-static void tickScroll(uint32_t now);
-
-static void enterScroll(uint32_t now) {
-  g_phase = PHASE_SCROLL;
-  g_phaseStart = now;
-  g_scrollTrack = false;
-  g_scrollX = -MATRIX_W;
-  g_scrollLast = now;
-  tickScroll(now);
-}
-
-static const uint8_t* animPacked(uint8_t i) {
-  if (i >= g_animCount) i = 0;
-  return g_anim + (size_t)i * FRAME_PACKED;
-}
-
-static void blitPacked(const uint8_t* src48) {
-  for (int i = 0; i < FRAME_PACKED; i++) {
-    g_disp[2 * i] = (uint8_t)(src48[i] >> 4);
-    g_disp[2 * i + 1] = (uint8_t)(src48[i] & 0x0f);
-  }
-}
-
-static void enterShow(uint32_t now) {
-  g_phase = PHASE_SHOW;
-  g_phaseStart = now;
-  if (g_kind == FRAME_FIRE) {
-    matrixFireStep(g_heat);
-    blit(g_heat);
-    g_lastFire = now;
-  } else if (g_kind == FRAME_ANIMATION && g_animCount > 0) {
-    g_animIndex = 0;
-    g_animLast = now;
-    blitPacked(animPacked(0));
-  } else {
-    blit(g_custom);
-  }
-}
-
 static void tickScroll(uint32_t now) {
-  if (g_wifi == WIFI_ONLINE) {
+  if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
     if (!g_scrollTrack) {
       buildIpText();
       g_scrollX = -MATRIX_W;
@@ -753,292 +494,317 @@ static void tickScroll(uint32_t now) {
       g_scrollLast += steps * SCROLL_MS;
       g_scrollX += (int)steps;
       renderIp();
-      if (g_scrollX > g_ipCols) enterShow(now);
+      if (g_scrollX > g_ipCols) g_scrollTrack = false;
     }
     return;
   }
-  if (g_scrollTrack) {
-    g_scrollTrack = false;
-    g_phaseStart = now;
-  }
+  g_scrollTrack = false;
   renderLink(now);
-  if ((uint32_t)(now - g_phaseStart) >= LINK_MS) enterShow(now);
 }
 
-static void tickShow(uint32_t now) {
-  if (g_kind == FRAME_FIRE && (uint32_t)(now - g_lastFire) >= FIRE_MS) {
-    g_lastFire = now;
+static void wheel(uint8_t pos, uint8_t* r, uint8_t* g, uint8_t* b) {
+  if (pos < 85) {
+    *r = (uint8_t)(255 - pos * 3);
+    *g = (uint8_t)(pos * 3);
+    *b = 0;
+  } else if (pos < 170) {
+    pos = (uint8_t)(pos - 85);
+    *r = 0;
+    *g = (uint8_t)(255 - pos * 3);
+    *b = (uint8_t)(pos * 3);
+  } else {
+    pos = (uint8_t)(pos - 170);
+    *r = (uint8_t)(pos * 3);
+    *g = 0;
+    *b = (uint8_t)(255 - pos * 3);
+  }
+}
+
+static void solidRgb(uint8_t which, uint8_t* r, uint8_t* g, uint8_t* b) {
+  *r = 0;
+  *g = 0;
+  *b = 0;
+  switch (which) {
+    case COL_RED: *r = 255; break;
+    case COL_ORANGE: *r = 255; *g = 80; break;
+    case COL_YELLOW: *r = 255; *g = 180; break;
+    case COL_WHITE: *r = 255; *g = 255; *b = 255; break;
+    case COL_GREEN: *g = 255; break;
+    case COL_BLUE: *b = 255; break;
+    default: *r = 180; *b = 255; break;
+  }
+}
+
+static const char* colorName(uint8_t which) {
+  static const char* const N[] = {
+    "red", "orange", "yellow", "white", "green", "blue", "purple"
+  };
+  if (which >= COL_COUNT) return "orange";
+  return N[which];
+}
+
+static const char* modeName(uint8_t mode) {
+  if (mode == MODE_FIRE) return "fire";
+  if (mode == MODE_SOLID) return "solid";
+  if (mode == MODE_RAINBOW) return "rainbow";
+  return "off";
+}
+
+static void paintFire() {
+  for (int y = 0; y < PANEL_H; y++) {
+    for (int x = 0; x < PANEL_W; x++) {
+      FireRgb c = firePalette(g_heat[y * PANEL_W + x]);
+      g_panel.setPixelColor(panelIndex(x, y), c.r, c.g, c.b);
+    }
+  }
+}
+
+static void paintSolid() {
+  uint8_t r, g, b;
+  solidRgb(g_color, &r, &g, &b);
+  for (int y = 0; y < PANEL_H; y++) {
+    for (int x = 0; x < PANEL_W; x++) {
+      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
+    }
+  }
+}
+
+static void paintRainbow() {
+  uint8_t step = (uint8_t)(3 + g_speed / 8);
+  g_hue = (uint8_t)(g_hue + step);
+  for (int y = 0; y < PANEL_H; y++) {
+    for (int x = 0; x < PANEL_W; x++) {
+      uint8_t r, g, b;
+      wheel((uint8_t)(g_hue + (uint8_t)(x * 10) + (uint8_t)(y * 6)), &r, &g, &b);
+      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
+    }
+  }
+}
+
+static uint32_t stepPeriodMs() {
+  // speed 0 -> 150 ms, speed 50 -> 85 ms, speed 100 -> 20 ms.
+  return 20u + (uint32_t)(100 - g_speed) * 130u / 100u;
+}
+
+static void applyBrightness() {
+  uint8_t cap = brightnessLimit();
+  if (g_brightness > cap) g_brightness = cap;
+  g_panel.setBrightness(g_brightness);
+}
+
+static void tickPanel(uint32_t now) {
+  if (g_mode == MODE_OFF) {
+    if (!g_dirty) return;
+    applyBrightness();
+    g_panel.clear();
+    panelShow();
+    g_dirty = 0;
+    return;
+  }
+  if (g_mode == MODE_SOLID) {
+    if (!g_dirty) return;
+    applyBrightness();
+    paintSolid();
+    panelShow();
+    g_dirty = 0;
+    return;
+  }
+  uint32_t period = stepPeriodMs();
+  if (!g_dirty && (uint32_t)(now - g_lastFrame) < period) return;
+  g_lastFrame = now;
+  applyBrightness();
+  if (g_mode == MODE_FIRE) {
+    matrixFireSetIntensity(g_intensity);
     matrixFireStep(g_heat);
-    blit(g_heat);
-  } else if (g_kind == FRAME_ANIMATION && g_animCount > 0) {
-    uint8_t guard = 0;
-    while (guard < 8) {
-      uint16_t dur = g_animDur[g_animIndex];
-      if (dur < FRAME_INTERVAL_MIN) dur = g_interval;
-      if ((uint32_t)(now - g_animLast) < dur) break;
-      g_animLast += dur;
-      g_animIndex = (uint8_t)((g_animIndex + 1) % g_animCount);
-      guard++;
-    }
-    if (guard) {
-      uint16_t dur = g_animDur[g_animIndex];
-      if (dur < FRAME_INTERVAL_MIN) dur = g_interval;
-      if ((uint32_t)(now - g_animLast) >= dur) g_animLast = now;
-      blitPacked(animPacked(g_animIndex));
-    }
+    paintFire();
+  } else {
+    paintRainbow();
   }
-  if ((uint32_t)(now - g_phaseStart) >= SHOW_MS) enterScroll(now);
+  panelShow();
+  g_dirty = 0;
 }
 
-static void showFireNow(uint32_t now) {
-  g_kind = FRAME_FIRE;
-  enterShow(now);
+static void setMode(uint8_t mode) {
+  if (mode > MODE_RAINBOW) mode = MODE_OFF;
+  if (mode == g_mode) return;
+  if (mode != MODE_OFF) g_resume = mode;
+  g_mode = mode;
+  g_dirty = 1;
 }
 
-static void showCustomNow(uint32_t now) {
-  g_kind = FRAME_CUSTOM;
-  enterShow(now);
+static bool modeFromName(const char* s, uint8_t* out) {
+  if (!strcmp(s, "off")) { *out = MODE_OFF; return true; }
+  if (!strcmp(s, "fire")) { *out = MODE_FIRE; return true; }
+  if (!strcmp(s, "solid")) { *out = MODE_SOLID; return true; }
+  if (!strcmp(s, "rainbow")) { *out = MODE_RAINBOW; return true; }
+  return false;
 }
 
-static void showAnimationNow(uint32_t now) {
-  g_kind = FRAME_ANIMATION;
-  enterShow(now);
-}
-
-static void clearPicture() {
-  memset(g_custom, 0, sizeof g_custom);
-  g_animCount = 0;
-  g_animIndex = 0;
-  g_interval = FRAME_INTERVAL_DEFAULT;
-  g_stored = FRAME_FIRE;
-}
-
-static void storeSingleFrame() {
-  packFrame(g_anim, g_custom);
-  g_animCount = 1;
-  g_animDur[0] = g_interval;
-  g_animIndex = 0;
-  g_stored = FRAME_CUSTOM;
-}
-
-static bool applyKind(uint8_t kind, uint32_t now) {
-  if (kind == FRAME_CUSTOM) {
-    showCustomNow(now);
-    return true;
-  }
-  if (kind == FRAME_ANIMATION) {
-    if (g_stored != FRAME_ANIMATION || g_animCount < 1) return false;
-    showAnimationNow(now);
-    return true;
-  }
-  showFireNow(now);
-  return true;
-}
-
-static bool matchHdr(const char* p, const char* key) {
-  while (*key) {
-    char c = *p++;
-    if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
-    if (c != *key++) return false;
-  }
-  return true;
-}
-
-static int contentLength(const char* req) {
-  const char* end = strstr(req, "\r\n\r\n");
-  if (!end) return 0;
-  const char* p = req;
-  while (p < end) {
-    if (matchHdr(p, "content-length:")) {
-      p += 15;
-      while (*p == ' ' || *p == '\t') p++;
-      if (*p < '0' || *p > '9') return -1;
-      int n = 0;
-      while (*p >= '0' && *p <= '9') {
-        n = n * 10 + (*p - '0');
-        if (n > 1000000) return -1;
-        p++;
-      }
-      return n;
-    }
-    while (p < end && !(*p == '\r' && (p + 1) < end && p[1] == '\n')) p++;
-    if (p < end && *p == '\r') p += 2;
-  }
-  return 0;
-}
-
-static bool headerIsOctet(const char* req) {
-  const char* end = strstr(req, "\r\n\r\n");
-  if (!end) return false;
-  const char* p = req;
-  while (p < end) {
-    if (matchHdr(p, "content-type:")) {
-      p += 13;
-      while (*p == ' ' || *p == '\t') p++;
-      return matchHdr(p, "application/octet-stream");
-    }
-    while (p < end && !(*p == '\r' && (p + 1) < end && p[1] == '\n')) p++;
-    if (p < end && *p == '\r') p += 2;
+static bool colorFromName(const char* s, uint8_t* out) {
+  for (uint8_t i = 0; i < COL_COUNT; i++) {
+    if (!strcmp(s, colorName(i))) { *out = i; return true; }
   }
   return false;
 }
 
-// State JSON is generated twice from the same snapshot: once to measure
-// Content-Length, then again in 192-byte slices while the socket drains.
-// "leds" stays an 8x12 integer array. "frames" are 96-char hex strings.
-// A 128-frame body is about 14 KB and is not stored in SRAM.
-static void takeAdd(StateTake* t, const char* s, int n) {
-  if (n <= 0) return;
-  int a = t->pos;
-  t->pos += n;
-  if (t->cap <= 0 || !t->dst || t->filled >= t->cap) return;
-  int lo = a > t->skip ? a : t->skip;
-  int hi = t->pos;
-  int lim = t->skip + t->cap;
-  if (hi > lim) hi = lim;
-  if (hi > lo) {
-    memcpy(t->dst + t->filled, s + (lo - a), (size_t)(hi - lo));
-    t->filled += hi - lo;
+static bool parseU255(const char* v, int* out) {
+  if (!v[0]) return false;
+  int n = 0;
+  for (const char* p = v; *p; p++) {
+    if (*p < '0' || *p > '9') return false;
+    n = n * 10 + (*p - '0');
+    if (n > 255) return false;
   }
-}
-
-static bool takeDone(const StateTake* t) {
-  return t->cap > 0 && t->pos >= t->skip + t->cap;
-}
-
-static char hexCh(uint8_t v) {
-  return (char)(v < 10 ? ('0' + v) : ('a' + (v - 10)));
-}
-
-static uint8_t animPixel(int frame, int i) {
-  const uint8_t* p = g_anim + (size_t)frame * FRAME_PACKED;
-  uint8_t b = p[i >> 1];
-  return (uint8_t)((i & 1) ? (b & 0x0f) : (b >> 4));
-}
-
-static uint8_t viewPixel(int i) {
-  if (!g_viewAnim) return g_custom[i];
-  return animPixel(g_viewIndex, i);
-}
-
-static void emitLevel(StateTake* t, uint8_t v) {
-  char num[2];
-  int k = 0;
-  if (v >= 10) {
-    num[k++] = '1';
-    num[k++] = (char)('0' + (v - 10));
-  } else {
-    num[k++] = (char)('0' + v);
-  }
-  takeAdd(t, num, k);
-}
-
-static void emitLeds(StateTake* t) {
-  takeAdd(t, "[", 1);
-  for (int y = 0; y < MATRIX_H; y++) {
-    if (takeDone(t)) return;
-    if (y) takeAdd(t, ",", 1);
-    takeAdd(t, "[", 1);
-    for (int x = 0; x < MATRIX_W; x++) {
-      if (x) takeAdd(t, ",", 1);
-      emitLevel(t, viewPixel(y * MATRIX_W + x));
-    }
-    takeAdd(t, "]", 1);
-  }
-  takeAdd(t, "]", 1);
-}
-
-static void emitFrames(StateTake* t) {
-  takeAdd(t, ",\"frames\":[", 11);
-  for (int f = 0; f < g_animCount; f++) {
-    if (takeDone(t)) return;
-    if (f) takeAdd(t, ",", 1);
-    char fr[98];
-    fr[0] = '"';
-    for (int i = 0; i < MATRIX_N; i++) fr[1 + i] = hexCh(animPixel(f, i));
-    fr[97] = '"';
-    takeAdd(t, fr, 98);
-  }
-}
-
-static void emitDurs(StateTake* t) {
-  takeAdd(t, "],\"durations\":[", 15);
-  for (int f = 0; f < g_animCount; f++) {
-    if (takeDone(t)) return;
-    if (f) takeAdd(t, ",", 1);
-    char num[8];
-    int k = snprintf(num, sizeof num, "%u", (unsigned)g_animDur[f]);
-    if (k < 0) k = 0;
-    takeAdd(t, num, k);
-  }
-  takeAdd(t, "]}", 2);
-}
-
-static void stateFeed(StateTake* t) {
-  takeAdd(t, g_httpBuf, (int)g_prefixLen);
-  if (takeDone(t)) return;
-  emitLeds(t);
-  if (takeDone(t)) return;
-  emitFrames(t);
-  if (takeDone(t)) return;
-  emitDurs(t);
-}
-
-static bool statePrepare(bool ok, const char* err, uint32_t now) {
-  const char* mode = "fire";
-  if (g_kind == FRAME_CUSTOM) mode = "custom";
-  else if (g_kind == FRAME_ANIMATION) mode = "animation";
-  const char* phase = (g_phase == PHASE_SHOW) ? "show" : "scroll";
-  const char* wifi = (g_wifi == WIFI_ONLINE) ? "connected" :
-                     (g_wifi == WIFI_JOINING) ? "joining" : "off";
-  unsigned remaining = 0;
-  if (g_phase == PHASE_SHOW) {
-    uint32_t elapsed = now - g_phaseStart;
-    remaining = (elapsed >= SHOW_MS) ? 0 : (unsigned)(SHOW_MS - elapsed);
-  }
-  g_viewAnim = (g_kind == FRAME_ANIMATION && g_animCount > 0) ? 1 : 0;
-  g_viewIndex = g_viewAnim ? g_animIndex : 0;
-  int w = snprintf(g_httpBuf, 896,
-    "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\",\"phase\":\"%s\","
-    "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,\"remainingMs\":%u,"
-    "\"frameCount\":%u,\"maxFrames\":%u,\"interval\":%u,\"frame\":%u,\"leds\":",
-    ok ? "true" : "false",
-    err ? err : "",
-    mode, phase, wifi,
-    (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
-    (int)g_rssi, remaining,
-    (unsigned)g_animCount, (unsigned)FRAME_ANIM_MAX, (unsigned)g_interval,
-    (unsigned)g_viewIndex);
-  if (w < 0 || w >= 896) return false;
-  g_prefixLen = (uint16_t)w;
+  *out = n;
   return true;
 }
 
-static int stateMeasure() {
-  StateTake t;
-  t.dst = 0;
-  t.cap = 0;
-  t.skip = 0;
-  t.pos = 0;
-  t.filled = 0;
-  stateFeed(&t);
-  return t.pos;
+static bool parseU100(const char* v, int* out) {
+  if (!v[0]) return false;
+  int n = 0;
+  for (const char* p = v; *p; p++) {
+    if (*p < '0' || *p > '9') return false;
+    n = n * 10 + (*p - '0');
+    if (n > 100) return false;
+  }
+  *out = n;
+  return true;
 }
 
-static int stateFill(char* dst, int cap, int skip) {
-  StateTake t;
-  t.dst = dst;
-  t.cap = cap;
-  t.skip = skip;
-  t.pos = 0;
-  t.filled = 0;
-  stateFeed(&t);
-  return t.filled;
+static int hexVal(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+static bool applyOne(const char* key, const char* val, const char** err) {
+  if (!strcmp(key, "mode")) {
+    uint8_t m;
+    if (!modeFromName(val, &m)) { *err = "mode"; return false; }
+    setMode(m);
+    return true;
+  }
+  if (!strcmp(key, "brightness")) {
+    int n;
+    if (!parseU255(val, &n)) { *err = "brightness"; return false; }
+    uint8_t cap = brightnessLimit();
+    if (n > (int)cap) n = (int)cap;
+    g_brightness = (uint8_t)n;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "speed")) {
+    int n;
+    if (!parseU100(val, &n)) { *err = "speed"; return false; }
+    g_speed = (uint8_t)n;
+    return true;
+  }
+  if (!strcmp(key, "intensity")) {
+    int n;
+    if (!parseU100(val, &n)) { *err = "intensity"; return false; }
+    g_intensity = (uint8_t)n;
+    matrixFireSetIntensity(g_intensity);
+    return true;
+  }
+  if (!strcmp(key, "color") || !strcmp(key, "colour")) {
+    if (!strcmp(val, "next")) {
+      g_color = (uint8_t)((g_color + 1) % COL_COUNT);
+    } else {
+      uint8_t c;
+      if (!colorFromName(val, &c)) { *err = "color"; return false; }
+      g_color = c;
+    }
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "power")) {
+    int v;
+    if (!strcmp(val, "toggle")) v = (g_mode == MODE_OFF) ? 1 : 0;
+    else if (!strcmp(val, "0") || !strcmp(val, "off")) v = 0;
+    else if (!strcmp(val, "1") || !strcmp(val, "on")) v = 1;
+    else { *err = "power"; return false; }
+    if (v) setMode(g_resume == MODE_OFF ? MODE_FIRE : g_resume);
+    else setMode(MODE_OFF);
+    return true;
+  }
+  *err = "key";
+  return false;
+}
+
+static void applyQuery(const char* q, const char** err) {
+  while (*q) {
+    char key[16];
+    char val[20];
+    uint8_t ki = 0, vi = 0;
+    bool trunc = false;
+    while (*q && *q != '=' && *q != '&') {
+      if (ki + 1 < sizeof key) key[ki++] = *q;
+      else trunc = true;
+      q++;
+    }
+    key[ki] = 0;
+    if (*q == '=') q++;
+    while (*q && *q != '&') {
+      char c = *q++;
+      if (c == '+') c = ' ';
+      else if (c == '%' && q[0] && q[1]) {
+        int hi = hexVal(q[0]);
+        int lo = hexVal(q[1]);
+        if (hi >= 0 && lo >= 0) {
+          c = (char)((hi << 4) | lo);
+          q += 2;
+        }
+      }
+      if (vi + 1 < sizeof val) val[vi++] = c;
+      else trunc = true;
+    }
+    val[vi] = 0;
+    if (*q == '&') q++;
+    if (!key[0]) continue;
+    if (trunc) { *err = "key"; return; }
+    if (!applyOne(key, val, err)) return;
+  }
+}
+
+static int buildState(char* b, size_t n, bool ok, const char* err) {
+  const char* wifi = (g_wifi == WIFI_ONLINE) ? "connected" :
+                     (g_wifi == WIFI_JOINING) ? "joining" : "off";
+  uint8_t cap = brightnessLimit();
+  uint8_t br = g_brightness;
+  if (br > cap) br = cap;
+  return snprintf(b, n,
+    "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\",\"power\":%s,"
+    "\"brightness\":%u,\"brightnessCap\":%u,"
+    "\"speed\":%u,\"intensity\":%u,\"color\":\"%s\","
+    "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
+    "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
+    "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
+    "\"powerBudgetMa\":%u}",
+    ok ? "true" : "false",
+    err ? err : "",
+    modeName(g_mode),
+    (g_mode == MODE_OFF) ? "false" : "true",
+    (unsigned)br,
+    (unsigned)cap,
+    (unsigned)g_speed,
+    (unsigned)g_intensity,
+    colorName(g_color),
+    wifi,
+    (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
+    (int)g_rssi,
+    (unsigned)PANEL_N,
+    (unsigned)PANEL_W,
+    (unsigned)PANEL_H,
+    PANEL_SERPENTINE ? "true" : "false",
+    PANEL_FLIP_X ? "true" : "false",
+    PANEL_FLIP_Y ? "true" : "false",
+    (unsigned)(PANEL_ROTATE & 3),
+    (unsigned)POWER_BUDGET_MA);
 }
 
 static void httpBegin(int code, const char* reason, const char* type,
                       const char* body, uint16_t len) {
-  g_stream = 0;
   int n = snprintf(g_hdr, sizeof g_hdr,
     "HTTP/1.1 %d %s\r\n"
     "Content-Type: %s\r\n"
@@ -1046,8 +812,6 @@ static void httpBegin(int code, const char* reason, const char* type,
     "Connection: close\r\n"
     "Cache-Control: no-store\r\n"
     "Access-Control-Allow-Origin: *\r\n"
-    "Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n"
-    "Access-Control-Allow-Headers: Content-Type\r\n"
     "\r\n",
     code, reason, type, (unsigned)len);
   if (n < 0 || (size_t)n >= sizeof g_hdr) {
@@ -1065,153 +829,48 @@ static void httpBegin(int code, const char* reason, const char* type,
   g_http = PH_WRITE;
 }
 
-static void httpJson(bool ok, const char* err, uint32_t now) {
-  static const char FULL[] = "{\"ok\":false,\"error\":\"full\"}";
-  if (!statePrepare(ok, err, now)) {
-    httpBegin(500, "Error", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
-    return;
+static void httpJson(bool ok, const char* err) {
+  int n = buildState(g_json, sizeof g_json, ok, err);
+  if (n < 0 || (size_t)n >= sizeof g_json) {
+    n = snprintf(g_json, sizeof g_json, "{\"ok\":false,\"error\":\"full\"}");
+    ok = false;
   }
-  int n = stateMeasure();
-  if (n <= 0 || n > 65535) {
-    httpBegin(500, "Error", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
-    return;
-  }
+  if (n < 0) n = 0;
   httpBegin(ok ? 200 : 400, ok ? "OK" : "Bad Request",
-            "application/json", 0, (uint16_t)n);
-  if (g_hdrLen == 0) return;
-  g_stream = 1;
-  g_streamLen = (uint16_t)n;
-  g_streamOff = 0;
-  g_chunkLen = 0;
-  g_chunkOff = 0;
+            "application/json", g_json, (uint16_t)n);
 }
 
-static bool modeFromRequest(const char* query, const char* body, uint8_t* kind) {
-  const char* q = query;
-  while (q && *q) {
-    if (strncmp(q, "mode=", 5) == 0) return frameParseModeToken(q + 5, kind);
-    while (*q && *q != '&') q++;
-    if (*q == '&') q++;
-  }
-  const char* m = frameFindKey(body ? body : "", "mode");
-  if (!m) return false;
-  m = frameSkipWs(m);
-  if (*m != '"') return false;
-  return frameParseModeToken(m + 1, kind);
+static void httpStop() {
+  g_client.stop();
+  g_http = PH_IDLE;
 }
 
-static void handlePicture(const char* body, uint32_t now) {
-  body = body ? body : "";
-  if (frameFindTopKey(body, "frames")) {
-    uint8_t count = 0;
-    uint16_t interval = FRAME_INTERVAL_DEFAULT;
-    const char* err = 0;
-    // Validates before writing, so a bad body leaves g_anim alone.
-    if (!frameParseAnimation(body, g_anim, g_animDur, &count, &interval, &err) || count < 1) {
-      httpJson(false, err ? err : "frames", now);
-      return;
-    }
-    g_animCount = count;
-    g_interval = interval;
-    g_stored = FRAME_ANIMATION;
-    unpackFrame(g_custom, g_anim);
-    showAnimationNow(now);
-    httpJson(true, 0, now);
+static void httpHandle() {
+  if (strncmp(g_req, "GET ", 4) != 0) {
+    httpJson(false, "method");
     return;
   }
-  bool pix = false;
-  bool hasMode = false;
-  uint8_t kind = FRAME_FIRE;
-  const char* err = 0;
-  uint8_t temp[MATRIX_N];
-  memcpy(temp, g_custom, sizeof temp);
-  if (!frameParseBody(body, temp, &pix, &hasMode, &kind, &err)) {
-    httpJson(false, err ? err : "json", now);
-    return;
+  char path[48];
+  char query[160];
+  const char* p = g_req + 4;
+  const char* end = strpbrk(p, " \r\n");
+  if (!end) end = p + strlen(p);
+  const char* qmark = 0;
+  for (const char* s = p; s < end; s++) {
+    if (*s == '?') { qmark = s; break; }
   }
-  if (pix) {
-    memcpy(g_custom, temp, sizeof g_custom);
-    storeSingleFrame();
-    showCustomNow(now);
-  } else if (hasMode) {
-    if (!applyKind(kind, now)) {
-      httpJson(false, "frames", now);
-      return;
-    }
-  } else {
-    httpJson(false, "json", now);
-    return;
-  }
-  httpJson(true, 0, now);
-}
-
-static void readToken(const char*& p, char* dst, size_t n) {
-  size_t i = 0;
-  while (*p && *p != ' ' && *p != '\r' && *p != '\n' && i + 1 < n) dst[i++] = *p++;
-  dst[i] = 0;
-  while (*p && *p != ' ' && *p != '\r' && *p != '\n') p++;
-}
-
-static bool captureRoute(const char* req) {
-  const char* p = req;
-  readToken(p, g_method, sizeof g_method);
-  if (*p != ' ') return false;
-  p++;
-  char raw[72];
-  readToken(p, raw, sizeof raw);
-  g_query[0] = 0;
-  char* qmark = strchr(raw, '?');
+  size_t plen = (size_t)((qmark ? qmark : end) - p);
+  if (plen >= sizeof path) plen = sizeof path - 1;
+  memcpy(path, p, plen);
+  path[plen] = 0;
+  query[0] = 0;
   if (qmark) {
-    *qmark = 0;
-    strncpy(g_query, qmark + 1, sizeof g_query - 1);
-    g_query[sizeof g_query - 1] = 0;
-  }
-  strncpy(g_path, raw, sizeof g_path - 1);
-  g_path[sizeof g_path - 1] = 0;
-  return g_method[0] && g_path[0];
-}
-
-static void handleBinary(const uint8_t* body, int len, uint32_t now) {
-  uint8_t count = 0;
-  uint16_t interval = FRAME_INTERVAL_DEFAULT;
-  const char* err = 0;
-  if (len < 0) len = 0;
-  if (!frameParseBinary(body, (size_t)len, g_anim, g_animDur, &count, &interval, &err) || count < 1) {
-    httpJson(false, err ? err : "frames", now);
-    return;
-  }
-  g_animCount = count;
-  g_interval = interval;
-  g_stored = FRAME_ANIMATION;
-  unpackFrame(g_custom, g_anim);
-  showAnimationNow(now);
-  httpJson(true, 0, now);
-}
-
-// Path /api/animation.bin and Content-Type application/octet-stream are
-// binary. Otherwise a body whose first byte is not JSON ('{', '[', '"',
-// or whitespace) is the raw packet too.
-static bool bodyIsBinary(const char* path, int octet, const char* body, int len) {
-  if (path && strcmp(path, "/api/animation.bin") == 0) return true;
-  if (octet) return true;
-  if (!body || len <= 0) return false;
-  unsigned char c = (unsigned char)body[0];
-  if (c == '{' || c == '[' || c == '"' || c == ' ' || c == '\t' || c == '\r' || c == '\n')
-    return false;
-  return true;
-}
-
-static void httpHandle(uint32_t now, const char* body, int bodyLen) {
-  const char* method = g_method;
-  const char* path = g_path;
-  const char* query = g_query;
-
-  if (!strcmp(method, "OPTIONS")) {
-    httpBegin(204, "No Content", "text/plain", "", 0);
-    return;
+    size_t qlen = (size_t)(end - (qmark + 1));
+    if (qlen >= sizeof query) qlen = sizeof query - 1;
+    memcpy(query, qmark + 1, qlen);
+    query[qlen] = 0;
   }
   if (!strcmp(path, "/") || !strcmp(path, "/index.html")) {
-    if (strcmp(method, "GET")) { httpJson(false, "method", now); return; }
     httpBegin(200, "OK", "text/html; charset=utf-8", PAGE, g_pageLen);
     return;
   }
@@ -1220,113 +879,44 @@ static void httpHandle(uint32_t now, const char* body, int bodyLen) {
     return;
   }
   if (!strcmp(path, "/api/state")) {
-    if (strcmp(method, "GET")) { httpJson(false, "method", now); return; }
-    httpJson(true, 0, now);
+    httpJson(true, 0);
     return;
   }
-  if (!strcmp(path, "/api/reset")) {
-    if (strcmp(method, "POST")) { httpJson(false, "method", now); return; }
-    showFireNow(now);
-    httpJson(true, 0, now);
-    return;
-  }
-  if ((!strcmp(path, "/api/frame") || !strcmp(path, "/api/animation")) &&
-      !strcmp(method, "DELETE")) {
-    clearPicture();
-    showFireNow(now);
-    httpJson(true, 0, now);
-    return;
-  }
-  if (!strcmp(path, "/api/mode")) {
-    if (strcmp(method, "POST")) { httpJson(false, "method", now); return; }
-    uint8_t kind = FRAME_FIRE;
-    if (!modeFromRequest(query, body, &kind)) {
-      httpJson(false, "mode", now);
-      return;
-    }
-    if (!applyKind(kind, now)) {
-      httpJson(false, "frames", now);
-      return;
-    }
-    httpJson(true, 0, now);
-    return;
-  }
-  if (!strcmp(path, "/api/frame") || !strcmp(path, "/api/leds") ||
-      !strcmp(path, "/api/animation") || !strcmp(path, "/api/animation.bin")) {
-    if (strcmp(method, "POST")) { httpJson(false, "method", now); return; }
-    if (bodyIsBinary(path, g_octet, body, bodyLen)) handleBinary((const uint8_t*)body, bodyLen, now);
-    else handlePicture(body, now);
+  if (!strcmp(path, "/api/set")) {
+    const char* err = 0;
+    applyQuery(query, &err);
+    httpJson(err == 0, err);
     return;
   }
   static const char MISS[] = "not found\n";
   httpBegin(404, "Not Found", "text/plain; charset=utf-8", MISS, (uint16_t)(sizeof MISS - 1));
 }
 
-static void httpStop() {
-  g_client.stop();
-  g_http = PH_IDLE;
-  g_gotHdr = 0;
-  g_stream = 0;
-}
-
 static void httpRead(uint32_t now) {
   int avail = g_client.available();
   if (avail > 0) {
     if (avail > HTTP_READ_MAX) avail = HTTP_READ_MAX;
-    int room = (int)sizeof g_httpBuf - 1 - (int)g_reqLen;
+    int room = (int)sizeof g_req - 1 - (int)g_reqLen;
     if (avail > room) avail = room;
     if (avail > 0) {
-      int n = g_client.read((uint8_t*)g_httpBuf + g_reqLen, (size_t)avail);
+      int n = g_client.read((uint8_t*)g_req + g_reqLen, (size_t)avail);
       if (n > 0) {
         g_reqLen = (uint16_t)(g_reqLen + n);
-        g_httpBuf[g_reqLen] = 0;
+        g_req[g_reqLen] = 0;
       }
     }
   }
+  bool full = g_reqLen >= (sizeof g_req) - 1;
+  bool hdr = g_reqLen > 0 && strstr(g_req, "\r\n\r\n") != 0;
   bool timed = (uint32_t)(now - g_clientMs) >= HTTP_READ_TIMEOUT_MS;
-  if (!g_gotHdr) {
-    char* hdrEnd = strstr(g_httpBuf, "\r\n\r\n");
-    if (!hdrEnd) {
-      if (timed || g_reqLen >= (sizeof g_httpBuf) - 1) httpStop();
+  if (hdr || full || timed) {
+    if (g_reqLen == 0) {
+      httpStop();
       return;
     }
-    int headerBytes = (int)(hdrEnd - g_httpBuf) + 4;
-    int cl = contentLength(g_httpBuf);
-    if (cl < 0) {
-      httpJson(false, "json", now);
-      return;
-    }
-    // The body is kept on its own, so header size does not shrink it.
-    // 128 packed frames with per-frame durations are 6404 bytes.
-    if (cl >= (int)sizeof g_httpBuf) {
-      static const char FULL[] = "{\"ok\":false,\"error\":\"full\"}";
-      httpBegin(413, "Payload Too Large", "application/json", FULL, (uint16_t)(sizeof FULL - 1));
-      return;
-    }
-    g_octet = headerIsOctet(g_httpBuf) ? 1 : 0;
-    if (!captureRoute(g_httpBuf)) {
-      httpJson(false, "method", now);
-      return;
-    }
-    int have = (int)g_reqLen - headerBytes;
-    if (have < 0) have = 0;
-    if (have > cl) have = cl;
-    memmove(g_httpBuf, g_httpBuf + headerBytes, (size_t)have);
-    g_reqLen = (uint16_t)have;
-    g_httpBuf[g_reqLen] = 0;
-    g_need = (uint16_t)cl;
-    g_gotHdr = 1;
+    httpHandle();
   }
-  if ((int)g_reqLen < (int)g_need) {
-    if (timed) httpStop();
-    return;
-  }
-  g_httpBuf[g_need] = 0;
-  g_gotHdr = 0;
-  httpHandle(now, g_httpBuf, (int)g_need);
 }
-
-static char* httpChunk() { return g_httpBuf + 1024; }
 
 static void httpWrite() {
   if (g_hdrOff < g_hdrLen) {
@@ -1339,32 +929,6 @@ static void httpWrite() {
     }
     g_fail = 0;
     g_hdrOff = (uint16_t)(g_hdrOff + w);
-    return;
-  }
-  if (g_stream) {
-    if (g_chunkOff >= g_chunkLen) {
-      if (g_streamOff >= g_streamLen) {
-        httpStop();
-        return;
-      }
-      int n = stateFill(httpChunk(), HTTP_WRITE_MAX, (int)g_streamOff);
-      if (n <= 0) {
-        httpStop();
-        return;
-      }
-      g_chunkLen = (uint16_t)n;
-      g_chunkOff = 0;
-    }
-    uint16_t n = (uint16_t)(g_chunkLen - g_chunkOff);
-    if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
-    size_t w = g_client.write((const uint8_t*)httpChunk() + g_chunkOff, n);
-    if (w == 0) {
-      if (++g_fail > 8) httpStop();
-      return;
-    }
-    g_fail = 0;
-    g_chunkOff = (uint16_t)(g_chunkOff + w);
-    g_streamOff = (uint16_t)(g_streamOff + w);
     return;
   }
   if (g_body && g_bodyOff < g_bodyLen) {
@@ -1451,10 +1015,7 @@ static void wifiDrop(uint32_t now) {
   g_wifi = WIFI_JOINING;
   g_server.end();
   g_serverUp = 0;
-  if (g_http != PH_IDLE) {
-    g_client.stop();
-    g_http = PH_IDLE;
-  }
+  if (g_http != PH_IDLE) httpStop();
   g_joinSince = now - WIFI_RETRY_MS;
 }
 
@@ -1525,10 +1086,7 @@ static void webPoll(uint32_t now) {
     if (incoming) {
       g_client = incoming;
       g_reqLen = 0;
-      g_gotHdr = 0;
-      g_need = 0;
-      g_stream = 0;
-      g_httpBuf[0] = 0;
+      g_req[0] = 0;
       g_clientMs = now;
       g_http = PH_READ;
       return;
@@ -1551,18 +1109,35 @@ static void webPoll(uint32_t now) {
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
+  Serial.print(F("Panel "));
+  Serial.print(PANEL_W);
+  Serial.print(F("x"));
+  Serial.print(PANEL_H);
+  Serial.print(F(" on D"));
+  Serial.print(PANEL_PIN);
+  Serial.print(F(", brightness "));
+  Serial.print(BRIGHTNESS_DEFAULT);
+  Serial.print(F(" cap "));
+  Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros() ^ (uint32_t)analogRead(A0));
+  matrixFireReset();
+  matrixFireSetIntensity(g_intensity);
+  memset(g_heat, 0, sizeof g_heat);
   for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
-  // Radio first, then the 24 kHz matrix timer. The first WiFi.begin() can
-  // block; later polls must not.
   webSetup();
+  g_panel.begin();
+  applyBrightness();
+  g_panel.clear();
+  g_panel.show();
   matrixBegin();
-  enterScroll(millis());
+  g_scrollTrack = false;
+  g_lastFrame = 0;
+  g_dirty = 1;
 }
 
 void loop() {
   uint32_t now = millis();
   webPoll(now);
-  if (g_phase == PHASE_SCROLL) tickScroll(now);
-  else tickShow(now);
+  tickScroll(now);
+  tickPanel(now);
 }
