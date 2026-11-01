@@ -14,11 +14,21 @@
 //   secret   rocker + toggle + key + wave. Knob fills from the bottom.
 //   lava     mushroom. Two balls toss on the grid. Fire trail if enabled.
 //   music    toggle only. A short phrase walks the path (no MIDI on this lamp).
+//   metaballs  latched from the idle fire by the arcade code rrllrrll
+//              (white white, red red, white white, red red). Blobs drift,
+//              their fields add, and the hue drifts. Red adds a blob (max 8),
+//              white removes one (min 1). The code buffer is not used in this
+//              mode, so those presses are not eaten by Classic.
+//   plasma     latched from the idle fire by llrrllrr (red red, white white,
+//              red red, white white). A plasma field rotates and zooms.
+//              Red zooms in, white zooms out. Same rule: once latched, the
+//              arcade buttons are the zoom control, not another code.
 
 #pragma once
 
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 static const uint8_t M_FIRE = 0;
 static const uint8_t M_JUMBO = 1;
@@ -31,6 +41,8 @@ static const uint8_t M_WAVE_EPIC = 7;
 static const uint8_t M_SECRET = 8;
 static const uint8_t M_LAVA = 9;
 static const uint8_t M_MUSIC = 10;
+static const uint8_t M_METABALLS = 11;
+static const uint8_t M_PLASMA = 12;
 
 struct ModeIn {
   uint8_t mode;
@@ -106,6 +118,86 @@ struct NotePulse {
   uint8_t hue;
   uint8_t life;
 };
+static const uint8_t META_MIN = 1;
+static const uint8_t META_MAX = 8;
+struct MetaBlob {
+  float x;
+  float y;
+  float vx;
+  float vy;
+};
+static MetaBlob g_metaB[META_MAX];
+static uint8_t g_metaN = 3;
+static uint32_t g_metaRng = 1u;
+
+static float metaRand() {
+  g_metaRng = g_metaRng * 1664525u + 1013904223u;
+  return (float)((g_metaRng >> 8) & 0xffffffu) / 16777216.0f;
+}
+
+static void metaPlace(uint8_t i) {
+  static const float kDir[8][2] = {
+    {1.0f, 0.15f}, {0.7f, 0.7f}, {-0.2f, 1.0f}, {-0.75f, 0.55f},
+    {-1.0f, -0.1f}, {-0.55f, -0.8f}, {0.15f, -1.0f}, {0.8f, -0.45f}
+  };
+  uint8_t d = (uint8_t)(metaRand() * 8.0f);
+  if (d > 7) d = 7;
+  float spd = 0.45f + metaRand() * 0.55f;
+  g_metaB[i].x = 1.2f + metaRand() * 12.6f;
+  g_metaB[i].y = 1.2f + metaRand() * 12.6f;
+  g_metaB[i].vx = kDir[d][0] * spd;
+  g_metaB[i].vy = kDir[d][1] * spd;
+}
+
+static void modesMetaBoot() {
+  g_metaRng ^= 0xA5A5u;
+  g_metaN = 3;
+  for (uint8_t i = 0; i < g_metaN; i++) metaPlace(i);
+}
+
+static void modesMetaAdd() {
+  if (g_metaN >= META_MAX) return;
+  metaPlace(g_metaN);
+  g_metaN++;
+}
+
+static void modesMetaRemove() {
+  if (g_metaN <= META_MIN) return;
+  g_metaN--;
+}
+
+static uint8_t modesMetaCount() { return g_metaN; }
+
+static uint8_t g_plasmaZoom = 2;
+
+static void modesPlasmaZoom(int dir) {
+  int z = (int)g_plasmaZoom + dir;
+  if (z < 0) z = 0;
+  if (z > 4) z = 4;
+  g_plasmaZoom = (uint8_t)z;
+}
+
+static uint8_t modesPlasmaZoomLevel() { return g_plasmaZoom; }
+
+static float g_plasmaAngle = 0.0f;
+static float g_plasmaTime = 0.0f;
+
+static void hsvToRgb(uint8_t h, uint8_t s, uint8_t v, uint8_t* r, uint8_t* g, uint8_t* b) {
+  uint8_t region = (uint8_t)(h / 43);
+  uint8_t rem = (uint8_t)((h - (uint8_t)(region * 43)) * 6);
+  uint8_t p = (uint8_t)((uint16_t)v * (uint16_t)(255 - s) / 255);
+  uint8_t q = (uint8_t)((uint16_t)v * (255 - ((uint16_t)s * rem / 255)) / 255);
+  uint8_t t = (uint8_t)((uint16_t)v * (255 - ((uint16_t)s * (uint16_t)(255 - rem) / 255)) / 255);
+  switch (region) {
+    case 0: *r = v; *g = t; *b = p; break;
+    case 1: *r = q; *g = v; *b = p; break;
+    case 2: *r = p; *g = v; *b = t; break;
+    case 3: *r = p; *g = q; *b = v; break;
+    case 4: *r = t; *g = p; *b = v; break;
+    default: *r = v; *g = p; *b = q; break;
+  }
+}
+
 static NotePulse g_notes[4];
 static uint8_t g_phrase = 0;
 static uint32_t g_noteMs = 0;
@@ -284,6 +376,26 @@ static void modesStep(const ModeIn* in, uint32_t now) {
       if (g_notes[i].pos > 255) g_notes[i].life = 0;
     }
   }
+
+  if (in->mode == M_METABALLS) {
+    float scale = (float)sp / 256.0f;
+    float step = 0.28f * scale;
+    for (uint8_t i = 0; i < g_metaN; i++) {
+      g_metaB[i].x += g_metaB[i].vx * step;
+      g_metaB[i].y += g_metaB[i].vy * step;
+      if (g_metaB[i].x < 0.4f) { g_metaB[i].x = 0.4f; g_metaB[i].vx = -g_metaB[i].vx; }
+      if (g_metaB[i].x > 14.6f) { g_metaB[i].x = 14.6f; g_metaB[i].vx = -g_metaB[i].vx; }
+      if (g_metaB[i].y < 0.4f) { g_metaB[i].y = 0.4f; g_metaB[i].vy = -g_metaB[i].vy; }
+      if (g_metaB[i].y > 14.6f) { g_metaB[i].y = 14.6f; g_metaB[i].vy = -g_metaB[i].vy; }
+    }
+  }
+
+  if (in->mode == M_PLASMA) {
+    float scale = (float)sp / 256.0f;
+    g_plasmaAngle += 0.045f * scale;
+    if (g_plasmaAngle > 6.2831853f) g_plasmaAngle -= 6.2831853f;
+    g_plasmaTime += 0.06f * scale;
+  }
 }
 
 static void paintLava(const ModeIn* in, int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
@@ -445,5 +557,41 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now, uint8_t* r,
   if (in->mode == M_MUSIC) {
     paintMusic(x, y, now, r, g, b);
     return;
+  }
+  if (in->mode == M_METABALLS) {
+    float field = 0.0f;
+    for (uint8_t i = 0; i < g_metaN; i++) {
+      float dx = (float)x - g_metaB[i].x;
+      float dy = (float)y - g_metaB[i].y;
+      float d2 = dx * dx + dy * dy + 0.30f;
+      field += 1.9f / d2;
+    }
+    if (field < 0.58f) return;
+    float u = (field - 0.58f) * 0.42f;
+    if (u > 1.0f) u = 1.0f;
+    uint8_t hue = (uint8_t)((now / 28u) + (uint32_t)(field * 26.0f));
+    uint8_t sat = (uint8_t)(255 - (int)(u * 80.0f));
+    uint8_t val = (uint8_t)(u * 255.0f);
+    hsvToRgb(hue, sat, val, r, g, b);
+    return;
+  }
+  if (in->mode == M_PLASMA) {
+    float breathe = 0.82f + 0.38f * sinf(g_plasmaTime * 0.37f);
+    float zoom = breathe * (0.50f + (float)g_plasmaZoom * 0.32f);
+    float ca = cosf(g_plasmaAngle);
+    float sa = sinf(g_plasmaAngle);
+    float dx = ((float)x - 7.5f) * zoom;
+    float dy = ((float)y - 7.5f) * zoom;
+    float rx = dx * ca - dy * sa;
+    float ry = dx * sa + dy * ca;
+    float v = sinf(rx * 0.90f + g_plasmaTime)
+            + sinf(ry * 0.70f - g_plasmaTime * 0.85f)
+            + sinf((rx + ry) * 0.48f + g_plasmaTime * 0.40f);
+    float n = (v + 3.0f) * (1.0f / 6.0f);
+    if (n < 0.0f) n = 0.0f;
+    if (n > 1.0f) n = 1.0f;
+    uint8_t hue = (uint8_t)(n * 210.0f + g_plasmaTime * 14.0f);
+    uint8_t val = (uint8_t)(70.0f + n * 185.0f);
+    hsvToRgb(hue, 235, val, r, g, b);
   }
 }

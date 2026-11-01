@@ -9,7 +9,8 @@
    The picture is the 16x16 panel. The page is the spiral lamp's physical
    panel (rocker, toggles, arcade buttons, key, mushroom, fader, knob).
    Switches at rest play the matrix fire. The other positions play the
-   spiral modes. See matrix_modes.h for how each one sits on the grid.
+   spiral modes, plus Metaballs (rrllrrll) and Plasma (llrrllrr) while idle.
+   See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
    animation buffer.
@@ -38,8 +39,8 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   95892 B flash (36% of 262144), 11368 B globals (34% of 32768),
-   21400 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
+   103108 B flash (39% of 262144), 11540 B globals (35% of 32768),
+   21228 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -108,6 +109,8 @@ static const uint8_t MODE_WAVE_EPIC = 7;
 static const uint8_t MODE_SECRET = 8;
 static const uint8_t MODE_LAVA = 9;
 static const uint8_t MODE_MUSIC = 10;
+static const uint8_t MODE_METABALLS = 11;
+static const uint8_t MODE_PLASMA = 12;
 
 static const int MATRIX_W = 12;
 static const int MATRIX_H = 8;
@@ -138,6 +141,15 @@ static_assert(PANEL_W == PANEL_H, "PANEL_ROTATE assumes a square panel");
 static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
 
 #include "matrix_modes.h"
+
+static_assert(MODE_METABALLS == M_METABALLS, "metaballs mode id");
+static_assert(MODE_PLASMA == M_PLASMA, "plasma mode id");
+
+// Arcade buttons, same pins as the spiral lamp. Active low, internal pullup.
+// Unconnected pins stay high, so only a real press is seen.
+static const uint8_t PIN_RED = 8;
+static const uint8_t PIN_WHITE = 4;
+static const uint32_t ARCADE_DB_MS = 20;
 
 // bit 0 = top row of a 5-row glyph. Drawn on matrix rows 1..5.
 static const uint8_t DIGITS[10][3] = {
@@ -177,6 +189,18 @@ static uint8_t g_fader = 50;
 static uint8_t g_speed = 50;
 static char g_seq[8];
 static uint8_t g_seqN = 0;
+static char g_metaSeq[8];
+static uint8_t g_metaSeqN = 0;
+static uint8_t g_meta = 0;
+static uint8_t g_plasma = 0;
+struct ArcadeBtn {
+  uint8_t pin;
+  uint8_t stable;
+  uint8_t raw;
+  uint32_t since;
+};
+static ArcadeBtn g_btnRed = {PIN_RED, HIGH, HIGH, 0};
+static ArcadeBtn g_btnWhite = {PIN_WHITE, HIGH, HIGH, 0};
 static uint8_t g_dirty = 1;
 static uint32_t g_lastFrame = 0;
 
@@ -314,7 +338,7 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 </div>
 </div>
 <pre id=st>loading</pre>
-<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest play the matrix fire. The lava fire trail is on, as on the spiral lamp. The 12×8 matrix scrolls the IP.</p>
+<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. With every switch off, white-white, red-red, white-white, red-red (rrllrrll) starts Metaballs, and red-red, white-white, red-red, white-white (llrrllrr) starts Plasma. In Metaballs those buttons are not a code: red adds a blob (up to 8) and white removes one (down to 1). In Plasma they are not a code either: red zooms in and white zooms out. Turning any other switch on leaves either mode. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest, before that code, play the matrix fire. The red and white buttons are also D8 and D4, active low, same as the spiral lamp. The lava fire trail is on. The 12×8 matrix scrolls the IP.</p>
 <script>
 var S={rocker:0,toggle:0,key:0,wave:0,chaos:0,fader:50,speed:50,cover:0};
 var link=document.getElementById('link'),st=document.getElementById('st');
@@ -352,6 +376,8 @@ function show(s){
     'key '+(s.key?'on':'off')+'  wave '+(s.wave?'on':'off')+'  chaos '+(s.chaos?'on':'off')+'\n'+
     'brightness '+s.brightness+' / '+s.brightnessCap+'   fader '+s.fader+'%\n'+
     'speed '+s.speed+'   fire trail '+(s.fireTrail?'on':'off')+'\n'+
+    (s.mode==='metaballs'?('balls '+s.balls+'  (red adds, white removes)\n'):'')+
+    (s.mode==='plasma'?('zoom '+s.zoom+' / 4  (red zooms in, white zooms out)\n'):'')+
     'top '+s.topName+'   bottom '+s.bottomName+'\n'+
     'wifi '+s.wifi+'   rssi '+s.rssi;
 }
@@ -621,6 +647,8 @@ static uint8_t derivedMode() {
   if (!g_rocker && g_toggle) return MODE_MUSIC;
   if (g_rocker && g_classic) return MODE_CLASSIC;
   if (g_rocker) return MODE_JUMBO;
+  if (g_meta) return MODE_METABALLS;
+  if (g_plasma) return MODE_PLASMA;
   return MODE_FIRE;
 }
 
@@ -634,9 +662,9 @@ static const char* lavaName(uint8_t i) {
 static const char* modeName(uint8_t mode) {
   static const char* const N[] = {
     "fire", "jumbo", "classic", "rainbow", "wave", "wave-mod",
-    "wave-rainbow", "wave-epic", "secret", "lava", "music"
+    "wave-rainbow", "wave-epic", "secret", "lava", "music", "metaballs", "plasma"
   };
-  if (mode > MODE_MUSIC) return "fire";
+  if (mode > MODE_PLASMA) return "fire";
   return N[mode];
 }
 
@@ -651,6 +679,63 @@ static void pushSeq(char c) {
     if (!g_toggle) g_classic = 1;
     g_seqN = 0;
   }
+}
+
+// Idle-only codes. Classic owns the buttons while the rocker is on, so this
+// buffer is separate. It is ignored once Metaballs or Plasma is showing:
+// those presses zoom or add balls instead of spelling another code.
+static void pushMeta(char c) {
+  if (g_rocker || g_toggle || g_keySw || g_wave || g_chaos || g_meta || g_plasma) return;
+  if (g_metaSeqN < 8) g_metaSeq[g_metaSeqN++] = c;
+  else {
+    memmove(g_metaSeq, g_metaSeq + 1, 7);
+    g_metaSeq[7] = c;
+  }
+  if (g_metaSeqN == 8 && memcmp(g_metaSeq, "rrllrrll", 8) == 0) {
+    g_meta = 1;
+    g_plasma = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Metaballs "));
+    Serial.println(modesMetaCount());
+  } else if (g_metaSeqN == 8 && memcmp(g_metaSeq, "llrrllrr", 8) == 0) {
+    g_plasma = 1;
+    g_meta = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Plasma zoom "));
+    Serial.println(modesPlasmaZoomLevel());
+  }
+}
+
+static void leaveMeta() {
+  g_meta = 0;
+  g_plasma = 0;
+  g_metaSeqN = 0;
+}
+
+static void onArcade(char c) {
+  if (derivedMode() == MODE_METABALLS) {
+    if (c == 'l') modesMetaAdd();
+    else modesMetaRemove();
+    Serial.print(F("Metaballs "));
+    Serial.println(modesMetaCount());
+    g_dirty = 1;
+    return;
+  }
+  if (derivedMode() == MODE_PLASMA) {
+    if (c == 'l') modesPlasmaZoom(1);
+    else modesPlasmaZoom(-1);
+    Serial.print(F("Plasma zoom "));
+    Serial.println(modesPlasmaZoomLevel());
+    g_dirty = 1;
+    return;
+  }
+  if (g_chaos) {
+    if (c == 'r') g_top = (uint8_t)((g_top + 1) % 7);
+    else g_bot = (uint8_t)((g_bot + 1) % 7);
+  }
+  pushSeq(c);
+  pushMeta(c);
+  g_dirty = 1;
 }
 
 static uint8_t appliedBrightness() {
@@ -764,6 +849,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "rocker")) {
     uint8_t v = g_rocker;
     if (!parseSwitch(val, &v)) { *err = "rocker"; return false; }
+    if (v && !g_rocker) leaveMeta();
     g_rocker = v;
     g_dirty = 1;
     return true;
@@ -771,7 +857,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "toggle")) {
     uint8_t v = g_toggle;
     if (!parseSwitch(val, &v)) { *err = "toggle"; return false; }
-    if (v && !g_toggle) g_classic = 0;
+    if (v && !g_toggle) { g_classic = 0; leaveMeta(); }
     g_toggle = v;
     g_dirty = 1;
     return true;
@@ -779,6 +865,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "key")) {
     uint8_t v = g_keySw;
     if (!parseSwitch(val, &v)) { *err = "key"; return false; }
+    if (v && !g_keySw) leaveMeta();
     g_keySw = v;
     g_dirty = 1;
     return true;
@@ -786,6 +873,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "wave")) {
     uint8_t v = g_wave;
     if (!parseSwitch(val, &v)) { *err = "wave"; return false; }
+    if (v && !g_wave) leaveMeta();
     g_wave = v;
     g_dirty = 1;
     return true;
@@ -793,6 +881,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "chaos")) {
     uint8_t v = g_chaos;
     if (!parseSwitch(val, &v)) { *err = "chaos"; return false; }
+    if (v && !g_chaos) leaveMeta();
     g_chaos = v;
     g_dirty = 1;
     return true;
@@ -818,9 +907,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   }
   if (!strcmp(key, "white") || !strcmp(key, "top")) {
     if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
-      if (g_chaos) g_top = (uint8_t)((g_top + 1) % 7);
-      pushSeq('r');
-      g_dirty = 1;
+      onArcade('r');
       return true;
     }
     int n;
@@ -831,9 +918,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   }
   if (!strcmp(key, "red") || !strcmp(key, "bottom")) {
     if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
-      if (g_chaos) g_bot = (uint8_t)((g_bot + 1) % 7);
-      pushSeq('l');
-      g_dirty = 1;
+      onArcade('l');
       return true;
     }
     int n;
@@ -901,6 +986,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"classic\":%s,\"fireTrail\":%s,"
     "\"fader\":%u,\"brightness\":%u,\"brightnessCap\":%u,\"speed\":%u,"
     "\"top\":%u,\"topName\":\"%s\",\"bottom\":%u,\"bottomName\":\"%s\","
+    "\"balls\":%u,\"zoom\":%u,"
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
     "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
@@ -921,6 +1007,8 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     (unsigned)g_speed,
     (unsigned)g_top, lavaName(g_top),
     (unsigned)g_bot, lavaName(g_bot),
+    (unsigned)modesMetaCount(),
+    (unsigned)modesPlasmaZoomLevel(),
     wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi,
@@ -1237,6 +1325,24 @@ static void webPoll(uint32_t now) {
   }
 }
 
+static uint8_t arcadeFell(ArcadeBtn* b, uint32_t now) {
+  uint8_t raw = (uint8_t)digitalRead(b->pin);
+  if (raw != b->raw) {
+    b->raw = raw;
+    b->since = now;
+  }
+  if (raw != b->stable && (uint32_t)(now - b->since) >= ARCADE_DB_MS) {
+    b->stable = raw;
+    if (raw == LOW) return 1;
+  }
+  return 0;
+}
+
+static void pollArcade(uint32_t now) {
+  if (arcadeFell(&g_btnRed, now)) onArcade('l');
+  if (arcadeFell(&g_btnWhite, now)) onArcade('r');
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
@@ -1251,6 +1357,12 @@ void setup() {
   Serial.print(F(" cap "));
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros() ^ (uint32_t)analogRead(A0));
+  pinMode(PIN_RED, INPUT_PULLUP);
+  pinMode(PIN_WHITE, INPUT_PULLUP);
+  g_btnRed.stable = g_btnRed.raw = (uint8_t)digitalRead(PIN_RED);
+  g_btnWhite.stable = g_btnWhite.raw = (uint8_t)digitalRead(PIN_WHITE);
+  g_btnRed.since = g_btnWhite.since = millis();
+  modesMetaBoot();
   matrixFireReset();
   matrixFireSetIntensity(50);
   memset(g_heat, 0, sizeof g_heat);
@@ -1268,6 +1380,7 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+  pollArcade(now);
   webPoll(now);
   tickScroll(now);
   tickPanel(now);

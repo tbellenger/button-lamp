@@ -1,6 +1,6 @@
 # MatrixLamp_R4_Wifi
 
-Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The page is the spiral lamp's physical control panel. Switches at rest play the matrix fire; the other positions play the spiral modes (jumbo, classic, rainbow, the four waves, secret, lava, music). The board's 12×8 red matrix scrolls the WiFi IP. There is no animation upload and no OTA.
+Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The page is the spiral lamp's physical control panel. Switches at rest play the matrix fire; the other positions play the spiral modes (jumbo, classic, rainbow, the four waves, secret, lava, music). With every switch off, white-white, red-red, white-white, red-red (`rrllrrll`) latches Metaballs, and red-red, white-white, red-red, white-white (`llrrllrr`) latches Plasma. In Metaballs, red (D8) adds a blob and white (D4) removes one. In Plasma, red zooms in and white zooms out. Those presses are not a second code. The same two buttons are wired, active low, on those pins. The board's 12×8 red matrix scrolls the WiFi IP. There is no animation upload and no OTA.
 
 The project README, section 5, is the full note (page, `GET /api/state`, `GET /api/set`). This file is the wiring and the upload.
 
@@ -54,4 +54,4 @@ Windows can double-click `tools/upload_matrixlamp.bat`. The window waits at the 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, no `secrets.h`: 95892 B flash (36% of 262144), 11368 B globals (34% of 32768), 21400 B left for locals. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, no `secrets.h`: 103108 B flash (39% of 262144), 11540 B globals (35% of 32768), 21228 B left for locals. NeoPixel mallocs another 768 B for the 256 LEDs.

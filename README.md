@@ -172,8 +172,8 @@ The mode is whatever those switches would select on the spiral lamp. Centres and
 | Control | Pin | On the 16×16 |
 |---|---|---|
 | Fader | A0 | Brightness. Halfway is **20** of 255. It cannot pass the cap (40). |
-| Red arcade, middle left | D8 | While Chaos is on, next lava bottom colour. With the rocker on, one step of the classic code (`l`). |
-| White arcade, top left | D4 | While Chaos is on, next lava top colour. With the rocker on, one step of the classic code (`r`). |
+| Red arcade, middle left | D8 | While Chaos is on, next lava bottom colour. With the rocker on, one step of the classic code (`l`). With every switch off, one step of the Metaballs code. In Metaballs, add a blob. |
+| White arcade, top left | D4 | While Chaos is on, next lava top colour. With the rocker on, one step of the classic code (`r`). With every switch off, one step of the Metaballs code. In Metaballs, remove a blob. |
 | Toggle, left of the rocker | D6 | With the rocker, Jumbo's colour cycle. Alone (rocker, key, wave, and chaos off), Music. |
 | Rocker, centre | D7 | Power for Jumbo / Classic. Off, and nothing else selected, is the matrix fire. |
 | Covered toggle, right of the rocker | D10 | Wave. Open the red cover, then flip the switch. |
@@ -196,6 +196,8 @@ How each spiral mode sits on the grid (`y = 0` is the top of the picture):
 | Secret | rocker + toggle + key + wave | The knob fills LEDs from the bottom along the path. The fader picks the solid colour, and the bottom of the fader mixes in the violet-to-red gradient. |
 | Lava | mushroom | Two balls toss across the grid under gravity. Bottom ball uses the red button's colour, top ball the white button's. The fire trail (on at boot, no switch on the real panel) sits behind each ball. |
 | Music | toggle only | A dim pulse walks the path, and a short built-in phrase sends brighter notes. This lamp has no AppleMIDI socket. |
+| Metaballs | arcade code `rrllrrll` while every switch is off (white, white, red, red, white, white, red, red) | Glowing blobs drift and bounce. Their fields add, so they merge and split. The hue drifts. Red (D8) adds a blob, up to 8. White (D4) removes one, down to 1. The knob is their speed. The fader stays brightness. Those presses are not written into the Classic code: Classic only listens while the rocker is on, and this code only listens while every switch is off and Metaballs is not already showing. Turning the rocker, toggle, key, wave switch, or mushroom on leaves Metaballs. |
+| Plasma | arcade code `llrrllrr` while every switch is off (red, red, white, white, red, red, white, white) | A plasma field rotates and zooms in and out. The knob is the animation speed. The fader stays brightness. Red zooms in one step (five steps, held at the tight end). White zooms out. Same as Metaballs: once the mode is on, the arcade buttons are that control and are not another code. Either code clears the other. A switch turning on leaves Plasma. |
 
 The 12×8 matrix scrolls the IP while WiFi is online. Until DHCP has a non-zero address it shows a waiting mark. It does not scroll `0.0.0.0`.
 
@@ -229,6 +231,8 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit. The sketch includes that header for 
 | `mode` | `fire`, `jumbo`, `classic`, `rainbow`, `wave`, `wave-mod`, `wave-rainbow`, `wave-epic`, `secret`, `lava`, `music`. Derived from the switches. |
 | `rocker`, `toggle`, `key`, `wave`, `chaos` | `true` when that switch is on |
 | `classic` | The arcade sequence has armed Classic |
+| `balls` | Metaballs blob count, 1–8. Starts at 3 |
+| `zoom` | Plasma zoom step, 0–4. Starts at 2. Higher is tighter |
 | `fireTrail` | Lava tail. On at boot. No switch on the panel. |
 | `fader` | 0–100, the slider position. 50 is the boot position. |
 | `brightness` | NeoPixel level 0–255 after the cap. Boot value 20. |
@@ -258,6 +262,8 @@ curl -s http://<ip>/api/state
 curl -s 'http://<ip>/api/set?rocker=1&toggle=1'
 curl -s 'http://<ip>/api/set?chaos=1&white=press'
 curl -s 'http://<ip>/api/set?brightness=20'
+curl -s 'http://<ip>/api/set?white=press&white=press&red=press&red=press&white=press&white=press&red=press&red=press'
+curl -s 'http://<ip>/api/set?red=press'
 ```
 
 Host check for the fire, from this folder's parent:
@@ -271,7 +277,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 95892 B flash (36% of 262144), 11368 B globals (34% of 32768), 21400 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 103108 B flash (39% of 262144), 11540 B globals (35% of 32768), 21228 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -283,7 +289,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes on the grid, matrix fire at rest. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes, plus Metaballs and Plasma from arcade codes while idle. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 
