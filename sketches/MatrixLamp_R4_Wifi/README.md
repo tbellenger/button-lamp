@@ -1,6 +1,6 @@
 # MatrixLamp_R4_Wifi
 
-Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The page is the spiral lamp's physical control panel. Switches at rest play the matrix fire; the other positions play the spiral modes (jumbo, classic, rainbow, the four waves, secret, lava, music). With every switch off, white-white, red-red, white-white, red-red (`rrllrrll`) latches Metaballs, red-red, white-white, red-red, white-white (`llrrllrr`) latches Plasma, and white-white-white, red-red, white-white-white (`rrrllrrr`) latches Sun. In Metaballs, red (D8) adds a blob and white (D4) removes one. In Plasma, red zooms in and white zooms out. In Sun, red grows it and white shrinks it. Those presses are not a second code. The same two buttons are wired, active low, on those pins. The board's 12×8 red matrix scrolls the WiFi IP. There is no animation upload and no OTA.
+Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The page is the spiral lamp's physical control panel. Switches at rest play the matrix fire; the other positions play the spiral modes (jumbo, classic, rainbow, the four waves, secret, lava, music). With every switch off, white-white, red-red, white-white, red-red (`rrllrrll`) latches Metaballs, red-red, white-white, red-red, white-white (`llrrllrr`) latches Plasma, and white-white-white, red-red, white-white-white (`rrrllrrr`) latches Sun. In Metaballs, red (D8) adds a blob and white (D4) removes one. In Plasma, red zooms in and white zooms out. In Sun, red grows it and white shrinks it. Those presses are not a second code. The same two buttons are wired, active low, on those pins. The board's 12×8 red matrix scrolls the WiFi IP. There is no animation upload. After one USB flash, firmware updates go over WiFi.
 
 The project README, section 5, is the full note (page, `GET /api/state`, `GET /api/set`). This file is the wiring and the upload.
 
@@ -23,7 +23,7 @@ Brightness starts at **20** of 255 (`BRIGHTNESS_DEFAULT`). The page cannot raise
 
 ## WiFi
 
-Copy `secrets.example.h` to `secrets.h` in this folder. `secrets.h` is gitignored. Do not commit it. An empty `WIFI_SSID`, or no `secrets.h`, skips WiFi. The panel still runs.
+Copy `secrets.example.h` to `secrets.h` in this folder. `secrets.h` is gitignored. Do not commit it. Put the network in `WIFI_SSID` / `WIFI_PASS` and set `OTA_PASSWORD`. A USB build stores those in data flash when they differ. A GitHub build has no `secrets.h` and does not overwrite them. With no stored network, the board opens WiFi `MatrixLamp-Setup` so a phone can enter them. Hold red and white while resetting to open that page again.
 
 The lamp is online only when `WiFi.status()` is `WL_CONNECTED` and `WiFi.localIP()` is not `0.0.0.0`. mDNS: `matrixlamp.local` and `matrix-lamp.local`. DHCP name: `matrixlamp`.
 
@@ -48,10 +48,22 @@ tools/upload_matrixlamp.sh /dev/cu.usbmodem1101 --monitor
 tools\upload_matrixlamp.bat COM5
 ```
 
-Windows can double-click `tools/upload_matrixlamp.bat`. The window waits at the end. The port is the first argument; leave it off and the script looks for one Uno R4 WiFi. `--monitor` opens serial at 115200 after upload. The script installs the `arduino:renesas_uno` core and Adafruit NeoPixel if they are missing, and warns if `secrets.h` is missing.
+Windows can double-click `tools/upload_matrixlamp.bat`. The window waits at the end. The port is the first argument; leave it off and the script looks for one Uno R4 WiFi. `--monitor` opens serial at 115200 after a USB upload. The script installs the `arduino:renesas_uno` core, Adafruit NeoPixel, and ArduinoOTA if they are missing, and warns if `secrets.h` is missing.
+
+The first time, use USB. After this firmware is running:
+
+```text
+tools\upload_matrixlamp.bat ota
+tools\upload_matrixlamp.bat ota 192.168.1.20
+tools/upload_matrixlamp.sh --ota
+```
+
+That compiles a `.bin` and POSTs it to `http://matrixlamp.local/update` (or the IP you pass). The password comes from the `OTA_PASSWORD` environment variable, then `secrets.h`, then a prompt. Success is printed only when the lamp reboots into that build. If `matrixlamp.local` does not resolve on Windows, use the IP shown on the web page and on the serial monitor.
+
+On the phone, open the lamp's page, enter the OTA password under Firmware, and either pick a `.bin` or tap Update from GitHub. The 16×16 fills orange while the image is stored. A short or bad file is not applied. The project README, section 5, has the size limit (122880 bytes), the GitHub release tags, and the setup AP.
 
 ```text
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, no `secrets.h`: 110596 B flash (42% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122632 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122640 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
