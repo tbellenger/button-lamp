@@ -1,0 +1,6 @@
+# Creality CR-10 family, regular PLA, open frame. No shipped cr_10 profile.
+material = "pla"
+bed = [300.0, 300.0, 400.0]
+
+[export]
+formats = ["3mf", "stl"]
