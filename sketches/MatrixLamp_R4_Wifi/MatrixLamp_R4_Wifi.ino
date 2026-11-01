@@ -47,10 +47,9 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   122632 B flash (46% of 262144), 15204 B globals (46% of 32768),
-   17564 B left for locals. The .bin is 122640 B. OTA allows at most
-   122880 B (half of the 240 KB sketch region, on a 2 KB boundary).
-   NeoPixel then mallocs 768 B for 256 LEDs.
+   122680 B flash (46% of 262144), 15204 B globals (46% of 32768),
+   17564 B left for locals. The .bin is 122688 B. OTA allows at most
+   122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -412,21 +411,21 @@ details p{margin:.2rem .9rem .7rem;color:#e7d8c6;font-size:.92rem}
 <pre id=st>loading</pre>
 </div>
 <div class=presets>
-<p class=note>Presets. Fader halfway is brightness 20 (cap 40). Red is D8, white is D4. Mushroom wins. Idle codes need every switch off; any switch on leaves them.</p>
-<details><summary>Fire</summary><p>All switches off. Knob is flame speed.</p></details>
-<details><summary>Jumbo</summary><p>Rocker on. Toggle cycles colour. Knob is wipe speed.</p></details>
-<details><summary>Classic</summary><p>Rocker on, toggle off. Code: white, red, white, white, red, white, red, red. Knob is orange, yellow, or white. Toggle leaves.</p></details>
-<details><summary>Rainbow</summary><p>Key on. Toggle reverses. Knob is speed.</p></details>
-<details><summary>Wave</summary><p>Open the red cover. A band moves up. Knob is speed.</p></details>
-<details><summary>Wave modifier</summary><p>Toggle plus wave. The band crossfades.</p></details>
-<details><summary>Wave rainbow</summary><p>Key plus wave. Each row is a hue.</p></details>
-<details><summary>Wave epic</summary><p>Key, toggle, and wave. Rocker off (rocker on is Secret).</p></details>
-<details><summary>Secret</summary><p>Rocker, toggle, key, and wave. Knob fills from the bottom.</p></details>
-<details><summary>Lava</summary><p>Mushroom. White cycles the top ball, red the bottom.</p></details>
-<details><summary>Music</summary><p>Toggle only. Built-in phrase. Knob is speed.</p></details>
-<details><summary>Metaballs</summary><p>Idle: white white, red red, white white, red red. Then red adds a blob (max 8), white removes (min 1).</p></details>
-<details><summary>Plasma</summary><p>Idle: red red, white white, red red, white white. Then red zooms in, white zooms out.</p></details>
-<details><summary>Sun</summary><p>Idle: white white white, red red, white white white. Then red grows, white shrinks.</p></details>
+<p class=note>Presets. Fader halfway is brightness 20. Idle codes need every switch off.</p>
+<details><summary>Fire</summary><p>All off. Knob is speed.</p></details>
+<details><summary>Jumbo</summary><p>Rocker on. Toggle cycles colour.</p></details>
+<details><summary>Classic</summary><p>Rocker on. Code: white red white white red white red red.</p></details>
+<details><summary>Rainbow</summary><p>Key on. Toggle reverses.</p></details>
+<details><summary>Wave</summary><p>Open the red cover.</p></details>
+<details><summary>Wave modifier</summary><p>Toggle and wave.</p></details>
+<details><summary>Wave rainbow</summary><p>Key and wave.</p></details>
+<details><summary>Wave epic</summary><p>Key, toggle, and wave. Rocker off.</p></details>
+<details><summary>Secret</summary><p>Rocker, toggle, key, and wave.</p></details>
+<details><summary>Lava</summary><p>Mushroom. White cycles the top, red the bottom.</p></details>
+<details><summary>Music</summary><p>Toggle only.</p></details>
+<details><summary>Metaballs</summary><p>white white red red white white red red. Red adds, white removes.</p></details>
+<details><summary>Plasma</summary><p>red red white white red red white white. Red zooms in.</p></details>
+<details><summary>Sun</summary><p>white white white red red white white white. Red grows.</p></details>
 </div>
 </div>
 <script>
@@ -1349,15 +1348,19 @@ static void httpWrite() {
   g_otaApply = 0;
   g_rebootAfter = 0;
   if (apply || reboot) {
+    modem.timeout(400);
     g_client.flush();
-    delay(500);
+    delay(200);
+    modem.timeout(MODEM_CMD_BUDGET_MS);
   }
   httpStop();
   if (apply) {
-    Serial.println(F("OTA apply"));
-    InternalStorage.apply();
-    Serial.println(F("OTA apply failed"));
-    otaResumeLamp();
+    if (!otaCommit()) {
+      otaSet("error", "apply failed");
+      otaSolid(180, 0, 0);
+      delay(1000);
+      otaResumeLamp();
+    }
     return;
   }
   if (reboot) NVIC_SystemReset();
