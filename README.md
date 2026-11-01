@@ -165,15 +165,39 @@ Pass the port as the first argument. If you leave it off, the script looks for o
 
 #### What it plays
 
-The page is the control panel. It follows the spiral lamp page in `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` (dark page, mode menu, sliders, a row of buttons, a status block).
+The page is a picture of the spiral lamp's **physical** control panel: the printed `Switch Panel` layout (184.15 × 133.35 mm, fader along the front edge), with the same centres as `plywood/fingerjoint/src/controls.py`. Birch face, red and white arcade buttons, key switch, red mushroom, toggle, vertical rocker, red flip-cover over the wave toggle, speed knob, and the brightness fader. Buttons press in, the key turns, the mushroom latches, the rocker and toggles flip, the cover opens, and the knob and fader move by drag.
 
-- **Off**, **Fire**, **Solid colour**, **Rainbow**. Off is remembered: Turn on comes back to the last mode.
-- **Brightness** is the NeoPixel 0–255 value. It starts at **20**. The slider cannot go above the cap (40, or lower if the power budget is tighter). 20 is the same level as Tom's rainbow test and is plenty on this panel.
-- **Speed** is the fire step and the rainbow (0 slow, 100 fast). **Fire intensity** is how tall the flames are. 50 is the tuned flame.
-- The colour buttons switch to that solid colour: red, orange, yellow, white, green, blue, purple.
-- The 12×8 matrix scrolls the IP while WiFi is online. Until DHCP has a non-zero address it shows a waiting mark. It does not scroll `0.0.0.0`.
+The mode is whatever those switches would select on the spiral lamp. Centres and pins, from the front edge up:
 
-Fire is full colour on the 16×16: deep red at the cool edge, through orange and yellow, to white only on the hottest cells (the bottom-row plume cores). The bottom row stays hot. Three wide plumes rise from it, and a rare draft licks the top row without going white.
+| Control | Pin | On the 16×16 |
+|---|---|---|
+| Fader | A0 | Brightness. Halfway is **20** of 255. It cannot pass the cap (40). |
+| Red arcade, middle left | D8 | While Chaos is on, next lava bottom colour. With the rocker on, one step of the classic code (`l`). |
+| White arcade, top left | D4 | While Chaos is on, next lava top colour. With the rocker on, one step of the classic code (`r`). |
+| Toggle, left of the rocker | D6 | With the rocker, Jumbo's colour cycle. Alone (rocker, key, wave, and chaos off), Music. |
+| Rocker, centre | D7 | Power for Jumbo / Classic. Off, and nothing else selected, is the matrix fire. |
+| Covered toggle, right of the rocker | D10 | Wave. Open the red cover, then flip the switch. |
+| Speed knob | A1 | Speed for every moving mode. On Classic it is also the colour (orange → yellow → white). |
+| Key, top middle | D5 | Rainbow. With Wave, Wave rainbow. With Wave and the toggle, Wave epic. |
+| Mushroom, top right | D11 | Lava. It wins over the other switches. |
+
+How each spiral mode sits on the grid (`y = 0` is the top of the picture):
+
+| Mode | Switches | On the 16×16 |
+|---|---|---|
+| Fire | all off | The matrix fire: deep red, orange, yellow, white only in the hottest cores. Not a spiral-lamp mode. This is what the strip lamp leaves dark. |
+| Jumbo | rocker, toggle optional | A wipe from the bottom row upward in the jumbo colour (white, then red, purple, blue, green, yellow, orange). The toggle steps that colour. |
+| Classic | rocker, after `rlrrlrll` on the arcade buttons | The whole panel one colour from the knob. Turning the toggle on leaves Classic. |
+| Rainbow | key | A hue runs along a serpentine path that starts at the bottom. The toggle reverses it. |
+| Wave | wave | A bright band ripples up the rows. |
+| Wave modifier | wave + toggle | That band crossfades a colour pair. |
+| Wave rainbow | wave + key | Each row is a hue; the band still travels. |
+| Wave epic | wave + key + toggle | One row flashes through the epic colours. |
+| Secret | rocker + toggle + key + wave | The knob fills LEDs from the bottom along the path. The fader picks the solid colour, and the bottom of the fader mixes in the violet-to-red gradient. |
+| Lava | mushroom | Two balls toss across the grid under gravity. Bottom ball uses the red button's colour, top ball the white button's. The fire trail (on at boot, no switch on the real panel) sits behind each ball. |
+| Music | toggle only | A dim pulse walks the path, and a short built-in phrase sends brighter notes. This lamp has no AppleMIDI socket. |
+
+The 12×8 matrix scrolls the IP while WiFi is online. Until DHCP has a non-zero address it shows a waiting mark. It does not scroll `0.0.0.0`.
 
 If the picture is mirrored or turned, edit the `PANEL_*` settings at the top of the sketch. Nothing else has to change.
 
@@ -202,13 +226,15 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit. The sketch includes that header for 
 
 | Field | Meaning |
 |---|---|
-| `mode` | `off`, `fire`, `solid`, or `rainbow` |
-| `power` | `false` when mode is `off` |
-| `brightness` | 0–255, already clamped to the cap. Boot value 20 |
-| `brightnessCap` | The cap the slider is allowed to reach |
-| `speed` | 0–100. Fire step and rainbow |
-| `intensity` | 0–100. Fire height. 50 is the tuned flame |
-| `color` | Solid colour: `red`, `orange`, `yellow`, `white`, `green`, `blue`, `purple` |
+| `mode` | `fire`, `jumbo`, `classic`, `rainbow`, `wave`, `wave-mod`, `wave-rainbow`, `wave-epic`, `secret`, `lava`, `music`. Derived from the switches. |
+| `rocker`, `toggle`, `key`, `wave`, `chaos` | `true` when that switch is on |
+| `classic` | The arcade sequence has armed Classic |
+| `fireTrail` | Lava tail. On at boot. No switch on the panel. |
+| `fader` | 0–100, the slider position. 50 is the boot position. |
+| `brightness` | NeoPixel level 0–255 after the cap. Boot value 20. |
+| `brightnessCap` | The cap, 40 unless the power budget is lower |
+| `speed` | 0–100, the knob |
+| `top`, `topName`, `bottom`, `bottomName` | Lava colours, `red` `purple` `blue` `green` `yellow` `orange` `off` |
 | `wifi` | `off`, `joining`, or `connected`. `connected` means a non-zero DHCP address |
 | `ip` | Dotted address, or `0.0.0.0` while DHCP has not finished |
 | `rssi` | dBm, or 0 when offline |
@@ -216,21 +242,22 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit. The sketch includes that header for 
 | `serpentine`, `flipX`, `flipY`, `rotate` | The orientation settings compiled into the sketch |
 | `powerBudgetMa` | `POWER_BUDGET_MA` |
 
-`GET /api/set?key=value&...` applies keys left to right and returns that state. `ok` is false on the first bad key; earlier keys stick. `error` is `mode`, `brightness`, `speed`, `intensity`, `color`, `power`, `key`, or `method`.
+`GET /api/set?key=value&...` applies keys left to right and returns that state. `ok` is false on the first bad key; earlier keys stick. `error` is the key that failed, or `method`.
 
 | Key | Values |
 |---|---|
-| `mode` | `off`, `fire`, `solid`, `rainbow` |
-| `power` | `0` / `off`, `1` / `on`, `toggle`. On restores the last mode |
-| `brightness` | `0`–`255`, clamped to the cap |
-| `speed`, `intensity` | `0`–`100` |
-| `color` (or `colour`) | a colour name, or `next` |
+| `rocker`, `toggle`, `key`, `wave`, `chaos` | `0` / `off`, `1` / `on`, `toggle` |
+| `fader`, `speed` | `0`–`100` |
+| `brightness` | `0`–`255`, clamped to the cap. Moves the fader so the level matches. |
+| `white`, `top` | `press` or `next` cycles the top lava colour while Chaos is on. A number `0`–`6` sets it. `press` is also the white button in the classic code. |
+| `red`, `bottom` | Same, for the bottom colour and the red button. |
+| `fire` | `0`, `1`, or `toggle`. The lava tail. Not on the panel. |
 
 ```text
 curl -s http://<ip>/api/state
-curl -s 'http://<ip>/api/set?mode=fire&brightness=20&intensity=50'
-curl -s 'http://<ip>/api/set?color=orange&mode=solid'
-curl -s 'http://<ip>/api/set?power=toggle'
+curl -s 'http://<ip>/api/set?rocker=1&toggle=1'
+curl -s 'http://<ip>/api/set?chaos=1&white=press'
+curl -s 'http://<ip>/api/set?brightness=20'
 ```
 
 Host check for the fire, from this folder's parent:
@@ -244,7 +271,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 85992 B flash (32% of 262144), 10900 B globals (33% of 32768), 21868 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 95892 B flash (36% of 262144), 11368 B globals (34% of 32768), 21400 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -256,7 +283,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | no | no | yes | no | Fire, solid, or rainbow on the panel. Onboard 12×8 scrolls the IP. mDNS `matrixlamp.local` and `matrix-lamp.local`. No animation upload. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes on the grid, matrix fire at rest. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 
@@ -268,7 +295,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `sketches/SpiralLamp_R3_FireTrail/` | Same lamp, plus a fire tail on the lava balls (was `SpiralLamp_v2`) |
 | `sketches/SpiralLamp_R4_FireTrail/` | FireTrail lamp on the Uno R4 WiFi, radio unused (was `SpiralLamp_R4_v0`) |
 | `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` | R4 lamp plus the web page and AppleMIDI Music mode |
-| `sketches/MatrixLamp_R4_Wifi/` | 16×16 WS2812B panel: fire, solid, rainbow, page on port 80. Onboard 12×8 scrolls the IP |
+| `sketches/MatrixLamp_R4_Wifi/` | 16×16 panel, spiral modes, physical-panel page. Onboard 12×8 scrolls the IP |
 | `tools/upload_matrixlamp.sh`, `tools/upload_matrixlamp.bat` | Compile and upload MatrixLamp only (no OTA). `--monitor` opens serial at 115200 |
 | `tools/lava_harness/` | Host build of the lava effect (`v2`/`firetrail` default, `clean`/`base`, `r4`/`r4-firetrail`) |
 | `docs/wiring.md` | Authoritative wiring |

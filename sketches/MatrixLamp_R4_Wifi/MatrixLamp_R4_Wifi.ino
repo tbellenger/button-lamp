@@ -6,7 +6,10 @@
    panel must share ground. A 1000 µF capacitor across the panel 5 V and
    GND, at the panel, takes the switch-on surge.
 
-   The picture is the 16x16 panel: fire, a solid colour, or a rainbow.
+   The picture is the 16x16 panel. The page is the spiral lamp's physical
+   panel (rocker, toggles, arcade buttons, key, mushroom, fader, knob).
+   Switches at rest play the matrix fire. The other positions play the
+   spiral modes. See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
    animation buffer.
@@ -35,8 +38,8 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   85992 B flash (32% of 262144), 10900 B globals (33% of 32768),
-   21868 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
+   95892 B flash (36% of 262144), 11368 B globals (34% of 32768),
+   21400 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -94,19 +97,17 @@ static const uint8_t BRIGHTNESS_CAP = 40;
 static const uint16_t LED_MA_FULL = 60;
 static const uint16_t POWER_BUDGET_MA = 2500;
 
-static const uint8_t MODE_OFF = 0;
-static const uint8_t MODE_FIRE = 1;
-static const uint8_t MODE_SOLID = 2;
+static const uint8_t MODE_FIRE = 0;
+static const uint8_t MODE_JUMBO = 1;
+static const uint8_t MODE_CLASSIC = 2;
 static const uint8_t MODE_RAINBOW = 3;
-
-static const uint8_t COL_RED = 0;
-static const uint8_t COL_ORANGE = 1;
-static const uint8_t COL_YELLOW = 2;
-static const uint8_t COL_WHITE = 3;
-static const uint8_t COL_GREEN = 4;
-static const uint8_t COL_BLUE = 5;
-static const uint8_t COL_PURPLE = 6;
-static const uint8_t COL_COUNT = 7;
+static const uint8_t MODE_WAVE = 4;
+static const uint8_t MODE_WAVE_MOD = 5;
+static const uint8_t MODE_WAVE_RAINBOW = 6;
+static const uint8_t MODE_WAVE_EPIC = 7;
+static const uint8_t MODE_SECRET = 8;
+static const uint8_t MODE_LAVA = 9;
+static const uint8_t MODE_MUSIC = 10;
 
 static const int MATRIX_W = 12;
 static const int MATRIX_H = 8;
@@ -136,6 +137,8 @@ static_assert(PANEL_H == MATRIX_FIRE_H, "panel height must match the fire sim");
 static_assert(PANEL_W == PANEL_H, "PANEL_ROTATE assumes a square panel");
 static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
 
+#include "matrix_modes.h"
+
 // bit 0 = top row of a 5-row glyph. Drawn on matrix rows 1..5.
 static const uint8_t DIGITS[10][3] = {
   {0x1f, 0x11, 0x1f},
@@ -161,13 +164,19 @@ static uint8_t g_matrixOn = 0;
 static FspTimer g_matrixTimer;
 
 static uint8_t g_heat[MATRIX_FIRE_N];
-static uint8_t g_mode = MODE_FIRE;
-static uint8_t g_resume = MODE_FIRE;
-static uint8_t g_brightness = BRIGHTNESS_DEFAULT;
+static uint8_t g_rocker = 0;
+static uint8_t g_toggle = 0;
+static uint8_t g_keySw = 0;
+static uint8_t g_wave = 0;
+static uint8_t g_chaos = 0;
+static uint8_t g_classic = 0;
+static uint8_t g_top = 0;
+static uint8_t g_bot = 0;
+static uint8_t g_fireTrail = 1;
+static uint8_t g_fader = 50;
 static uint8_t g_speed = 50;
-static uint8_t g_intensity = 50;
-static uint8_t g_color = COL_ORANGE;
-static uint8_t g_hue = 0;
+static char g_seq[8];
+static uint8_t g_seqN = 0;
 static uint8_t g_dirty = 1;
 static uint32_t g_lastFrame = 0;
 
@@ -184,7 +193,7 @@ static uint16_t g_hdrOff = 0;
 static const char* g_body = 0;
 static uint16_t g_bodyLen = 0;
 static uint16_t g_bodyOff = 0;
-static char g_json[640];
+static char g_json[1024];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
@@ -202,113 +211,210 @@ static uint32_t g_scrollLast = 0;
 static char g_ipText[16] = "";
 static int g_ipCols = 0;
 
-static const char PAGE[] = R"PAGE(<!DOCTYPE html>
+static const char PAGE[] = R"PAGE(
+<!DOCTYPE html>
 <html lang=en><head>
 <meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Matrix Lamp</title>
 <style>
-body{margin:0;background:#14120f;color:#f3efe6;font:18px/1.35 system-ui,sans-serif}
-main{max-width:28rem;margin:0 auto;padding:1rem 1rem 2.5rem}
-h1{font-size:1.45rem;margin:0 0 .2rem}
-label{display:block;margin:.85rem 0 .25rem;font-size:.85rem;color:#c8bba6}
-select,button{font:inherit;background:#2a241c;color:#f3efe6;border:1px solid #5c4d38;border-radius:.6rem;padding:.7rem;width:100%;box-sizing:border-box}
-button{margin:.3rem 0;min-height:2.9rem}
-.row{display:flex;gap:.5rem}
-.row button{flex:1;width:auto}
-input[type=range]{width:100%;height:2rem;accent-color:#e07030}
-pre{background:#0c0b09;border-radius:.6rem;padding:.7rem;white-space:pre-wrap;font:13px/1.45 ui-monospace,monospace}
-.note{color:#b5a892;font-size:.85rem}
+body{margin:0;background:#241910;color:#f3efe6;font:16px/1.35 system-ui,sans-serif}
+main{max-width:40rem;margin:0 auto;padding:1rem 1rem 2rem}
+h1{font-size:1.15rem;font-weight:650;letter-spacing:.04em;margin:0 0 .15rem}
+.note{color:#cbbba6;font-size:.82rem;margin:.35rem 0 .7rem}
+pre{background:#1a120c;border-radius:.5rem;padding:.6rem .7rem;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;margin:.8rem 0}
+.wood{position:relative;width:100%;aspect-ratio:184.15/133.35;border-radius:10px;
+ background:
+  repeating-linear-gradient(90deg,rgba(90,55,25,.08) 0 2px,transparent 2px 7px),
+  linear-gradient(180deg,#e0c48a,#c4965a 40%,#b8894c 70%,#a8753d);
+ box-shadow:inset 0 0 0 3px #8a5a32,inset 0 0 40px rgba(80,40,10,.25),0 14px 30px rgba(0,0,0,.45);
+ touch-action:none;user-select:none}
+.screw{position:absolute;width:2.2%;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);
+ background:radial-gradient(circle at 35% 30%,#ddd,#888 45%,#444);box-shadow:0 1px 2px rgba(0,0,0,.5)}
+.screw:after{content:"";position:absolute;left:18%;right:18%;top:46%;height:8%;background:#333;transform:rotate(35deg)}
+button{font:inherit;color:inherit;border:0;padding:0;background:transparent;cursor:pointer}
+.ctrl{position:absolute;transform:translate(-50%,-50%)}
+.tag{position:absolute;left:50%;top:108%;transform:translateX(-50%);white-space:nowrap;
+ font-size:clamp(8px,1.7vw,11px);letter-spacing:.08em;text-transform:uppercase;color:rgba(55,32,12,.8);
+ text-shadow:0 1px 0 rgba(255,230,190,.35);pointer-events:none}
+.arcade{width:15.2%;aspect-ratio:1}
+.arcade b{display:block;width:100%;height:100%;border-radius:50%}
+.arcade.white b{background:radial-gradient(circle at 34% 28%,#fff,#e6e6e6 42%,#b9b9b9 70%,#7d7d7d);
+ box-shadow:0 .45em 0 #6a6a6a,0 .7em 1em rgba(0,0,0,.35),inset 0 -.4em .6em rgba(0,0,0,.12)}
+.arcade.red b{background:radial-gradient(circle at 34% 28%,#ff8a80,#e53935 40%,#b71c1c 72%,#6d1010);
+ box-shadow:0 .45em 0 #5c1212,0 .7em 1em rgba(0,0,0,.35),inset 0 -.35em .5em rgba(0,0,0,.2)}
+.arcade.down b{transform:translateY(.28em);box-shadow:0 .12em 0 #444,0 .2em .4em rgba(0,0,0,.3)}
+.key{width:12.1%;aspect-ratio:1;border-radius:50%;
+ background:radial-gradient(circle at 35% 30%,#f2f3f5,#b7bcc2 42%,#6e747a 75%,#3e4348);
+ box-shadow:0 .35em 0 #3a3a3a,0 .55em .8em rgba(0,0,0,.35),inset 0 0 0 .35em #8d9399}
+.key i{position:absolute;left:46%;top:28%;width:8%;height:44%;background:#161616;border-radius:2px;transition:transform .16s}
+.key.on i{transform:rotate(90deg)}
+.mush{width:16%;aspect-ratio:1}
+.mush .col{position:absolute;left:28%;right:28%;bottom:0;height:28%;background:#1b1b1b;border-radius:3px}
+.mush b{position:absolute;left:0;right:0;top:0;bottom:18%;border-radius:50%;
+ background:radial-gradient(circle at 32% 28%,#ff7b7b,#d32f2f 46%,#8f1515 78%,#5c0d0d);
+ box-shadow:inset 0 -.4em .5em rgba(0,0,0,.25),0 .4em .6em rgba(0,0,0,.35);transition:transform .12s}
+.mush.on b{transform:translateY(12%) scaleY(.82)}
+.tog{width:8.5%;aspect-ratio:1;border-radius:50%;
+ background:radial-gradient(circle at 40% 35%,#e4e7ea,#9aa0a6 55%,#5e646a);
+ box-shadow:0 .25em 0 #3a3a3a,inset 0 0 0 .18em #6c7278}
+.tog i{position:absolute;left:42%;top:-55%;width:16%;height:130%;background:linear-gradient(#f5f5f5,#9aa0a6);border-radius:2px;
+ transform-origin:50% 78%;transform:rotate(32deg);transition:transform .12s;box-shadow:1px 1px 0 #333}
+.tog.on i{transform:rotate(-32deg)}
+.rock{width:12%;height:30%;border-radius:5px;background:#141414;
+ box-shadow:inset 0 0 0 3px #0a0a0a,0 3px 8px rgba(0,0,0,.4)}
+.rock i{position:absolute;left:12%;right:12%;height:46%;border-radius:3px;
+ background:linear-gradient(#4a4a4a,#161616);top:50%;transition:top .12s;box-shadow:0 2px 0 #000}
+.rock.on i{top:5%}
+.rock .led{position:absolute;left:42%;top:8%;width:16%;aspect-ratio:1;border-radius:50%;background:#3a1a1a}
+.rock.on .led{background:#ff2a2a;box-shadow:0 0 6px #ff2a2a}
+.cov{width:14%;height:26%}
+.cov .lid{position:absolute;left:0;right:0;top:0;bottom:0;border-radius:3px 3px 6px 6px;
+ background:linear-gradient(#e24b4b,#9d1c1c);box-shadow:0 4px 0 #5c1010,0 6px 8px rgba(0,0,0,.3);
+ transform-origin:50% 0;transition:transform .18s;z-index:2}
+.cov.open .lid{transform:rotateX(68deg)}
+.cov .tog,.cov .lid{pointer-events:none}
+.cov .tog{position:absolute;left:50%;top:58%;width:46%}
+.knob{width:12.5%;aspect-ratio:1;border-radius:50%;
+ background:radial-gradient(circle at 35% 30%,#3c3c3c,#141414 60%,#000);
+ box-shadow:0 .55em 0 #1a120c,0 .8em 1em rgba(0,0,0,.4)}
+.knob i{position:absolute;left:46%;top:10%;width:8%;height:34%;background:#f2f2f2;border-radius:2px;transform-origin:50% 120%}
+.fade{width:62%;height:16%}
+.fade .slot{position:absolute;left:0;right:0;top:46%;height:16%;background:#2b2118;border-radius:99px;box-shadow:inset 0 2px 3px rgba(0,0,0,.6)}
+.fade .screw{width:3.6%;top:54%}
+.fade .thumb{position:absolute;top:18%;width:12%;height:64%;margin-left:-6%;border-radius:3px;
+ background:linear-gradient(#3a3a3a,#111);box-shadow:0 3px 0 #000,0 4px 8px rgba(0,0,0,.45)}
+.fade .thumb i{display:block;height:2px;margin:46% 15% 0;background:#eee}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
-<label for=mode>Mode</label>
-<select id=mode>
-<option value=off>Off</option>
-<option value=fire>Fire</option>
-<option value=solid>Solid colour</option>
-<option value=rainbow>Rainbow</option>
-</select>
-<button type=button id=power>Turn off</button>
-<label for=br>Brightness <span id=brv>20</span></label>
-<input id=br type=range min=0 max=40 value=20>
-<label for=sp>Speed <span id=spv>50</span></label>
-<input id=sp type=range min=0 max=100 value=50>
-<label for=fi>Fire intensity <span id=fiv>50</span></label>
-<input id=fi type=range min=0 max=100 value=50>
-<label>Solid colour</label>
-<div class=row>
-<button type=button data-c=red>Red</button>
-<button type=button data-c=orange>Orange</button>
-<button type=button data-c=yellow>Yellow</button>
-<button type=button data-c=white>White</button>
+<div class=wood id=face>
+<i class=screw style="left:3.4%;top:4.8%"></i>
+<i class=screw style="left:96.6%;top:4.8%"></i>
+<i class=screw style="left:3.4%;top:95.2%"></i>
+<i class=screw style="left:96.6%;top:95.2%"></i>
+<button type=button class="ctrl arcade white" id=white style="left:20.7%;top:21.4%"><b></b><span class=tag>white</span></button>
+<button type=button class="ctrl key" id=key style="left:50%;top:19%"><i></i><span class=tag>key</span></button>
+<button type=button class="ctrl mush" id=chaos style="left:79.3%;top:21.4%"><i class=col></i><b></b><span class=tag>chaos</span></button>
+<button type=button class="ctrl arcade red" id=red style="left:13.8%;top:59.5%"><b></b><span class=tag>red</span></button>
+<button type=button class="ctrl tog" id=toggle style="left:32.8%;top:59.5%"><i></i><span class=tag>toggle</span></button>
+<button type=button class="ctrl rock" id=rocker style="left:50%;top:59.5%"><i class=led></i><i></i><span class=tag>rocker</span></button>
+<div class="ctrl cov" id=cov style="left:67.2%;top:59.5%">
+<button type=button class="tog" id=wave><i></i></button>
+<button type=button class=lid id=lid></button>
+<span class=tag>wave</span>
 </div>
-<div class=row>
-<button type=button data-c=green>Green</button>
-<button type=button data-c=blue>Blue</button>
-<button type=button data-c=purple>Purple</button>
+<button type=button class="ctrl knob" id=knob style="left:86.2%;top:59.5%"><i></i><span class=tag>speed</span></button>
+<div class="ctrl fade" id=fade style="left:50%;top:89.9%">
+<i class=slot></i>
+<i class=screw style="left:0"></i>
+<i class=screw style="left:100%"></i>
+<b class=thumb id=thumb><i></i></b>
+<span class=tag>brightness</span>
+</div>
 </div>
 <pre id=st>loading</pre>
-<p class=note>Brightness is out of 255 and starts at 20, which is plenty on this panel. The slider stops at the cap (40, or lower if the power budget is tighter) so a USB port or a small 5 V supply is not asked for a full-white frame. Speed is the fire and the rainbow. Intensity is how tall and hot the fire is: 50 is the tuned flame, higher reaches further up the panel. The colour buttons switch to that solid colour. The board's 12×8 matrix scrolls the IP address. Serpentine, flip, and rotate are settings in the sketch, not on this page.</p>
+<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest play the matrix fire. The lava fire trail is on, as on the spiral lamp. The 12×8 matrix scrolls the IP.</p>
 <script>
-var mode=document.getElementById('mode'),br=document.getElementById('br'),sp=document.getElementById('sp');
-var fi=document.getElementById('fi'),st=document.getElementById('st'),brv=document.getElementById('brv');
-var spv=document.getElementById('spv'),fiv=document.getElementById('fiv'),link=document.getElementById('link');
-var power=document.getElementById('power');
-var pending='',busy=0;
+var S={rocker:0,toggle:0,key:0,wave:0,chaos:0,fader:50,speed:50,cover:0};
+var link=document.getElementById('link'),st=document.getElementById('st');
+var pending='',busy=0,drag=0;
 function send(q){pending=q;if(!busy)pump();}
 function pump(){
   if(!pending)return;
   var q=pending;pending='';busy=1;
   fetch('/api/set?'+q).then(function(r){return r.json();}).then(show).catch(function(){}).then(function(){busy=0;pump();});
 }
+function paint(){
+  document.getElementById('rocker').className='ctrl rock'+(S.rocker?' on':'');
+  document.getElementById('toggle').className='ctrl tog'+(S.toggle?' on':'');
+  document.getElementById('key').className='ctrl key'+(S.key?' on':'');
+  document.getElementById('chaos').className='ctrl mush'+(S.chaos?' on':'');
+  document.getElementById('wave').className='tog'+(S.wave?' on':'');
+  document.getElementById('cov').className='ctrl cov'+(S.cover?' open':'');
+  var deg=-135+S.speed*270/100;
+  document.querySelector('#knob i').style.transform='rotate('+deg+'deg)';
+  document.getElementById('thumb').style.left=S.fader+'%';
+}
 function show(s){
   if(!s||!s.mode)return;
-  var ae=document.activeElement;
-  if(ae!==mode)mode.value=s.mode;
-  if(s.brightnessCap)br.max=s.brightnessCap;
-  if(ae!==br)br.value=s.brightness;
-  if(ae!==sp)sp.value=s.speed;
-  if(ae!==fi)fi.value=s.intensity;
-  brv.textContent=br.value;
-  spv.textContent=sp.value;
-  fiv.textContent=fi.value;
-  power.textContent=(s.mode==='off')?'Turn on':'Turn off';
+  if(!drag){
+    S.rocker=s.rocker?1:0; S.toggle=s.toggle?1:0; S.key=s.key?1:0;
+    S.wave=s.wave?1:0; S.chaos=s.chaos?1:0;
+    S.cover=S.wave?1:0;
+    S.fader=s.fader; S.speed=s.speed;
+    paint();
+  }
   link.textContent=s.wifi+'  '+s.ip+'   '+s.ledCount+' LEDs';
   st.textContent=
-    'mode '+s.mode+'\n'+
-    'brightness '+s.brightness+' / '+s.brightnessCap+'\n'+
-    'speed '+s.speed+'   intensity '+s.intensity+'\n'+
-    'colour '+s.color+'\n'+
-    'wifi '+s.wifi+'   rssi '+s.rssi+'\n'+
-    'panel '+s.width+'x'+s.height+'   serpentine '+(s.serpentine?'on':'off')+'\n'+
-    'flipX '+(s.flipX?'on':'off')+'   flipY '+(s.flipY?'on':'off')+'   rotate '+s.rotate+'\n'+
-    'cap '+s.brightnessCap+'   budget '+s.powerBudgetMa+' mA';
+    'mode '+s.mode+(s.classic?' (classic armed)':'')+'\n'+
+    'rocker '+(s.rocker?'on':'off')+'  toggle '+(s.toggle?'on':'off')+'\n'+
+    'key '+(s.key?'on':'off')+'  wave '+(s.wave?'on':'off')+'  chaos '+(s.chaos?'on':'off')+'\n'+
+    'brightness '+s.brightness+' / '+s.brightnessCap+'   fader '+s.fader+'%\n'+
+    'speed '+s.speed+'   fire trail '+(s.fireTrail?'on':'off')+'\n'+
+    'top '+s.topName+'   bottom '+s.bottomName+'\n'+
+    'wifi '+s.wifi+'   rssi '+s.rssi;
 }
-mode.onchange=function(){send('mode='+encodeURIComponent(mode.value));};
-power.onclick=function(){send('power=toggle');};
-function slide(el,key,label){
-  var t=0,last=0;
-  el.oninput=function(){
-    label.textContent=el.value;
-    var now=Date.now();
-    if(now-last>200){last=now;send(key+'='+el.value);}
-    clearTimeout(t);
-    t=setTimeout(function(){last=Date.now();send(key+'='+el.value);},220);
+function flip(name){
+  S[name]=S[name]?0:1;
+  if(name=='toggle'&&S.toggle){}
+  paint();
+  send(name+'='+(S[name]?'1':'0'));
+}
+document.getElementById('rocker').onclick=function(){flip('rocker');};
+document.getElementById('toggle').onclick=function(){flip('toggle');};
+document.getElementById('key').onclick=function(){flip('key');};
+document.getElementById('chaos').onclick=function(){flip('chaos');};
+document.getElementById('cov').onclick=function(){
+  S.wave=S.wave?0:1;
+  S.cover=S.wave?1:0;
+  paint();
+  send('wave='+(S.wave?'1':'0'));
+};
+function press(id,key){
+  var el=document.getElementById(id);
+  el.onpointerdown=function(){el.classList.add('down');};
+  el.onpointerup=function(){el.classList.remove('down');send(key+'=press');};
+  el.onpointercancel=function(){el.classList.remove('down');};
+  el.onpointerleave=function(){el.classList.remove('down');};
+}
+press('white','white');
+press('red','red');
+function dragPointer(el,move,key){
+  var down=0;
+  el.onpointerdown=function(ev){
+    down=1; drag=1;
+    if(el.setPointerCapture)el.setPointerCapture(ev.pointerId);
+    move(ev); paint();
   };
-  el.onchange=function(){clearTimeout(t);send(key+'='+el.value);};
+  el.onpointermove=function(ev){if(!down)return; move(ev); paint();};
+  function end(){
+    if(!down)return;
+    down=0; drag=0;
+    send(key+'='+(key=='speed'?S.speed:S.fader));
+  }
+  el.onpointerup=end; el.onpointercancel=end;
 }
-slide(br,'brightness',brv);
-slide(sp,'speed',spv);
-slide(fi,'intensity',fiv);
-var colours=document.querySelectorAll('button[data-c]');
-for(var ci=0;ci<colours.length;ci++){
-  colours[ci].onclick=function(){send('color='+this.getAttribute('data-c')+'&mode=solid');};
-}
+dragPointer(document.getElementById('knob'),function(ev){
+  var r=document.getElementById('knob').getBoundingClientRect();
+  var x=ev.clientX-(r.left+r.width/2), y=ev.clientY-(r.top+r.height/2);
+  var a=Math.atan2(y,x)+Math.PI/2;
+  if(a>Math.PI)a-=Math.PI*2;
+  var deg=a*180/Math.PI;
+  if(deg<-135)deg=-135; if(deg>135)deg=135;
+  S.speed=Math.round((deg+135)/270*100);
+},'speed');
+dragPointer(document.getElementById('fade'),function(ev){
+  var r=document.getElementById('fade').getBoundingClientRect();
+  var t=(ev.clientX-r.left)/r.width;
+  if(t<0)t=0; if(t>1)t=1;
+  S.fader=Math.round(t*100);
+},'fader');
 function poll(){
-  if(busy||pending)return;
+  if(busy||pending||drag)return;
   fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});
 }
+paint();
 setInterval(poll,1000);
 poll();
 </script>
@@ -502,52 +608,68 @@ static void tickScroll(uint32_t now) {
   renderLink(now);
 }
 
-static void wheel(uint8_t pos, uint8_t* r, uint8_t* g, uint8_t* b) {
-  if (pos < 85) {
-    *r = (uint8_t)(255 - pos * 3);
-    *g = (uint8_t)(pos * 3);
-    *b = 0;
-  } else if (pos < 170) {
-    pos = (uint8_t)(pos - 85);
-    *r = 0;
-    *g = (uint8_t)(255 - pos * 3);
-    *b = (uint8_t)(pos * 3);
-  } else {
-    pos = (uint8_t)(pos - 170);
-    *r = (uint8_t)(pos * 3);
-    *g = 0;
-    *b = (uint8_t)(255 - pos * 3);
+static uint8_t derivedMode() {
+  if (g_chaos) return MODE_LAVA;
+  if (g_wave && g_toggle && g_rocker && g_keySw) return MODE_SECRET;
+  if (g_wave) {
+    if (g_keySw && g_toggle) return MODE_WAVE_EPIC;
+    if (g_keySw) return MODE_WAVE_RAINBOW;
+    if (g_toggle) return MODE_WAVE_MOD;
+    return MODE_WAVE;
   }
+  if (g_keySw) return MODE_RAINBOW;
+  if (!g_rocker && g_toggle) return MODE_MUSIC;
+  if (g_rocker && g_classic) return MODE_CLASSIC;
+  if (g_rocker) return MODE_JUMBO;
+  return MODE_FIRE;
 }
 
-static void solidRgb(uint8_t which, uint8_t* r, uint8_t* g, uint8_t* b) {
-  *r = 0;
-  *g = 0;
-  *b = 0;
-  switch (which) {
-    case COL_RED: *r = 255; break;
-    case COL_ORANGE: *r = 255; *g = 80; break;
-    case COL_YELLOW: *r = 255; *g = 180; break;
-    case COL_WHITE: *r = 255; *g = 255; *b = 255; break;
-    case COL_GREEN: *g = 255; break;
-    case COL_BLUE: *b = 255; break;
-    default: *r = 180; *b = 255; break;
-  }
-}
-
-static const char* colorName(uint8_t which) {
+static const char* lavaName(uint8_t i) {
   static const char* const N[] = {
-    "red", "orange", "yellow", "white", "green", "blue", "purple"
+    "red", "purple", "blue", "green", "yellow", "orange", "off"
   };
-  if (which >= COL_COUNT) return "orange";
-  return N[which];
+  return N[i % 7];
 }
 
 static const char* modeName(uint8_t mode) {
-  if (mode == MODE_FIRE) return "fire";
-  if (mode == MODE_SOLID) return "solid";
-  if (mode == MODE_RAINBOW) return "rainbow";
-  return "off";
+  static const char* const N[] = {
+    "fire", "jumbo", "classic", "rainbow", "wave", "wave-mod",
+    "wave-rainbow", "wave-epic", "secret", "lava", "music"
+  };
+  if (mode > MODE_MUSIC) return "fire";
+  return N[mode];
+}
+
+static void pushSeq(char c) {
+  if (g_chaos || g_keySw || g_wave || !g_rocker) return;
+  if (g_seqN < 8) g_seq[g_seqN++] = c;
+  else {
+    memmove(g_seq, g_seq + 1, 7);
+    g_seq[7] = c;
+  }
+  if (g_seqN == 8 && memcmp(g_seq, "rlrrlrll", 8) == 0) {
+    if (!g_toggle) g_classic = 1;
+    g_seqN = 0;
+  }
+}
+
+static uint8_t appliedBrightness() {
+  uint8_t cap = brightnessLimit();
+  return (uint8_t)((uint16_t)g_fader * cap / 100u);
+}
+
+static void applyBrightness() {
+  g_panel.setBrightness(appliedBrightness());
+}
+
+static void fillMode(const ModeIn* in, uint32_t now) {
+  for (int y = 0; y < PANEL_H; y++) {
+    for (int x = 0; x < PANEL_W; x++) {
+      uint8_t r, g, b;
+      modesColor(in, x, y, now, &r, &g, &b);
+      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
+    }
+  }
 }
 
 static void paintFire() {
@@ -559,104 +681,34 @@ static void paintFire() {
   }
 }
 
-static void paintSolid() {
-  uint8_t r, g, b;
-  solidRgb(g_color, &r, &g, &b);
-  for (int y = 0; y < PANEL_H; y++) {
-    for (int x = 0; x < PANEL_W; x++) {
-      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
-    }
-  }
-}
-
-static void paintRainbow() {
-  uint8_t step = (uint8_t)(3 + g_speed / 8);
-  g_hue = (uint8_t)(g_hue + step);
-  for (int y = 0; y < PANEL_H; y++) {
-    for (int x = 0; x < PANEL_W; x++) {
-      uint8_t r, g, b;
-      wheel((uint8_t)(g_hue + (uint8_t)(x * 10) + (uint8_t)(y * 6)), &r, &g, &b);
-      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
-    }
-  }
-}
-
 static uint32_t stepPeriodMs() {
-  // speed 0 -> 150 ms, speed 50 -> 85 ms, speed 100 -> 20 ms.
   return 20u + (uint32_t)(100 - g_speed) * 130u / 100u;
 }
 
-static void applyBrightness() {
-  uint8_t cap = brightnessLimit();
-  if (g_brightness > cap) g_brightness = cap;
-  g_panel.setBrightness(g_brightness);
-}
-
 static void tickPanel(uint32_t now) {
-  if (g_mode == MODE_OFF) {
-    if (!g_dirty) return;
-    applyBrightness();
-    g_panel.clear();
-    panelShow();
-    g_dirty = 0;
-    return;
-  }
-  if (g_mode == MODE_SOLID) {
-    if (!g_dirty) return;
-    applyBrightness();
-    paintSolid();
-    panelShow();
-    g_dirty = 0;
-    return;
-  }
+  uint8_t mode = derivedMode();
   uint32_t period = stepPeriodMs();
   if (!g_dirty && (uint32_t)(now - g_lastFrame) < period) return;
   g_lastFrame = now;
   applyBrightness();
-  if (g_mode == MODE_FIRE) {
-    matrixFireSetIntensity(g_intensity);
+  if (mode == MODE_FIRE) {
+    matrixFireSetIntensity(50);
     matrixFireStep(g_heat);
     paintFire();
   } else {
-    paintRainbow();
+    ModeIn in;
+    in.mode = mode;
+    in.speed = g_speed;
+    in.fader = g_fader;
+    in.top = g_top;
+    in.bottom = g_bot;
+    in.fireTrail = g_fireTrail;
+    in.toggle = g_toggle;
+    modesStep(&in, now);
+    fillMode(&in, now);
   }
   panelShow();
   g_dirty = 0;
-}
-
-static void setMode(uint8_t mode) {
-  if (mode > MODE_RAINBOW) mode = MODE_OFF;
-  if (mode == g_mode) return;
-  if (mode != MODE_OFF) g_resume = mode;
-  g_mode = mode;
-  g_dirty = 1;
-}
-
-static bool modeFromName(const char* s, uint8_t* out) {
-  if (!strcmp(s, "off")) { *out = MODE_OFF; return true; }
-  if (!strcmp(s, "fire")) { *out = MODE_FIRE; return true; }
-  if (!strcmp(s, "solid")) { *out = MODE_SOLID; return true; }
-  if (!strcmp(s, "rainbow")) { *out = MODE_RAINBOW; return true; }
-  return false;
-}
-
-static bool colorFromName(const char* s, uint8_t* out) {
-  for (uint8_t i = 0; i < COL_COUNT; i++) {
-    if (!strcmp(s, colorName(i))) { *out = i; return true; }
-  }
-  return false;
-}
-
-static bool parseU255(const char* v, int* out) {
-  if (!v[0]) return false;
-  int n = 0;
-  for (const char* p = v; *p; p++) {
-    if (*p < '0' || *p > '9') return false;
-    n = n * 10 + (*p - '0');
-    if (n > 255) return false;
-  }
-  *out = n;
-  return true;
 }
 
 static bool parseU100(const char* v, int* out) {
@@ -671,6 +723,18 @@ static bool parseU100(const char* v, int* out) {
   return true;
 }
 
+static bool parseU255(const char* v, int* out) {
+  if (!v[0]) return false;
+  int n = 0;
+  for (const char* p = v; *p; p++) {
+    if (*p < '0' || *p > '9') return false;
+    n = n * 10 + (*p - '0');
+    if (n > 255) return false;
+  }
+  *out = n;
+  return true;
+}
+
 static int hexVal(char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -678,20 +742,72 @@ static int hexVal(char c) {
   return -1;
 }
 
+static bool parseSwitch(const char* v, uint8_t* cur) {
+  if (!strcmp(v, "1") || !strcmp(v, "on")) { *cur = 1; return true; }
+  if (!strcmp(v, "0") || !strcmp(v, "off")) { *cur = 0; return true; }
+  if (!strcmp(v, "toggle")) { *cur = *cur ? 0 : 1; return true; }
+  return false;
+}
+
+static void setFaderFromLevel(int level) {
+  uint8_t cap = brightnessLimit();
+  if (cap < 1) cap = 1;
+  if (level < 0) level = 0;
+  if (level > (int)cap) level = (int)cap;
+  int pct = (level * 100 + cap / 2) / (int)cap;
+  if (pct > 100) pct = 100;
+  g_fader = (uint8_t)pct;
+  g_dirty = 1;
+}
+
 static bool applyOne(const char* key, const char* val, const char** err) {
-  if (!strcmp(key, "mode")) {
-    uint8_t m;
-    if (!modeFromName(val, &m)) { *err = "mode"; return false; }
-    setMode(m);
+  if (!strcmp(key, "rocker")) {
+    uint8_t v = g_rocker;
+    if (!parseSwitch(val, &v)) { *err = "rocker"; return false; }
+    g_rocker = v;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "toggle")) {
+    uint8_t v = g_toggle;
+    if (!parseSwitch(val, &v)) { *err = "toggle"; return false; }
+    if (v && !g_toggle) g_classic = 0;
+    g_toggle = v;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "key")) {
+    uint8_t v = g_keySw;
+    if (!parseSwitch(val, &v)) { *err = "key"; return false; }
+    g_keySw = v;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "wave")) {
+    uint8_t v = g_wave;
+    if (!parseSwitch(val, &v)) { *err = "wave"; return false; }
+    g_wave = v;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "chaos")) {
+    uint8_t v = g_chaos;
+    if (!parseSwitch(val, &v)) { *err = "chaos"; return false; }
+    g_chaos = v;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "fader")) {
+    int n;
+    if (!parseU100(val, &n)) { *err = "fader"; return false; }
+    g_fader = (uint8_t)n;
+    g_dirty = 1;
     return true;
   }
   if (!strcmp(key, "brightness")) {
     int n;
     if (!parseU255(val, &n)) { *err = "brightness"; return false; }
-    uint8_t cap = brightnessLimit();
-    if (n > (int)cap) n = (int)cap;
-    g_brightness = (uint8_t)n;
-    g_dirty = 1;
+    setFaderFromLevel(n);
     return true;
   }
   if (!strcmp(key, "speed")) {
@@ -700,32 +816,38 @@ static bool applyOne(const char* key, const char* val, const char** err) {
     g_speed = (uint8_t)n;
     return true;
   }
-  if (!strcmp(key, "intensity")) {
-    int n;
-    if (!parseU100(val, &n)) { *err = "intensity"; return false; }
-    g_intensity = (uint8_t)n;
-    matrixFireSetIntensity(g_intensity);
-    return true;
-  }
-  if (!strcmp(key, "color") || !strcmp(key, "colour")) {
-    if (!strcmp(val, "next")) {
-      g_color = (uint8_t)((g_color + 1) % COL_COUNT);
-    } else {
-      uint8_t c;
-      if (!colorFromName(val, &c)) { *err = "color"; return false; }
-      g_color = c;
+  if (!strcmp(key, "white") || !strcmp(key, "top")) {
+    if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
+      if (g_chaos) g_top = (uint8_t)((g_top + 1) % 7);
+      pushSeq('r');
+      g_dirty = 1;
+      return true;
     }
+    int n;
+    if (!parseU100(val, &n) || n > 6) { *err = "top"; return false; }
+    g_top = (uint8_t)n;
     g_dirty = 1;
     return true;
   }
-  if (!strcmp(key, "power")) {
-    int v;
-    if (!strcmp(val, "toggle")) v = (g_mode == MODE_OFF) ? 1 : 0;
-    else if (!strcmp(val, "0") || !strcmp(val, "off")) v = 0;
-    else if (!strcmp(val, "1") || !strcmp(val, "on")) v = 1;
-    else { *err = "power"; return false; }
-    if (v) setMode(g_resume == MODE_OFF ? MODE_FIRE : g_resume);
-    else setMode(MODE_OFF);
+  if (!strcmp(key, "red") || !strcmp(key, "bottom")) {
+    if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
+      if (g_chaos) g_bot = (uint8_t)((g_bot + 1) % 7);
+      pushSeq('l');
+      g_dirty = 1;
+      return true;
+    }
+    int n;
+    if (!parseU100(val, &n) || n > 6) { *err = "bottom"; return false; }
+    g_bot = (uint8_t)n;
+    g_dirty = 1;
+    return true;
+  }
+  if (!strcmp(key, "fire")) {
+    if (!strcmp(val, "toggle")) g_fireTrail = g_fireTrail ? 0 : 1;
+    else if (!strcmp(val, "0")) g_fireTrail = 0;
+    else if (!strcmp(val, "1")) g_fireTrail = 1;
+    else { *err = "fire"; return false; }
+    g_dirty = 1;
     return true;
   }
   *err = "key";
@@ -770,26 +892,35 @@ static void applyQuery(const char* q, const char** err) {
 static int buildState(char* b, size_t n, bool ok, const char* err) {
   const char* wifi = (g_wifi == WIFI_ONLINE) ? "connected" :
                      (g_wifi == WIFI_JOINING) ? "joining" : "off";
+  uint8_t mode = derivedMode();
   uint8_t cap = brightnessLimit();
-  uint8_t br = g_brightness;
-  if (br > cap) br = cap;
+  uint8_t level = appliedBrightness();
   return snprintf(b, n,
-    "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\",\"power\":%s,"
-    "\"brightness\":%u,\"brightnessCap\":%u,"
-    "\"speed\":%u,\"intensity\":%u,\"color\":\"%s\","
+    "{\"ok\":%s,\"error\":\"%s\",\"mode\":\"%s\","
+    "\"rocker\":%s,\"toggle\":%s,\"key\":%s,\"wave\":%s,\"chaos\":%s,"
+    "\"classic\":%s,\"fireTrail\":%s,"
+    "\"fader\":%u,\"brightness\":%u,\"brightnessCap\":%u,\"speed\":%u,"
+    "\"top\":%u,\"topName\":\"%s\",\"bottom\":%u,\"bottomName\":\"%s\","
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
     "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
     "\"powerBudgetMa\":%u}",
     ok ? "true" : "false",
     err ? err : "",
-    modeName(g_mode),
-    (g_mode == MODE_OFF) ? "false" : "true",
-    (unsigned)br,
+    modeName(mode),
+    g_rocker ? "true" : "false",
+    g_toggle ? "true" : "false",
+    g_keySw ? "true" : "false",
+    g_wave ? "true" : "false",
+    g_chaos ? "true" : "false",
+    g_classic ? "true" : "false",
+    g_fireTrail ? "true" : "false",
+    (unsigned)g_fader,
+    (unsigned)level,
     (unsigned)cap,
     (unsigned)g_speed,
-    (unsigned)g_intensity,
-    colorName(g_color),
+    (unsigned)g_top, lavaName(g_top),
+    (unsigned)g_bot, lavaName(g_bot),
     wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi,
@@ -1121,7 +1252,7 @@ void setup() {
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros() ^ (uint32_t)analogRead(A0));
   matrixFireReset();
-  matrixFireSetIntensity(g_intensity);
+  matrixFireSetIntensity(50);
   memset(g_heat, 0, sizeof g_heat);
   for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
   webSetup();
