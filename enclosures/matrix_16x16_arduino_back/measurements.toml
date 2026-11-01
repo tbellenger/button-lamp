@@ -1,0 +1,134 @@
+[matrix_pcb_size]
+value = 160.0
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 256-LED flexible FPCB (B01DC0IOCK) published outer dimension 160.0 x 160.0 mm; same value as enclosures/matrix_16x16_mount"
+
+[matrix_pcb_thickness]
+value = 2.5
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 flexible FPCB pocket height used by matrix_16x16_housing (PCB plus 5050 package)"
+
+[pixel_pitch]
+value = 10.0
+unit = "mm"
+how = "BTF-LIGHTING WS2812B 16x16 matrix grid pitch: 160.0 mm / 16 = 10.0 mm center-to-center"
+
+[led_package_size]
+value = 5.0
+unit = "mm"
+how = "5050 SMD RGB LED package 5.0 x 5.0 mm"
+
+[diffuser_size]
+value = 162.0
+unit = "mm"
+how = "Akamino polycarbonate sheet scored and snapped to 162.0 x 162.0 mm square"
+
+[diffuser_sheet_thickness]
+value = 1.0
+unit = "mm"
+how = "Akamino 0.039 in (1.0 mm) polycarbonate sheet"
+
+[top_deck_flange_size]
+value = 92.0
+unit = "mm"
+how = "Button Lamp top-deck spiral cage flange outline 92.0 x 92.0 mm; the desk stand does not use it, the original base mount does"
+
+[top_deck_bolt_spacing]
+value = 76.2
+unit = "mm"
+how = "Button Lamp top-deck 4-bolt square spacing 76.2 mm (3.000 in) verified in the original matrix_16x16_base_mount"
+
+[m3_clearance]
+value = 3.4
+unit = "mm"
+how = "nurb fastener table, M3 medium clearance hole, ISO 273"
+
+[m3_head_dia]
+value = 6.0
+unit = "mm"
+how = "nurb fastener table, M3 socket cap head 5.5 mm + 0.5 mm clearance, ISO 4762"
+
+[m3_head_depth]
+value = 3.2
+unit = "mm"
+how = "nurb fastener table, M3 socket cap head height 3.0 mm + 0.2 mm layer slack, ISO 4762"
+
+[m3_nut_across_corners]
+value = 6.3
+unit = "mm"
+how = "nurb fastener table, M3 hex nut 6.1 mm across corners + 0.2 mm clearance, ISO 4032"
+
+[m3_nut_thickness]
+value = 2.6
+unit = "mm"
+how = "nurb fastener table, M3 hex nut 2.4 mm thickness + 0.2 mm clearance, ISO 4032"
+
+[uno_board_length]
+value = 68.58
+unit = "mm"
+how = "Arduino UNO R4 WiFi (ABX00087) board length along X from the official Gerber PCB.GM4 outline (0 to 68.58 mm) and the datasheet / shield guide 68.58 mm length"
+
+[uno_board_width]
+value = 53.34
+unit = "mm"
+how = "Arduino UNO R4 WiFi (ABX00087) board width along Y from the official Gerber PCB.GM4 outline (0 to 53.34 mm)"
+
+[uno_board_thickness]
+value = 1.6
+unit = "mm"
+how = "Arduino UNO R4 WiFi official STEP UNO_R4_WIFI.step PCB solid spans 1.61 mm; shield guide states 1.6 mm"
+
+[uno_hole_dia]
+value = 3.2
+unit = "mm"
+how = "ABX00087 NC drill PCB-RoundHoles.TXT tool T8, 126 mil (3.2 mm), 4x NPTH mounting holes"
+
+[uno_usb_y]
+value = 37.87
+unit = "mm"
+how = "Center of the CX90B-16P USB-C shell along board Y, measured from the official UNO_R4_WIFI.step solid (bbox Y 33.10 to 42.64 mm)"
+
+[uno_usb_z]
+value = 1.50
+unit = "mm"
+how = "Center of the USB-C shell above the PCB top face, measured from a cross-section of the CX90B-16P solid in UNO_R4_WIFI.step"
+
+[uno_jack_y]
+value = 8.36
+unit = "mm"
+how = "Center of the PJ-102AH barrel-jack body along board Y, from UNO_R4_WIFI.step bbox Y 3.66 to 13.06 mm"
+
+[uno_jack_z]
+value = 6.60
+unit = "mm"
+how = "Center of the PJ-102AH barrel opening above the PCB top face, from a front cross-section of the jack solid in UNO_R4_WIFI.step (void spans about z 3.4 to 9.8 mm)"
+
+[uno_jack_overhang]
+value = 1.96
+unit = "mm"
+how = "How far the PJ-102AH body extends past the board X=0 edge, from UNO_R4_WIFI.step xmin -1.96 mm"
+
+[uno_matrix_cx]
+value = 45.96
+unit = "mm"
+how = "Center X of the onboard 12x8 LED matrix, mean of the 12 LED columns at 34.41 mm through 57.51 mm in UNO_R4_WIFI.step"
+
+[uno_matrix_cy]
+value = 19.18
+unit = "mm"
+how = "Center Y of the onboard 12x8 LED matrix, mean of the 8 LED rows at 11.83 mm through 26.53 mm in UNO_R4_WIFI.step"
+
+[insert_hole_dia]
+value = 4.1
+unit = "mm"
+how = "ruthex RX-M3Sx4.0 datasheet hole d3 is 4.0 mm (insert OD 4.6 mm, length 4.0 mm). Modelled 4.1 mm so a PLA hole that prints ~0.1 mm small still matches the datasheet, per CNC Kitchen's M3 insert measurements"
+
+[insert_length]
+value = 4.0
+unit = "mm"
+how = "ruthex RX-M3Sx4.0 (M3 short) nominal length 4.0 mm, datasheet RX-Serie"
+
+[insert_min_wall]
+value = 1.6
+unit = "mm"
+how = "ruthex RX-M3Sx4.0 minimum wall W around the insert, datasheet RX-Serie. Bosses here use 2.2 mm, above both that floor and the 2 mm project wall"
