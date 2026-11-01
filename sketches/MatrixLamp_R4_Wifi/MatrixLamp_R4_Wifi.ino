@@ -9,7 +9,9 @@
    The picture is the 16x16 panel. The page is the spiral lamp's physical
    panel (rocker, toggles, arcade buttons, key, mushroom, fader, knob).
    Switches at rest play the matrix fire. The other positions play the
-   spiral modes. See matrix_modes.h for how each one sits on the grid.
+   spiral modes, plus Metaballs (rrllrrll), Plasma (llrrllrr), and Sun
+   (rrrllrrr) while idle.
+   See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
    animation buffer.
@@ -38,8 +40,8 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   95892 B flash (36% of 262144), 11368 B globals (34% of 32768),
-   21400 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
+   110204 B flash (42% of 262144), 11544 B globals (35% of 32768),
+   21224 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -108,6 +110,9 @@ static const uint8_t MODE_WAVE_EPIC = 7;
 static const uint8_t MODE_SECRET = 8;
 static const uint8_t MODE_LAVA = 9;
 static const uint8_t MODE_MUSIC = 10;
+static const uint8_t MODE_METABALLS = 11;
+static const uint8_t MODE_PLASMA = 12;
+static const uint8_t MODE_SUN = 13;
 
 static const int MATRIX_W = 12;
 static const int MATRIX_H = 8;
@@ -138,6 +143,16 @@ static_assert(PANEL_W == PANEL_H, "PANEL_ROTATE assumes a square panel");
 static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
 
 #include "matrix_modes.h"
+
+static_assert(MODE_METABALLS == M_METABALLS, "metaballs mode id");
+static_assert(MODE_PLASMA == M_PLASMA, "plasma mode id");
+static_assert(MODE_SUN == M_SUN, "sun mode id");
+
+// Arcade buttons, same pins as the spiral lamp. Active low, internal pullup.
+// Unconnected pins stay high, so only a real press is seen.
+static const uint8_t PIN_RED = 8;
+static const uint8_t PIN_WHITE = 4;
+static const uint32_t ARCADE_DB_MS = 20;
 
 // bit 0 = top row of a 5-row glyph. Drawn on matrix rows 1..5.
 static const uint8_t DIGITS[10][3] = {
@@ -177,6 +192,19 @@ static uint8_t g_fader = 50;
 static uint8_t g_speed = 50;
 static char g_seq[8];
 static uint8_t g_seqN = 0;
+static char g_metaSeq[8];
+static uint8_t g_metaSeqN = 0;
+static uint8_t g_meta = 0;
+static uint8_t g_plasma = 0;
+static uint8_t g_sun = 0;
+struct ArcadeBtn {
+  uint8_t pin;
+  uint8_t stable;
+  uint8_t raw;
+  uint32_t since;
+};
+static ArcadeBtn g_btnRed = {PIN_RED, HIGH, HIGH, 0};
+static ArcadeBtn g_btnWhite = {PIN_WHITE, HIGH, HIGH, 0};
 static uint8_t g_dirty = 1;
 static uint32_t g_lastFrame = 0;
 
@@ -285,6 +313,13 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 .fade .thumb{position:absolute;top:18%;width:12%;height:64%;margin-left:-6%;border-radius:3px;
  background:linear-gradient(#3a3a3a,#111);box-shadow:0 3px 0 #000,0 4px 8px rgba(0,0,0,.45)}
 .fade .thumb i{display:block;height:2px;margin:46% 15% 0;background:#eee}
+details{background:#1a120c;border:1px solid #5c4630;border-radius:.55rem;margin:.35rem 0}
+summary{padding:.7rem .85rem;cursor:pointer;font-weight:650}
+details ol{margin:.15rem .9rem .75rem;padding-left:1.15rem;color:#e7d8c6;font-size:.92rem}
+details li{margin:.28rem 0}
+.w,.r{display:inline-block;padding:.02rem .42rem;border-radius:99px;font-weight:700;font-size:.84em;line-height:1.45}
+.w{background:#f4f4f4;color:#222}
+.r{background:#c62828;color:#fff}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
@@ -314,8 +349,91 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 </div>
 </div>
 <pre id=st>loading</pre>
-<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest play the matrix fire. The lava fire trail is on, as on the spiral lamp. The 12×8 matrix scrolls the IP.</p>
+<p class=note>Presets. Tap a name. Fader halfway is brightness 20 of 255 (cap 40). Red is D8, white is D4, both active low. The mushroom overrides every other switch. The 12×8 matrix scrolls the IP.</p>
+<details><summary>Fire</summary><ol>
+<li>Turn the rocker, toggle, key, wave cover, and mushroom off.</li>
+<li>If Metaballs, Plasma, or Sun is still showing, turn any one of those switches on, then off again. That clears the code.</li>
+<li>The panel plays the matrix fire. The knob is the flame speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Jumbo</summary><ol>
+<li>Mushroom off, key off, wave cover off.</li>
+<li>Rocker on. If the picture is one flat colour, Classic is still armed: flip the toggle on once to clear it, then Jumbo is the rocker.</li>
+<li>Toggle on cycles white, red, purple, blue, green, yellow, orange. Toggle off holds the colour.</li>
+<li>The knob is the bottom-up wipe speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Classic</summary><ol>
+<li>Mushroom off, key off, wave cover off, toggle off, rocker on.</li>
+<li>Press <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
+<li>The whole panel is one colour from the knob: left orange, middle yellow, right white. The fader is brightness.</li>
+<li>Flip the toggle on to leave. That returns to Jumbo.</li>
+</ol></details>
+<details><summary>Rainbow</summary><ol>
+<li>Mushroom off and wave cover off. The key wins over the rocker.</li>
+<li>Turn the key on. The toggle reverses the rainbow.</li>
+<li>The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave</summary><ol>
+<li>Mushroom off, key off, toggle off. Leave the rocker off if you also want to avoid Secret.</li>
+<li>Tap the red wave cover. It opens and the switch goes on.</li>
+<li>A bright band ripples up the rows. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave modifier</summary><ol>
+<li>Mushroom off, key off, rocker off.</li>
+<li>Toggle on, then tap the red wave cover so Wave is on.</li>
+<li>The band crossfades a colour pair. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave rainbow</summary><ol>
+<li>Mushroom off, toggle off, rocker off.</li>
+<li>Key on, and the red wave cover on.</li>
+<li>Each row is a hue and the band still travels. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave epic</summary><ol>
+<li>Mushroom off and rocker off. Rocker on with these switches is Secret instead.</li>
+<li>Key on, toggle on, and the red wave cover on.</li>
+<li>One row flashes through the epic colours. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Secret</summary><ol>
+<li>Mushroom off.</li>
+<li>Rocker on, toggle on, key on, and the red wave cover on. All four.</li>
+<li>The knob fills the panel from the bottom. Low on the fader mixes in the violet-to-red gradient. The fader is also brightness.</li>
+</ol></details>
+<details><summary>Lava</summary><ol>
+<li>Press the red mushroom. It overrides every other switch.</li>
+<li><span class=w>White</span> cycles the top ball. <span class=r>Red</span> cycles the bottom ball: red, purple, blue, green, yellow, orange, off.</li>
+<li>The fire trail is on at boot. There is no switch for it.</li>
+<li>The knob is speed. The fader is brightness. Press the mushroom again to leave.</li>
+</ol></details>
+<details><summary>Music</summary><ol>
+<li>Mushroom off, rocker off, key off, wave cover off.</li>
+<li>Toggle on.</li>
+<li>A dim pulse and a short built-in phrase. No MIDI on this lamp. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Metaballs</summary><ol>
+<li>Every switch off, so the fire is showing. These presses are not the Classic code.</li>
+<li>Press <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
+<li>After that, <span class=r>red</span> adds a blob, up to 8, and <span class=w>white</span> removes one, down to 1. Those presses are not another code.</li>
+<li>The knob is blob speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
+<details><summary>Plasma</summary><ol>
+<li>Every switch off.</li>
+<li>Press <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span>.</li>
+<li>After that, <span class=r>red</span> zooms in and <span class=w>white</span> zooms out, five steps, held at the ends. Not another code.</li>
+<li>The knob is the rotate and zoom speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
+<details><summary>Sun</summary><ol>
+<li>Every switch off.</li>
+<li>Press <span class=w>white</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=w>white</span>.</li>
+<li>After that, <span class=r>red</span> grows the sun and <span class=w>white</span> shrinks it, five steps, held at the ends. Not another code.</li>
+<li>The knob is the pulse and ray speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
 <script>
+var presets=document.querySelectorAll('details');
+for(var pi=0;pi<presets.length;pi++){
+  presets[pi].ontoggle=function(){
+    if(!this.open)return;
+    for(var pj=0;pj<presets.length;pj++) if(presets[pj]!==this) presets[pj].open=false;
+  };
+}
 var S={rocker:0,toggle:0,key:0,wave:0,chaos:0,fader:50,speed:50,cover:0};
 var link=document.getElementById('link'),st=document.getElementById('st');
 var pending='',busy=0,drag=0;
@@ -352,6 +470,9 @@ function show(s){
     'key '+(s.key?'on':'off')+'  wave '+(s.wave?'on':'off')+'  chaos '+(s.chaos?'on':'off')+'\n'+
     'brightness '+s.brightness+' / '+s.brightnessCap+'   fader '+s.fader+'%\n'+
     'speed '+s.speed+'   fire trail '+(s.fireTrail?'on':'off')+'\n'+
+    (s.mode==='metaballs'?('balls '+s.balls+'  (red adds, white removes)\n'):'')+
+    (s.mode==='plasma'?('zoom '+s.zoom+' / 4  (red zooms in, white zooms out)\n'):'')+
+    (s.mode==='sun'?('sun '+s.sun+' / 4  (red grows, white shrinks)\n'):'')+
     'top '+s.topName+'   bottom '+s.bottomName+'\n'+
     'wifi '+s.wifi+'   rssi '+s.rssi;
 }
@@ -621,6 +742,9 @@ static uint8_t derivedMode() {
   if (!g_rocker && g_toggle) return MODE_MUSIC;
   if (g_rocker && g_classic) return MODE_CLASSIC;
   if (g_rocker) return MODE_JUMBO;
+  if (g_meta) return MODE_METABALLS;
+  if (g_plasma) return MODE_PLASMA;
+  if (g_sun) return MODE_SUN;
   return MODE_FIRE;
 }
 
@@ -634,9 +758,10 @@ static const char* lavaName(uint8_t i) {
 static const char* modeName(uint8_t mode) {
   static const char* const N[] = {
     "fire", "jumbo", "classic", "rainbow", "wave", "wave-mod",
-    "wave-rainbow", "wave-epic", "secret", "lava", "music"
+    "wave-rainbow", "wave-epic", "secret", "lava", "music", "metaballs",
+    "plasma", "sun"
   };
-  if (mode > MODE_MUSIC) return "fire";
+  if (mode > MODE_SUN) return "fire";
   return N[mode];
 }
 
@@ -651,6 +776,81 @@ static void pushSeq(char c) {
     if (!g_toggle) g_classic = 1;
     g_seqN = 0;
   }
+}
+
+// Idle-only codes. Classic owns the buttons while the rocker is on, so this
+// buffer is separate. It is ignored once Metaballs or Plasma is showing:
+// those presses zoom or add balls instead of spelling another code.
+static void pushMeta(char c) {
+  if (g_rocker || g_toggle || g_keySw || g_wave || g_chaos || g_meta || g_plasma || g_sun) return;
+  if (g_metaSeqN < 8) g_metaSeq[g_metaSeqN++] = c;
+  else {
+    memmove(g_metaSeq, g_metaSeq + 1, 7);
+    g_metaSeq[7] = c;
+  }
+  if (g_metaSeqN == 8 && memcmp(g_metaSeq, "rrllrrll", 8) == 0) {
+    g_meta = 1;
+    g_plasma = 0;
+    g_sun = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Metaballs "));
+    Serial.println(modesMetaCount());
+  } else if (g_metaSeqN == 8 && memcmp(g_metaSeq, "llrrllrr", 8) == 0) {
+    g_plasma = 1;
+    g_meta = 0;
+    g_sun = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Plasma zoom "));
+    Serial.println(modesPlasmaZoomLevel());
+  } else if (g_metaSeqN == 8 && memcmp(g_metaSeq, "rrrllrrr", 8) == 0) {
+    g_sun = 1;
+    g_meta = 0;
+    g_plasma = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Sun size "));
+    Serial.println(modesSunSizeLevel());
+  }
+}
+
+static void leaveMeta() {
+  g_meta = 0;
+  g_plasma = 0;
+  g_sun = 0;
+  g_metaSeqN = 0;
+}
+
+static void onArcade(char c) {
+  if (derivedMode() == MODE_METABALLS) {
+    if (c == 'l') modesMetaAdd();
+    else modesMetaRemove();
+    Serial.print(F("Metaballs "));
+    Serial.println(modesMetaCount());
+    g_dirty = 1;
+    return;
+  }
+  if (derivedMode() == MODE_PLASMA) {
+    if (c == 'l') modesPlasmaZoom(1);
+    else modesPlasmaZoom(-1);
+    Serial.print(F("Plasma zoom "));
+    Serial.println(modesPlasmaZoomLevel());
+    g_dirty = 1;
+    return;
+  }
+  if (derivedMode() == MODE_SUN) {
+    if (c == 'l') modesSunSize(1);
+    else modesSunSize(-1);
+    Serial.print(F("Sun size "));
+    Serial.println(modesSunSizeLevel());
+    g_dirty = 1;
+    return;
+  }
+  if (g_chaos) {
+    if (c == 'r') g_top = (uint8_t)((g_top + 1) % 7);
+    else g_bot = (uint8_t)((g_bot + 1) % 7);
+  }
+  pushSeq(c);
+  pushMeta(c);
+  g_dirty = 1;
 }
 
 static uint8_t appliedBrightness() {
@@ -764,6 +964,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "rocker")) {
     uint8_t v = g_rocker;
     if (!parseSwitch(val, &v)) { *err = "rocker"; return false; }
+    if (v && !g_rocker) leaveMeta();
     g_rocker = v;
     g_dirty = 1;
     return true;
@@ -771,7 +972,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "toggle")) {
     uint8_t v = g_toggle;
     if (!parseSwitch(val, &v)) { *err = "toggle"; return false; }
-    if (v && !g_toggle) g_classic = 0;
+    if (v && !g_toggle) { g_classic = 0; leaveMeta(); }
     g_toggle = v;
     g_dirty = 1;
     return true;
@@ -779,6 +980,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "key")) {
     uint8_t v = g_keySw;
     if (!parseSwitch(val, &v)) { *err = "key"; return false; }
+    if (v && !g_keySw) leaveMeta();
     g_keySw = v;
     g_dirty = 1;
     return true;
@@ -786,6 +988,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "wave")) {
     uint8_t v = g_wave;
     if (!parseSwitch(val, &v)) { *err = "wave"; return false; }
+    if (v && !g_wave) leaveMeta();
     g_wave = v;
     g_dirty = 1;
     return true;
@@ -793,6 +996,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "chaos")) {
     uint8_t v = g_chaos;
     if (!parseSwitch(val, &v)) { *err = "chaos"; return false; }
+    if (v && !g_chaos) leaveMeta();
     g_chaos = v;
     g_dirty = 1;
     return true;
@@ -818,9 +1022,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   }
   if (!strcmp(key, "white") || !strcmp(key, "top")) {
     if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
-      if (g_chaos) g_top = (uint8_t)((g_top + 1) % 7);
-      pushSeq('r');
-      g_dirty = 1;
+      onArcade('r');
       return true;
     }
     int n;
@@ -831,9 +1033,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   }
   if (!strcmp(key, "red") || !strcmp(key, "bottom")) {
     if (!strcmp(val, "1") || !strcmp(val, "next") || !strcmp(val, "press")) {
-      if (g_chaos) g_bot = (uint8_t)((g_bot + 1) % 7);
-      pushSeq('l');
-      g_dirty = 1;
+      onArcade('l');
       return true;
     }
     int n;
@@ -901,6 +1101,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"classic\":%s,\"fireTrail\":%s,"
     "\"fader\":%u,\"brightness\":%u,\"brightnessCap\":%u,\"speed\":%u,"
     "\"top\":%u,\"topName\":\"%s\",\"bottom\":%u,\"bottomName\":\"%s\","
+    "\"balls\":%u,\"zoom\":%u,\"sun\":%u,"
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
     "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
@@ -921,6 +1122,9 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     (unsigned)g_speed,
     (unsigned)g_top, lavaName(g_top),
     (unsigned)g_bot, lavaName(g_bot),
+    (unsigned)modesMetaCount(),
+    (unsigned)modesPlasmaZoomLevel(),
+    (unsigned)modesSunSizeLevel(),
     wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi,
@@ -1237,6 +1441,24 @@ static void webPoll(uint32_t now) {
   }
 }
 
+static uint8_t arcadeFell(ArcadeBtn* b, uint32_t now) {
+  uint8_t raw = (uint8_t)digitalRead(b->pin);
+  if (raw != b->raw) {
+    b->raw = raw;
+    b->since = now;
+  }
+  if (raw != b->stable && (uint32_t)(now - b->since) >= ARCADE_DB_MS) {
+    b->stable = raw;
+    if (raw == LOW) return 1;
+  }
+  return 0;
+}
+
+static void pollArcade(uint32_t now) {
+  if (arcadeFell(&g_btnRed, now)) onArcade('l');
+  if (arcadeFell(&g_btnWhite, now)) onArcade('r');
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
@@ -1251,6 +1473,12 @@ void setup() {
   Serial.print(F(" cap "));
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros() ^ (uint32_t)analogRead(A0));
+  pinMode(PIN_RED, INPUT_PULLUP);
+  pinMode(PIN_WHITE, INPUT_PULLUP);
+  g_btnRed.stable = g_btnRed.raw = (uint8_t)digitalRead(PIN_RED);
+  g_btnWhite.stable = g_btnWhite.raw = (uint8_t)digitalRead(PIN_WHITE);
+  g_btnRed.since = g_btnWhite.since = millis();
+  modesMetaBoot();
   matrixFireReset();
   matrixFireSetIntensity(50);
   memset(g_heat, 0, sizeof g_heat);
@@ -1268,6 +1496,7 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+  pollArcade(now);
   webPoll(now);
   tickScroll(now);
   tickPanel(now);
