@@ -23,6 +23,10 @@
 //              red red, white white). A plasma field rotates and zooms.
 //              Red zooms in, white zooms out. Same rule: once latched, the
 //              arcade buttons are the zoom control, not another code.
+//   sun        latched from the idle fire by rrrllrrr (white white white,
+//              red red, white white white). A pulsing sun with noisy rays.
+//              Red grows it, white shrinks it. Same rule: those presses are
+//              not fed back into the code buffer.
 
 #pragma once
 
@@ -43,6 +47,7 @@ static const uint8_t M_LAVA = 9;
 static const uint8_t M_MUSIC = 10;
 static const uint8_t M_METABALLS = 11;
 static const uint8_t M_PLASMA = 12;
+static const uint8_t M_SUN = 13;
 
 struct ModeIn {
   uint8_t mode;
@@ -181,6 +186,47 @@ static uint8_t modesPlasmaZoomLevel() { return g_plasmaZoom; }
 
 static float g_plasmaAngle = 0.0f;
 static float g_plasmaTime = 0.0f;
+
+static uint8_t g_sunSize = 2;
+static float g_sunTime = 0.0f;
+
+static void modesSunSize(int dir) {
+  int z = (int)g_sunSize + dir;
+  if (z < 0) z = 0;
+  if (z > 4) z = 4;
+  g_sunSize = (uint8_t)z;
+}
+
+static uint8_t modesSunSizeLevel() { return g_sunSize; }
+
+static void sunWarm(float heat, uint8_t* r, uint8_t* g, uint8_t* b) {
+  if (heat < 0.18f) {
+    *r = *g = *b = 0;
+    return;
+  }
+  float t = (heat - 0.18f) / 2.05f;
+  if (t > 1.0f) t = 1.0f;
+  int h = (int)(t * 255.0f);
+  if (h < 60) {
+    *r = (uint8_t)(50 + h * 3);
+    *g = 0;
+    *b = 0;
+  } else if (h < 130) {
+    *r = 255;
+    *g = (uint8_t)((h - 60) * 2);
+    *b = 0;
+  } else if (h < 200) {
+    *r = 255;
+    *g = (uint8_t)(140 + (h - 130));
+    *b = (uint8_t)((h - 130) / 3);
+  } else {
+    *r = 255;
+    *g = 255;
+    int w = (h - 200) * 255 / 55;
+    if (w > 255) w = 255;
+    *b = (uint8_t)w;
+  }
+}
 
 static void hsvToRgb(uint8_t h, uint8_t s, uint8_t v, uint8_t* r, uint8_t* g, uint8_t* b) {
   uint8_t region = (uint8_t)(h / 43);
@@ -396,6 +442,11 @@ static void modesStep(const ModeIn* in, uint32_t now) {
     if (g_plasmaAngle > 6.2831853f) g_plasmaAngle -= 6.2831853f;
     g_plasmaTime += 0.06f * scale;
   }
+
+  if (in->mode == M_SUN) {
+    float scale = (float)sp / 256.0f;
+    g_sunTime += 0.08f * scale;
+  }
 }
 
 static void paintLava(const ModeIn* in, int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
@@ -593,5 +644,23 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now, uint8_t* r,
     uint8_t hue = (uint8_t)(n * 210.0f + g_plasmaTime * 14.0f);
     uint8_t val = (uint8_t)(70.0f + n * 185.0f);
     hsvToRgb(hue, 235, val, r, g, b);
+    return;
+  }
+  if (in->mode == M_SUN) {
+    float dx = (float)x - 7.5f;
+    float dy = (float)y - 7.5f;
+    float dist = sqrtf(dx * dx + dy * dy);
+    float ang = atan2f(dy, dx);
+    float pulse = 0.86f + 0.14f * sinf(g_sunTime * 1.7f);
+    float coreR = (1.45f + (float)g_sunSize * 0.62f) * pulse;
+    float core = coreR / (dist + 0.42f);
+    float ray = sinf(ang * (5.0f + (float)g_sunSize) + g_sunTime * 1.8f);
+    ray = 0.55f + 0.45f * ray;
+    float grit = 0.62f + 0.38f * sinf(ang * 13.0f - g_sunTime * 2.6f + dist * 0.9f);
+    if (grit < 0.0f) grit = 0.0f;
+    float fall = 1.0f / (1.0f + dist * 0.20f);
+    float rayGain = 0.42f + (float)g_sunSize * 0.14f;
+    float heat = core * 1.05f + ray * grit * fall * rayGain;
+    sunWarm(heat, r, g, b);
   }
 }

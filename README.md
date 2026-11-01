@@ -198,6 +198,7 @@ How each spiral mode sits on the grid (`y = 0` is the top of the picture):
 | Music | toggle only | A dim pulse walks the path, and a short built-in phrase sends brighter notes. This lamp has no AppleMIDI socket. |
 | Metaballs | arcade code `rrllrrll` while every switch is off (white, white, red, red, white, white, red, red) | Glowing blobs drift and bounce. Their fields add, so they merge and split. The hue drifts. Red (D8) adds a blob, up to 8. White (D4) removes one, down to 1. The knob is their speed. The fader stays brightness. Those presses are not written into the Classic code: Classic only listens while the rocker is on, and this code only listens while every switch is off and Metaballs is not already showing. Turning the rocker, toggle, key, wave switch, or mushroom on leaves Metaballs. |
 | Plasma | arcade code `llrrllrr` while every switch is off (red, red, white, white, red, red, white, white) | A plasma field rotates and zooms in and out. The knob is the animation speed. The fader stays brightness. Red zooms in one step (five steps, held at the tight end). White zooms out. Same as Metaballs: once the mode is on, the arcade buttons are that control and are not another code. Either code clears the other. A switch turning on leaves Plasma. |
+| Sun | arcade code `rrrllrrr` while every switch is off (white, white, white, red, red, white, white, white) | A pulsing sun: yellow-white core, orange body, noisy rays in red. The knob is the shimmer and pulse speed. The fader stays brightness. Red grows the sun one step. White shrinks it. Five steps, held at the ends. Starts at 2. Same rule: once it is showing, red and white are size, not another code. Any of the three idle codes clears the other two. A switch turning on leaves Sun. |
 
 The 12×8 matrix scrolls the IP while WiFi is online. Until DHCP has a non-zero address it shows a waiting mark. It does not scroll `0.0.0.0`.
 
@@ -233,6 +234,7 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit. The sketch includes that header for 
 | `classic` | The arcade sequence has armed Classic |
 | `balls` | Metaballs blob count, 1–8. Starts at 3 |
 | `zoom` | Plasma zoom step, 0–4. Starts at 2. Higher is tighter |
+| `sun` | Sun size step, 0–4. Starts at 2. Higher is a larger core and stronger rays |
 | `fireTrail` | Lava tail. On at boot. No switch on the panel. |
 | `fader` | 0–100, the slider position. 50 is the boot position. |
 | `brightness` | NeoPixel level 0–255 after the cap. Boot value 20. |
@@ -277,7 +279,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 103108 B flash (39% of 262144), 11540 B globals (35% of 32768), 21228 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 105092 B flash (40% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
@@ -289,7 +291,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes, plus Metaballs and Plasma from arcade codes while idle. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes, plus Metaballs, Plasma, and Sun from arcade codes while idle. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 

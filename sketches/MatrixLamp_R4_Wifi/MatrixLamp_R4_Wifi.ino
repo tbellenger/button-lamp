@@ -9,7 +9,8 @@
    The picture is the 16x16 panel. The page is the spiral lamp's physical
    panel (rocker, toggles, arcade buttons, key, mushroom, fader, knob).
    Switches at rest play the matrix fire. The other positions play the
-   spiral modes, plus Metaballs (rrllrrll) and Plasma (llrrllrr) while idle.
+   spiral modes, plus Metaballs (rrllrrll), Plasma (llrrllrr), and Sun
+   (rrrllrrr) while idle.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
@@ -39,8 +40,8 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   103108 B flash (39% of 262144), 11540 B globals (35% of 32768),
-   21228 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
+   105092 B flash (40% of 262144), 11544 B globals (35% of 32768),
+   21224 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -111,6 +112,7 @@ static const uint8_t MODE_LAVA = 9;
 static const uint8_t MODE_MUSIC = 10;
 static const uint8_t MODE_METABALLS = 11;
 static const uint8_t MODE_PLASMA = 12;
+static const uint8_t MODE_SUN = 13;
 
 static const int MATRIX_W = 12;
 static const int MATRIX_H = 8;
@@ -144,6 +146,7 @@ static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above
 
 static_assert(MODE_METABALLS == M_METABALLS, "metaballs mode id");
 static_assert(MODE_PLASMA == M_PLASMA, "plasma mode id");
+static_assert(MODE_SUN == M_SUN, "sun mode id");
 
 // Arcade buttons, same pins as the spiral lamp. Active low, internal pullup.
 // Unconnected pins stay high, so only a real press is seen.
@@ -193,6 +196,7 @@ static char g_metaSeq[8];
 static uint8_t g_metaSeqN = 0;
 static uint8_t g_meta = 0;
 static uint8_t g_plasma = 0;
+static uint8_t g_sun = 0;
 struct ArcadeBtn {
   uint8_t pin;
   uint8_t stable;
@@ -338,7 +342,7 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 </div>
 </div>
 <pre id=st>loading</pre>
-<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. With every switch off, white-white, red-red, white-white, red-red (rrllrrll) starts Metaballs, and red-red, white-white, red-red, white-white (llrrllrr) starts Plasma. In Metaballs those buttons are not a code: red adds a blob (up to 8) and white removes one (down to 1). In Plasma they are not a code either: red zooms in and white zooms out. Turning any other switch on leaves either mode. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest, before that code, play the matrix fire. The red and white buttons are also D8 and D4, active low, same as the spiral lamp. The lava fire trail is on. The 12×8 matrix scrolls the IP.</p>
+<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. With every switch off, white-white, red-red, white-white, red-red (rrllrrll) starts Metaballs, red-red, white-white, red-red, white-white (llrrllrr) starts Plasma, and white-white-white, red-red, white-white-white (rrrllrrr) starts Sun. In Metaballs those buttons are not a code: red adds a blob (up to 8) and white removes one (down to 1). In Plasma they are not a code either: red zooms in and white zooms out. In Sun, red grows the sun and white shrinks it. Turning any other switch on leaves the mode. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest, before that code, play the matrix fire. The red and white buttons are also D8 and D4, active low, same as the spiral lamp. The lava fire trail is on. The 12×8 matrix scrolls the IP.</p>
 <script>
 var S={rocker:0,toggle:0,key:0,wave:0,chaos:0,fader:50,speed:50,cover:0};
 var link=document.getElementById('link'),st=document.getElementById('st');
@@ -378,6 +382,7 @@ function show(s){
     'speed '+s.speed+'   fire trail '+(s.fireTrail?'on':'off')+'\n'+
     (s.mode==='metaballs'?('balls '+s.balls+'  (red adds, white removes)\n'):'')+
     (s.mode==='plasma'?('zoom '+s.zoom+' / 4  (red zooms in, white zooms out)\n'):'')+
+    (s.mode==='sun'?('sun '+s.sun+' / 4  (red grows, white shrinks)\n'):'')+
     'top '+s.topName+'   bottom '+s.bottomName+'\n'+
     'wifi '+s.wifi+'   rssi '+s.rssi;
 }
@@ -649,6 +654,7 @@ static uint8_t derivedMode() {
   if (g_rocker) return MODE_JUMBO;
   if (g_meta) return MODE_METABALLS;
   if (g_plasma) return MODE_PLASMA;
+  if (g_sun) return MODE_SUN;
   return MODE_FIRE;
 }
 
@@ -662,9 +668,10 @@ static const char* lavaName(uint8_t i) {
 static const char* modeName(uint8_t mode) {
   static const char* const N[] = {
     "fire", "jumbo", "classic", "rainbow", "wave", "wave-mod",
-    "wave-rainbow", "wave-epic", "secret", "lava", "music", "metaballs", "plasma"
+    "wave-rainbow", "wave-epic", "secret", "lava", "music", "metaballs",
+    "plasma", "sun"
   };
-  if (mode > MODE_PLASMA) return "fire";
+  if (mode > MODE_SUN) return "fire";
   return N[mode];
 }
 
@@ -685,7 +692,7 @@ static void pushSeq(char c) {
 // buffer is separate. It is ignored once Metaballs or Plasma is showing:
 // those presses zoom or add balls instead of spelling another code.
 static void pushMeta(char c) {
-  if (g_rocker || g_toggle || g_keySw || g_wave || g_chaos || g_meta || g_plasma) return;
+  if (g_rocker || g_toggle || g_keySw || g_wave || g_chaos || g_meta || g_plasma || g_sun) return;
   if (g_metaSeqN < 8) g_metaSeq[g_metaSeqN++] = c;
   else {
     memmove(g_metaSeq, g_metaSeq + 1, 7);
@@ -694,21 +701,31 @@ static void pushMeta(char c) {
   if (g_metaSeqN == 8 && memcmp(g_metaSeq, "rrllrrll", 8) == 0) {
     g_meta = 1;
     g_plasma = 0;
+    g_sun = 0;
     g_metaSeqN = 0;
     Serial.print(F("Metaballs "));
     Serial.println(modesMetaCount());
   } else if (g_metaSeqN == 8 && memcmp(g_metaSeq, "llrrllrr", 8) == 0) {
     g_plasma = 1;
     g_meta = 0;
+    g_sun = 0;
     g_metaSeqN = 0;
     Serial.print(F("Plasma zoom "));
     Serial.println(modesPlasmaZoomLevel());
+  } else if (g_metaSeqN == 8 && memcmp(g_metaSeq, "rrrllrrr", 8) == 0) {
+    g_sun = 1;
+    g_meta = 0;
+    g_plasma = 0;
+    g_metaSeqN = 0;
+    Serial.print(F("Sun size "));
+    Serial.println(modesSunSizeLevel());
   }
 }
 
 static void leaveMeta() {
   g_meta = 0;
   g_plasma = 0;
+  g_sun = 0;
   g_metaSeqN = 0;
 }
 
@@ -726,6 +743,14 @@ static void onArcade(char c) {
     else modesPlasmaZoom(-1);
     Serial.print(F("Plasma zoom "));
     Serial.println(modesPlasmaZoomLevel());
+    g_dirty = 1;
+    return;
+  }
+  if (derivedMode() == MODE_SUN) {
+    if (c == 'l') modesSunSize(1);
+    else modesSunSize(-1);
+    Serial.print(F("Sun size "));
+    Serial.println(modesSunSizeLevel());
     g_dirty = 1;
     return;
   }
@@ -986,7 +1011,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"classic\":%s,\"fireTrail\":%s,"
     "\"fader\":%u,\"brightness\":%u,\"brightnessCap\":%u,\"speed\":%u,"
     "\"top\":%u,\"topName\":\"%s\",\"bottom\":%u,\"bottomName\":\"%s\","
-    "\"balls\":%u,\"zoom\":%u,"
+    "\"balls\":%u,\"zoom\":%u,\"sun\":%u,"
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
     "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
@@ -1009,6 +1034,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     (unsigned)g_bot, lavaName(g_bot),
     (unsigned)modesMetaCount(),
     (unsigned)modesPlasmaZoomLevel(),
+    (unsigned)modesSunSizeLevel(),
     wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi,
