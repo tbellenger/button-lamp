@@ -40,7 +40,7 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   110204 B flash (42% of 262144), 11544 B globals (35% of 32768),
+   110596 B flash (42% of 262144), 11544 B globals (35% of 32768),
    21224 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -247,7 +247,15 @@ static const char PAGE[] = R"PAGE(
 <title>Matrix Lamp</title>
 <style>
 body{margin:0;background:#241910;color:#f3efe6;font:16px/1.35 system-ui,sans-serif}
-main{max-width:40rem;margin:0 auto;padding:1rem 1rem 2rem}
+main{max-width:72rem;margin:0 auto;padding:1rem 1rem 2rem}
+.stage{display:flex;flex-direction:column;gap:.9rem;align-items:stretch}
+.panelcol{min-width:0}
+.presets{min-width:0}
+@media (min-width:760px){
+.stage{flex-direction:row;align-items:flex-start}
+.presets{order:-1;flex:0 0 320px;width:320px;max-height:calc(100vh - 6.5rem);overflow:auto}
+.panelcol{flex:1 1 auto}
+}
 h1{font-size:1.15rem;font-weight:650;letter-spacing:.04em;margin:0 0 .15rem}
 .note{color:#cbbba6;font-size:.82rem;margin:.35rem 0 .7rem}
 pre{background:#1a120c;border-radius:.5rem;padding:.6rem .7rem;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;margin:.8rem 0}
@@ -323,6 +331,8 @@ details li{margin:.28rem 0}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
+<div class=stage>
+<div class=panelcol>
 <div class=wood id=face>
 <i class=screw style="left:3.4%;top:4.8%"></i>
 <i class=screw style="left:96.6%;top:4.8%"></i>
@@ -349,6 +359,8 @@ details li{margin:.28rem 0}
 </div>
 </div>
 <pre id=st>loading</pre>
+</div>
+<div class=presets>
 <p class=note>Presets. Tap a name. Fader halfway is brightness 20 of 255 (cap 40). Red is D8, white is D4, both active low. The mushroom overrides every other switch. The 12×8 matrix scrolls the IP.</p>
 <details><summary>Fire</summary><ol>
 <li>Turn the rocker, toggle, key, wave cover, and mushroom off.</li>
@@ -426,6 +438,8 @@ details li{margin:.28rem 0}
 <li>After that, <span class=r>red</span> grows the sun and <span class=w>white</span> shrinks it, five steps, held at the ends. Not another code.</li>
 <li>The knob is the pulse and ray speed. The fader is brightness. Turn any other switch on to leave.</li>
 </ol></details>
+</div>
+</div>
 <script>
 var presets=document.querySelectorAll('details');
 for(var pi=0;pi<presets.length;pi++){
