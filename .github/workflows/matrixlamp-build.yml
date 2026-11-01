@@ -1,0 +1,115 @@
+name: Matrix Lamp firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sketches/MatrixLamp_R4_Wifi/**"
+      - "sketches/common/**"
+      - ".github/workflows/matrixlamp-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse a committed secrets.h
+        run: |
+          if [ -f sketches/MatrixLamp_R4_Wifi/secrets.h ]; then
+            echo "secrets.h must not be committed. CI builds have no WiFi password."
+            exit 1
+          fi
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install the Uno R4 core and libraries
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:renesas_uno
+          arduino-cli lib install "Adafruit NeoPixel"
+          arduino-cli lib install "ArduinoOTA"
+
+      - name: Version
+        id: ver
+        run: |
+          SHORT=$(git rev-parse --short=7 HEAD)
+          echo "version=${SHORT}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Compile
+        run: |
+          mkdir -p dist
+          printf '#define FW_VERSION "%s"\n' "${{ steps.ver.outputs.version }}" > sketches/MatrixLamp_R4_Wifi/fw_version.h
+          arduino-cli compile -b arduino:renesas_uno:unor4wifi \
+            --output-dir dist \
+            sketches/MatrixLamp_R4_Wifi
+          rm -f sketches/MatrixLamp_R4_Wifi/fw_version.h
+
+      - name: Manifest
+        run: |
+          set -eu
+          BIN=dist/MatrixLamp_R4_Wifi.ino.bin
+          # Half of the sketch region after the 16 KB bootloader, aligned down
+          # to the 2 KB code-flash block. ArduinoOTA InternalStorageRenesas
+          # rejects anything larger. (262144 - 16384) / 2 = 122880.
+          MAX=122880
+          SIZE=$(wc -c < "$BIN" | tr -d ' ')
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "Firmware is $SIZE bytes. OTA allows at most $MAX."
+            exit 1
+          fi
+          SHA=$(sha256sum "$BIN" | awk '{print $1}')
+          CRC=$(python3 -c 'import sys,zlib; print("%08x" % (zlib.crc32(open(sys.argv[1],"rb").read()) & 0xffffffff))' "$BIN")
+          export VERSION="${{ steps.ver.outputs.version }}"
+          export GITSHA="${{ steps.ver.outputs.sha }}"
+          export SIZE SHA CRC
+          python3 - <<'PY'
+          import json, os
+          json.dump({
+            "name": "MatrixLamp_R4_Wifi",
+            "version": os.environ["VERSION"],
+            "sha": os.environ["GITSHA"],
+            "size": int(os.environ["SIZE"]),
+            "sha256": os.environ["SHA"],
+            "crc32": os.environ["CRC"],
+            "file": "MatrixLamp_R4_Wifi.ino.bin",
+            "fqbn": "arduino:renesas_uno:unor4wifi",
+            "otaMax": 122880
+          }, open("dist/manifest.json", "w"), indent=2)
+          open("dist/manifest.json", "a").write("\n")
+          PY
+          echo "version ${{ steps.ver.outputs.version }}  size $SIZE  crc32 $CRC"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matrixlamp-firmware-${{ steps.ver.outputs.version }}
+          path: |
+            dist/MatrixLamp_R4_Wifi.ino.bin
+            dist/manifest.json
+          if-no-files-found: error
+
+      - name: Publish GitHub releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -eu
+          NOTES="Uno R4 WiFi firmware ${VERSION}.
+          The lamp downloads the matrixlamp-latest tag.
+          WiFi credentials are not in this file."
+          gh release delete matrixlamp-latest --yes --cleanup-tag || true
+          gh release create matrixlamp-latest \
+            dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json \
+            --title "Matrix Lamp firmware (latest)" \
+            --notes "$NOTES" \
+            --target "${{ github.sha }}"
+          gh release create "matrixlamp-${VERSION}" \
+            dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json \
+            --title "Matrix Lamp ${VERSION}" \
+            --notes "$NOTES" \
+            --target "${{ github.sha }}"

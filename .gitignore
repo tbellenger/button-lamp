@@ -12,3 +12,4 @@ build/
 # Do not commit real credentials.
 sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/secrets.h
 sketches/MatrixLamp_R4_Wifi/secrets.h
+sketches/MatrixLamp_R4_Wifi/fw_version.h

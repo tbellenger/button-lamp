@@ -8,3 +8,4 @@
 # Windows upload script stays CRLF. The shell script stays LF.
 tools/upload_matrixlamp.bat text eol=crlf
 tools/upload_matrixlamp.sh text eol=lf
+tools/matrixlamp_ota.ps1 text eol=crlf

@@ -129,9 +129,9 @@ NeoPixel also mallocs `LED_COUNT * 3` (480 B or 960 B). The HTTP client adds a 1
 
 ### 5. Matrix lamp (16×16 panel)
 
-`sketches/MatrixLamp_R4_Wifi/` drives a BTF-LIGHTING WS2812B 16×16 panel (256 LEDs) from an Arduino Uno R4 WiFi. The board's built-in 12×8 red matrix only scrolls the WiFi address. There is no animation upload, no stored frames, and no OTA.
+`sketches/MatrixLamp_R4_Wifi/` drives a BTF-LIGHTING WS2812B 16×16 panel (256 LEDs) from an Arduino Uno R4 WiFi. The board's built-in 12×8 red matrix only scrolls the WiFi address. There is no animation upload and no stored frames. Firmware updates go over WiFi after one USB flash.
 
-Copy `secrets.example.h` to `secrets.h` in that folder and put the network in `WIFI_SSID` / `WIFI_PASS`. `secrets.h` is gitignored. A missing `secrets.h`, or an empty `WIFI_SSID`, skips WiFi. The panel still runs.
+Copy `secrets.example.h` to `secrets.h` in that folder and put the network in `WIFI_SSID` / `WIFI_PASS`, and set `OTA_PASSWORD`. `secrets.h` is gitignored. Do not commit it. A USB build writes those values into the board's data flash when they differ from what is already stored. A build from GitHub Actions has no `secrets.h` and leaves the stored WiFi name and OTA password alone, so an over-the-air update does not knock the lamp off the network. With no stored network and no `secrets.h`, the board opens a setup WiFi named `MatrixLamp-Setup`.
 
 #### Wiring
 
@@ -161,7 +161,22 @@ The script pulls the repo (a failed pull prints a warning and continues), checks
 arduino-cli compile --upload -b arduino:renesas_uno:unor4wifi -p <port> sketches/MatrixLamp_R4_Wifi
 ```
 
-Pass the port as the first argument. If you leave it off, the script looks for one Uno R4 WiFi in `arduino-cli board list`. None, or more than one, prints the ports it can see and asks (or exits, if nothing is waiting for input). `--monitor` opens the serial monitor at 115200 after a good upload. The `.bat` waits for a key at the end so a double-clicked window does not close. These scripts are for this sketch only. There is no OTA.
+Pass the port as the first argument. If you leave it off, the script looks for one Uno R4 WiFi in `arduino-cli board list`. None, or more than one, prints the ports it can see and asks (or exits, if nothing is waiting for input). `--monitor` opens the serial monitor at 115200 after a good USB upload. The `.bat` waits for a key at the end so a double-clicked window does not close. These scripts are for this sketch only.
+
+The first flash has to be USB. The board can only accept a WiFi update once it is already running this firmware. After that:
+
+```text
+tools\upload_matrixlamp.bat ota
+tools\upload_matrixlamp.bat ota 192.168.1.20
+tools/upload_matrixlamp.sh --ota
+tools/upload_matrixlamp.sh --ota 192.168.1.20
+```
+
+`ota` and `--ota` compile the sketch to a `.bin` and POST it to `http://<host>/update`. The host defaults to `matrixlamp.local`. An IP works the same way. The password is `OTA_PASSWORD` in the environment, or the same name in `secrets.h`, or a prompt. The script prints `SUCCESS` when the lamp comes back reporting the version that was just compiled, and `FAILED` when it does not. Windows uses the `curl.exe` that ships with Windows 10 and 11.
+
+On Windows, `matrixlamp.local` often does not resolve. The lamp prints its IP on the serial monitor at boot and shows the same address at the top of the web page. Pass that IP as the host.
+
+The phone page can do the same upload, and can also pull the GitHub release. See below.
 
 #### What it plays
 
@@ -247,6 +262,12 @@ Core 1.6.0's `Arduino_LED_Matrix` is 1-bit. The sketch includes that header for 
 | `ledCount`, `width`, `height` | 256, 16, 16 |
 | `serpentine`, `flipX`, `flipY`, `rotate` | The orientation settings compiled into the sketch |
 | `powerBudgetMa` | `POWER_BUDGET_MA` |
+| `fw` | Firmware version. `local` for a USB build. GitHub builds use `<short sha>-<run>` |
+| `built` | Compile date and time |
+| `ota` | `idle`, `upload`, `check`, `checked`, `download`, `applying`, or `error` |
+| `otaPct` | Progress while a new image is being stored, 0–100 |
+| `otaMsg` | Short status, for example `up to date` or `bad image` |
+| `ghVersion`, `ghSize` | The release the lamp last checked |
 
 `GET /api/set?key=value&...` applies keys left to right and returns that state. `ok` is false on the first bad key; earlier keys stick. `error` is the key that failed, or `method`.
 
@@ -279,7 +300,23 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 110596 B flash (42% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122632 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The exported `.bin` is 122640 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up.
+
+#### WiFi firmware update
+
+The upload path is an HTTP POST on the lamp's existing web server, not the Arduino IDE network port. ArduinoOTA 1.1.1 does support this board: its Renesas storage writes the new image into the top half of code flash and, only when asked, copies it over the running sketch and resets. The sketch defines `NO_OTA_NETWORK` so the library does not open a second TCP port or a second mDNS responder. The lamp already answers `matrixlamp.local`. Curl and the phone both speak HTTP, so one endpoint covers the Windows script and the iPhone. The IDE recipe (`platform.local.txt` copied into the core) is not used.
+
+Checked against `arduino:renesas_uno` 1.6.0. Code flash is 256 KB with a 16 KB bootloader, so the sketch region is 240 KB. `InternalStorage` allows half of that, aligned down to the 2 KB block: **122880 bytes**. This build's `.bin` is 122640 bytes, 240 bytes under that cap. A larger image is refused and not applied. The 8 KB data flash holds the WiFi name and the OTA password. It is not big enough for a second sketch, and a code-flash update does not erase it.
+
+`POST /update` requires the header `X-OTA-Password`. An empty stored password refuses every upload. Optional header `X-OTA-Crc32` is 8 hex digits; a mismatch is not applied. The image also has to start like a Cortex-M sketch (stack pointer in RAM, reset vector inside the image, Thumb bit set). A short body, a dropped connection, or a failed flash write calls `close` and does not call `apply`. During the transfer the 24 kHz matrix scan is stopped, and the 16×16 fills with orange as the bytes land. `apply` reboots into the new firmware.
+
+The web page shows `firmware` and the build time from `/api/state`. The Firmware section asks for the OTA password and stays in that browser tab only. **Upload .bin** picks a file (Safari on iPhone can do this) and POSTs it with a progress readout. **Check for update** and **Update from GitHub** make the lamp fetch `https://github.com/tbellenger/button-lamp/releases/download/matrixlamp-latest/manifest.json` and the `.bin` named there, over `WiFiSSLClient`. It follows one HTTPS redirect (GitHub sends the file to `objects.githubusercontent.com`), checks the size and the `crc32` in the manifest, then applies. The panel shows the same orange bar. The page polls until the version changes.
+
+The repository is public, so those release files need no token. Nothing in the firmware is a GitHub credential. If the repo were private, the lamp could not download the release; the choices would be to keep the repo public, or to download the `.bin` on a computer and upload it from the phone. A token is not stored in the source.
+
+GitHub Actions (`.github/workflows/matrixlamp-build.yml`) runs on a push to `main` that touches this sketch, and from the Actions tab (Run workflow). It installs the core and libraries, compiles with no `secrets.h`, and fails the job if `secrets.h` is in the tree or the `.bin` is over 122880 bytes. The `.bin` and `manifest.json` are a workflow artifact and two releases: the moving tag `matrixlamp-latest`, and `matrixlamp-<version>`. Version is the short git SHA and the run number. Actions has to be enabled for the repository. The release appears after this firmware is on `main`, not from an unmerged pull request.
+
+Before any of that works, flash once over USB so the board is running this sketch. If that USB build included `secrets.h`, the lamp joins the network by itself. If the chip has never stored a network (a GitHub `.bin` on a blank board), join `MatrixLamp-Setup`, open the page it serves, and save the WiFi name, WiFi password, and OTA password. Hold the red and white arcade buttons while the board resets to open that setup page again. After the lamp is on the home network, WiFi updates do not need USB.
 
 ## Sketches
 
@@ -291,7 +328,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes, plus Metaballs, Plasma, and Sun from arcade codes while idle. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Physical-panel page. Spiral modes, plus Metaballs, Plasma, and Sun from arcade codes while idle. mDNS `matrixlamp.local` and `matrix-lamp.local`. WiFi firmware update after one USB flash. |
 
 ## Layout
 
@@ -304,7 +341,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `sketches/SpiralLamp_R4_FireTrail/` | FireTrail lamp on the Uno R4 WiFi, radio unused (was `SpiralLamp_R4_v0`) |
 | `sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/` | R4 lamp plus the web page and AppleMIDI Music mode |
 | `sketches/MatrixLamp_R4_Wifi/` | 16×16 panel, spiral modes, physical-panel page. Onboard 12×8 scrolls the IP |
-| `tools/upload_matrixlamp.sh`, `tools/upload_matrixlamp.bat` | Compile and upload MatrixLamp only (no OTA). `--monitor` opens serial at 115200 |
+| `tools/upload_matrixlamp.sh`, `tools/upload_matrixlamp.bat` | Compile and upload MatrixLamp. USB by default. `ota` / `--ota [host]` sends the `.bin` over WiFi. `--monitor` opens serial at 115200 after USB |
 | `tools/lava_harness/` | Host build of the lava effect (`v2`/`firetrail` default, `clean`/`base`, `r4`/`r4-firetrail`) |
 | `docs/wiring.md` | Authoritative wiring |
 | `docs/issues.md` | What was wrong in the purchased plans |

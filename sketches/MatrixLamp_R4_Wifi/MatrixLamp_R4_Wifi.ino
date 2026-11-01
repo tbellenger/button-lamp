@@ -39,13 +39,24 @@
    Host check for the fire:
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
-   Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   110596 B flash (42% of 262144), 11544 B globals (35% of 32768),
-   21224 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
+   WiFi names and the OTA password live in data flash, not in the
+   GitHub build. A USB build that has secrets.h copies them in when they
+   differ. With neither, the board opens the setup AP MatrixLamp-Setup.
+   POST /update (header X-OTA-Password) streams a .bin into ArduinoOTA
+   InternalStorage. A bad or short image is not applied. The 16x16 shows
+   an orange progress bar and the onboard matrix scan is stopped.
+
+   Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
+   122632 B flash (46% of 262144), 15204 B globals (46% of 32768),
+   17564 B left for locals. The .bin is 122640 B. OTA allows at most
+   122880 B (half of the 240 KB sketch region, on a 2 KB boundary).
+   NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
 #include <WiFiS3.h>
+#define NO_OTA_NETWORK
+#include <ArduinoOTA.h>
 #include <Modem.h>
 #include <Adafruit_NeoPixel.h>
 #include <stdio.h>
@@ -54,8 +65,18 @@
 #include "matrix_fire.h"
 #include "mdns_responder.h"
 
+#if __has_include("fw_version.h")
+#include "fw_version.h"
+#endif
+#ifndef FW_VERSION
+#define FW_VERSION "local"
+#endif
+
 #if __has_include("secrets.h")
 #include "secrets.h"
+#define LAMP_COMPILED_SECRETS 1
+#else
+#define LAMP_COMPILED_SECRETS 0
 #endif
 #ifndef WIFI_SSID
 #define WIFI_SSID ""
@@ -63,6 +84,15 @@
 #ifndef WIFI_PASS
 #define WIFI_PASS ""
 #endif
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD ""
+#endif
+
+static const char FW_BUILT[] = __DATE__ " " __TIME__;
+// Marker the upload scripts find in the .bin. Kept live by the boot print.
+static const char FW_MARK[] = "MLFW:" FW_VERSION "|" __DATE__ " " __TIME__;
+
+#include "lamp_creds.h"
 
 // ---- Panel wiring. Edit these if the picture is the wrong way around. ----
 // Data pin. Tom's panel is on D6 and answers to NEO_GRB + NEO_KHZ800.
@@ -136,6 +166,7 @@ static const uint8_t WIFI_ONLINE = 2;
 static const uint8_t PH_IDLE = 0;
 static const uint8_t PH_READ = 1;
 static const uint8_t PH_WRITE = 2;
+static const uint8_t PH_OTA = 3;
 
 static_assert(PANEL_W == MATRIX_FIRE_W, "panel width must match the fire sim");
 static_assert(PANEL_H == MATRIX_FIRE_H, "panel height must match the fire sim");
@@ -221,9 +252,35 @@ static uint16_t g_hdrOff = 0;
 static const char* g_body = 0;
 static uint16_t g_bodyLen = 0;
 static uint16_t g_bodyOff = 0;
-static char g_json[1024];
+static char g_json[1280];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
+static uint8_t g_otaActive = 0;
+static uint8_t g_otaOpened = 0;
+static uint8_t g_otaFail = 0;
+static uint8_t g_otaApply = 0;
+static uint8_t g_rebootAfter = 0;
+static uint8_t g_ghJob = 0;
+static uint8_t g_wantCrc = 0;
+static uint32_t g_crcExpect = 0;
+static uint32_t g_crcState = 0xffffffffu;
+static uint32_t g_otaLen = 0;
+static uint32_t g_otaGot = 0;
+static uint8_t g_otaHead[8];
+static uint8_t g_otaHeadN = 0;
+static int g_otaPct = 0;
+static int g_otaPaint = -1;
+static const char* g_otaState = "idle";
+static char g_otaMsg[40];
+static char g_ghVer[24];
+static char g_ghFile[40];
+static uint32_t g_ghCrc = 0;
+static uint8_t g_ghHave = 0;
+static long g_ghSize = 0;
+static char g_ghHost[64];
+static char g_ghPath[1400];
+static char g_manifest[480];
+static int g_manifestN = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
 static int16_t g_rssi = 0;
 static uint32_t g_lastStatus = 0;
@@ -260,77 +317,71 @@ h1{font-size:1.15rem;font-weight:650;letter-spacing:.04em;margin:0 0 .15rem}
 .note{color:#cbbba6;font-size:.82rem;margin:.35rem 0 .7rem}
 pre{background:#1a120c;border-radius:.5rem;padding:.6rem .7rem;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;margin:.8rem 0}
 .wood{position:relative;width:100%;aspect-ratio:184.15/133.35;border-radius:10px;
- background:
-  repeating-linear-gradient(90deg,rgba(90,55,25,.08) 0 2px,transparent 2px 7px),
-  linear-gradient(180deg,#e0c48a,#c4965a 40%,#b8894c 70%,#a8753d);
- box-shadow:inset 0 0 0 3px #8a5a32,inset 0 0 40px rgba(80,40,10,.25),0 14px 30px rgba(0,0,0,.45);
+ background:linear-gradient(180deg,#e0c48a,#a8753d);
  touch-action:none;user-select:none}
 .screw{position:absolute;width:2.2%;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);
- background:radial-gradient(circle at 35% 30%,#ddd,#888 45%,#444);box-shadow:0 1px 2px rgba(0,0,0,.5)}
-.screw:after{content:"";position:absolute;left:18%;right:18%;top:46%;height:8%;background:#333;transform:rotate(35deg)}
+ background:radial-gradient(circle at 35% 30%,#ddd,#888 45%,#444);}
 button{font:inherit;color:inherit;border:0;padding:0;background:transparent;cursor:pointer}
 .ctrl{position:absolute;transform:translate(-50%,-50%)}
 .tag{position:absolute;left:50%;top:108%;transform:translateX(-50%);white-space:nowrap;
  font-size:clamp(8px,1.7vw,11px);letter-spacing:.08em;text-transform:uppercase;color:rgba(55,32,12,.8);
- text-shadow:0 1px 0 rgba(255,230,190,.35);pointer-events:none}
+pointer-events:none}
 .arcade{width:15.2%;aspect-ratio:1}
 .arcade b{display:block;width:100%;height:100%;border-radius:50%}
-.arcade.white b{background:radial-gradient(circle at 34% 28%,#fff,#e6e6e6 42%,#b9b9b9 70%,#7d7d7d);
- box-shadow:0 .45em 0 #6a6a6a,0 .7em 1em rgba(0,0,0,.35),inset 0 -.4em .6em rgba(0,0,0,.12)}
-.arcade.red b{background:radial-gradient(circle at 34% 28%,#ff8a80,#e53935 40%,#b71c1c 72%,#6d1010);
- box-shadow:0 .45em 0 #5c1212,0 .7em 1em rgba(0,0,0,.35),inset 0 -.35em .5em rgba(0,0,0,.2)}
-.arcade.down b{transform:translateY(.28em);box-shadow:0 .12em 0 #444,0 .2em .4em rgba(0,0,0,.3)}
+.arcade.white b{background:radial-gradient(circle at 34% 28%,#fff,#e6e6e6 42%,#b9b9b9 70%,#7d7d7d);}
+.arcade.red b{background:radial-gradient(circle at 34% 28%,#ff8a80,#e53935 40%,#b71c1c 72%,#6d1010);}
+.arcade.down b{transform:translateY(.28em);}
 .key{width:12.1%;aspect-ratio:1;border-radius:50%;
- background:radial-gradient(circle at 35% 30%,#f2f3f5,#b7bcc2 42%,#6e747a 75%,#3e4348);
- box-shadow:0 .35em 0 #3a3a3a,0 .55em .8em rgba(0,0,0,.35),inset 0 0 0 .35em #8d9399}
+ background:radial-gradient(circle at 35% 30%,#f2f3f5,#b7bcc2 42%,#6e747a 75%,#3e4348);}
 .key i{position:absolute;left:46%;top:28%;width:8%;height:44%;background:#161616;border-radius:2px;transition:transform .16s}
 .key.on i{transform:rotate(90deg)}
 .mush{width:16%;aspect-ratio:1}
 .mush .col{position:absolute;left:28%;right:28%;bottom:0;height:28%;background:#1b1b1b;border-radius:3px}
 .mush b{position:absolute;left:0;right:0;top:0;bottom:18%;border-radius:50%;
- background:radial-gradient(circle at 32% 28%,#ff7b7b,#d32f2f 46%,#8f1515 78%,#5c0d0d);
- box-shadow:inset 0 -.4em .5em rgba(0,0,0,.25),0 .4em .6em rgba(0,0,0,.35);transition:transform .12s}
+ background:radial-gradient(circle at 32% 28%,#ff7b7b,#d32f2f 46%,#8f1515 78%,#5c0d0d);transition:transform .12s}
 .mush.on b{transform:translateY(12%) scaleY(.82)}
 .tog{width:8.5%;aspect-ratio:1;border-radius:50%;
- background:radial-gradient(circle at 40% 35%,#e4e7ea,#9aa0a6 55%,#5e646a);
- box-shadow:0 .25em 0 #3a3a3a,inset 0 0 0 .18em #6c7278}
+ background:radial-gradient(circle at 40% 35%,#e4e7ea,#9aa0a6 55%,#5e646a);}
 .tog i{position:absolute;left:42%;top:-55%;width:16%;height:130%;background:linear-gradient(#f5f5f5,#9aa0a6);border-radius:2px;
- transform-origin:50% 78%;transform:rotate(32deg);transition:transform .12s;box-shadow:1px 1px 0 #333}
+ transform-origin:50% 78%;transform:rotate(32deg);transition:transform .12s;}
 .tog.on i{transform:rotate(-32deg)}
-.rock{width:12%;height:30%;border-radius:5px;background:#141414;
- box-shadow:inset 0 0 0 3px #0a0a0a,0 3px 8px rgba(0,0,0,.4)}
+.rock{width:12%;height:30%;border-radius:5px;background:#141414;}
 .rock i{position:absolute;left:12%;right:12%;height:46%;border-radius:3px;
- background:linear-gradient(#4a4a4a,#161616);top:50%;transition:top .12s;box-shadow:0 2px 0 #000}
+ background:linear-gradient(#4a4a4a,#161616);top:50%;transition:top .12s;}
 .rock.on i{top:5%}
 .rock .led{position:absolute;left:42%;top:8%;width:16%;aspect-ratio:1;border-radius:50%;background:#3a1a1a}
-.rock.on .led{background:#ff2a2a;box-shadow:0 0 6px #ff2a2a}
+.rock.on .led{background:#ff2a2a;}
 .cov{width:14%;height:26%}
 .cov .lid{position:absolute;left:0;right:0;top:0;bottom:0;border-radius:3px 3px 6px 6px;
- background:linear-gradient(#e24b4b,#9d1c1c);box-shadow:0 4px 0 #5c1010,0 6px 8px rgba(0,0,0,.3);
+ background:linear-gradient(#e24b4b,#9d1c1c);
  transform-origin:50% 0;transition:transform .18s;z-index:2}
 .cov.open .lid{transform:rotateX(68deg)}
 .cov .tog,.cov .lid{pointer-events:none}
 .cov .tog{position:absolute;left:50%;top:58%;width:46%}
 .knob{width:12.5%;aspect-ratio:1;border-radius:50%;
- background:radial-gradient(circle at 35% 30%,#3c3c3c,#141414 60%,#000);
- box-shadow:0 .55em 0 #1a120c,0 .8em 1em rgba(0,0,0,.4)}
+ background:radial-gradient(circle at 35% 30%,#3c3c3c,#141414 60%,#000);}
 .knob i{position:absolute;left:46%;top:10%;width:8%;height:34%;background:#f2f2f2;border-radius:2px;transform-origin:50% 120%}
 .fade{width:62%;height:16%}
-.fade .slot{position:absolute;left:0;right:0;top:46%;height:16%;background:#2b2118;border-radius:99px;box-shadow:inset 0 2px 3px rgba(0,0,0,.6)}
+.fade .slot{position:absolute;left:0;right:0;top:46%;height:16%;background:#2b2118;border-radius:99px;}
 .fade .screw{width:3.6%;top:54%}
 .fade .thumb{position:absolute;top:18%;width:12%;height:64%;margin-left:-6%;border-radius:3px;
- background:linear-gradient(#3a3a3a,#111);box-shadow:0 3px 0 #000,0 4px 8px rgba(0,0,0,.45)}
+ background:linear-gradient(#3a3a3a,#111);}
 .fade .thumb i{display:block;height:2px;margin:46% 15% 0;background:#eee}
 details{background:#1a120c;border:1px solid #5c4630;border-radius:.55rem;margin:.35rem 0}
 summary{padding:.7rem .85rem;cursor:pointer;font-weight:650}
-details ol{margin:.15rem .9rem .75rem;padding-left:1.15rem;color:#e7d8c6;font-size:.92rem}
-details li{margin:.28rem 0}
-.w,.r{display:inline-block;padding:.02rem .42rem;border-radius:99px;font-weight:700;font-size:.84em;line-height:1.45}
-.w{background:#f4f4f4;color:#222}
-.r{background:#c62828;color:#fff}
+details p{margin:.2rem .9rem .7rem;color:#e7d8c6;font-size:.92rem}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
+<p class=note id=fw>firmware</p>
+<details><summary>Firmware</summary>
+<input id=otap type=password placeholder="OTA password" autocomplete=current-password>
+<input id=bin type=file accept=.bin>
+<button type=button id=up>Upload .bin</button>
+<button type=button id=chk>Check for update</button>
+<button type=button id=gh>Update from GitHub</button>
+<pre id=otast></pre>
+</details>
 <div class=stage>
 <div class=panelcol>
 <div class=wood id=face>
@@ -361,83 +412,21 @@ details li{margin:.28rem 0}
 <pre id=st>loading</pre>
 </div>
 <div class=presets>
-<p class=note>Presets. Tap a name. Fader halfway is brightness 20 of 255 (cap 40). Red is D8, white is D4, both active low. The mushroom overrides every other switch. The 12×8 matrix scrolls the IP.</p>
-<details><summary>Fire</summary><ol>
-<li>Turn the rocker, toggle, key, wave cover, and mushroom off.</li>
-<li>If Metaballs, Plasma, or Sun is still showing, turn any one of those switches on, then off again. That clears the code.</li>
-<li>The panel plays the matrix fire. The knob is the flame speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Jumbo</summary><ol>
-<li>Mushroom off, key off, wave cover off.</li>
-<li>Rocker on. If the picture is one flat colour, Classic is still armed: flip the toggle on once to clear it, then Jumbo is the rocker.</li>
-<li>Toggle on cycles white, red, purple, blue, green, yellow, orange. Toggle off holds the colour.</li>
-<li>The knob is the bottom-up wipe speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Classic</summary><ol>
-<li>Mushroom off, key off, wave cover off, toggle off, rocker on.</li>
-<li>Press <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
-<li>The whole panel is one colour from the knob: left orange, middle yellow, right white. The fader is brightness.</li>
-<li>Flip the toggle on to leave. That returns to Jumbo.</li>
-</ol></details>
-<details><summary>Rainbow</summary><ol>
-<li>Mushroom off and wave cover off. The key wins over the rocker.</li>
-<li>Turn the key on. The toggle reverses the rainbow.</li>
-<li>The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Wave</summary><ol>
-<li>Mushroom off, key off, toggle off. Leave the rocker off if you also want to avoid Secret.</li>
-<li>Tap the red wave cover. It opens and the switch goes on.</li>
-<li>A bright band ripples up the rows. The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Wave modifier</summary><ol>
-<li>Mushroom off, key off, rocker off.</li>
-<li>Toggle on, then tap the red wave cover so Wave is on.</li>
-<li>The band crossfades a colour pair. The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Wave rainbow</summary><ol>
-<li>Mushroom off, toggle off, rocker off.</li>
-<li>Key on, and the red wave cover on.</li>
-<li>Each row is a hue and the band still travels. The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Wave epic</summary><ol>
-<li>Mushroom off and rocker off. Rocker on with these switches is Secret instead.</li>
-<li>Key on, toggle on, and the red wave cover on.</li>
-<li>One row flashes through the epic colours. The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Secret</summary><ol>
-<li>Mushroom off.</li>
-<li>Rocker on, toggle on, key on, and the red wave cover on. All four.</li>
-<li>The knob fills the panel from the bottom. Low on the fader mixes in the violet-to-red gradient. The fader is also brightness.</li>
-</ol></details>
-<details><summary>Lava</summary><ol>
-<li>Press the red mushroom. It overrides every other switch.</li>
-<li><span class=w>White</span> cycles the top ball. <span class=r>Red</span> cycles the bottom ball: red, purple, blue, green, yellow, orange, off.</li>
-<li>The fire trail is on at boot. There is no switch for it.</li>
-<li>The knob is speed. The fader is brightness. Press the mushroom again to leave.</li>
-</ol></details>
-<details><summary>Music</summary><ol>
-<li>Mushroom off, rocker off, key off, wave cover off.</li>
-<li>Toggle on.</li>
-<li>A dim pulse and a short built-in phrase. No MIDI on this lamp. The knob is speed. The fader is brightness.</li>
-</ol></details>
-<details><summary>Metaballs</summary><ol>
-<li>Every switch off, so the fire is showing. These presses are not the Classic code.</li>
-<li>Press <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
-<li>After that, <span class=r>red</span> adds a blob, up to 8, and <span class=w>white</span> removes one, down to 1. Those presses are not another code.</li>
-<li>The knob is blob speed. The fader is brightness. Turn any other switch on to leave.</li>
-</ol></details>
-<details><summary>Plasma</summary><ol>
-<li>Every switch off.</li>
-<li>Press <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span>.</li>
-<li>After that, <span class=r>red</span> zooms in and <span class=w>white</span> zooms out, five steps, held at the ends. Not another code.</li>
-<li>The knob is the rotate and zoom speed. The fader is brightness. Turn any other switch on to leave.</li>
-</ol></details>
-<details><summary>Sun</summary><ol>
-<li>Every switch off.</li>
-<li>Press <span class=w>white</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=w>white</span>.</li>
-<li>After that, <span class=r>red</span> grows the sun and <span class=w>white</span> shrinks it, five steps, held at the ends. Not another code.</li>
-<li>The knob is the pulse and ray speed. The fader is brightness. Turn any other switch on to leave.</li>
-</ol></details>
+<p class=note>Presets. Fader halfway is brightness 20 (cap 40). Red is D8, white is D4. Mushroom wins. Idle codes need every switch off; any switch on leaves them.</p>
+<details><summary>Fire</summary><p>All switches off. Knob is flame speed.</p></details>
+<details><summary>Jumbo</summary><p>Rocker on. Toggle cycles colour. Knob is wipe speed.</p></details>
+<details><summary>Classic</summary><p>Rocker on, toggle off. Code: white, red, white, white, red, white, red, red. Knob is orange, yellow, or white. Toggle leaves.</p></details>
+<details><summary>Rainbow</summary><p>Key on. Toggle reverses. Knob is speed.</p></details>
+<details><summary>Wave</summary><p>Open the red cover. A band moves up. Knob is speed.</p></details>
+<details><summary>Wave modifier</summary><p>Toggle plus wave. The band crossfades.</p></details>
+<details><summary>Wave rainbow</summary><p>Key plus wave. Each row is a hue.</p></details>
+<details><summary>Wave epic</summary><p>Key, toggle, and wave. Rocker off (rocker on is Secret).</p></details>
+<details><summary>Secret</summary><p>Rocker, toggle, key, and wave. Knob fills from the bottom.</p></details>
+<details><summary>Lava</summary><p>Mushroom. White cycles the top ball, red the bottom.</p></details>
+<details><summary>Music</summary><p>Toggle only. Built-in phrase. Knob is speed.</p></details>
+<details><summary>Metaballs</summary><p>Idle: white white, red red, white white, red red. Then red adds a blob (max 8), white removes (min 1).</p></details>
+<details><summary>Plasma</summary><p>Idle: red red, white white, red red, white white. Then red zooms in, white zooms out.</p></details>
+<details><summary>Sun</summary><p>Idle: white white white, red red, white white white. Then red grows, white shrinks.</p></details>
 </div>
 </div>
 <script>
@@ -478,17 +467,13 @@ function show(s){
     paint();
   }
   link.textContent=s.wifi+'  '+s.ip+'   '+s.ledCount+' LEDs';
-  st.textContent=
-    'mode '+s.mode+(s.classic?' (classic armed)':'')+'\n'+
-    'rocker '+(s.rocker?'on':'off')+'  toggle '+(s.toggle?'on':'off')+'\n'+
-    'key '+(s.key?'on':'off')+'  wave '+(s.wave?'on':'off')+'  chaos '+(s.chaos?'on':'off')+'\n'+
-    'brightness '+s.brightness+' / '+s.brightnessCap+'   fader '+s.fader+'%\n'+
-    'speed '+s.speed+'   fire trail '+(s.fireTrail?'on':'off')+'\n'+
-    (s.mode==='metaballs'?('balls '+s.balls+'  (red adds, white removes)\n'):'')+
-    (s.mode==='plasma'?('zoom '+s.zoom+' / 4  (red zooms in, white zooms out)\n'):'')+
-    (s.mode==='sun'?('sun '+s.sun+' / 4  (red grows, white shrinks)\n'):'')+
-    'top '+s.topName+'   bottom '+s.bottomName+'\n'+
-    'wifi '+s.wifi+'   rssi '+s.rssi;
+  var fwEl=document.getElementById('fw');
+  if(fwEl&&s.fw)fwEl.textContent='firmware '+s.fw+'   built '+s.built;
+  st.textContent=s.mode+(s.classic?' armed':'')+'  bri '+s.brightness+'/'+s.brightnessCap+'  fader '+s.fader+'  speed '+s.speed+'\n'+
+    (s.mode==='metaballs'?('balls '+s.balls+'\n'):'')+
+    (s.mode==='plasma'?('zoom '+s.zoom+'\n'):'')+
+    (s.mode==='sun'?('sun '+s.sun+'\n'):'')+
+    s.wifi+' '+s.ip+'  rssi '+s.rssi;
 }
 function flip(name){
   S[name]=S[name]?0:1;
@@ -545,6 +530,40 @@ dragPointer(document.getElementById('fade'),function(ev){
   if(t<0)t=0; if(t>1)t=1;
   S.fader=Math.round(t*100);
 },'fader');
+var otap=document.getElementById('otap'),otastEl=document.getElementById('otast');
+try{otap.value=sessionStorage.getItem('otap')||'';}catch(e){}
+otap.onchange=function(){try{sessionStorage.setItem('otap',otap.value);}catch(e){}};
+function otaSay(t){otastEl.textContent=t;}
+function otaPost(u){fetch(u,{method:'POST',headers:{'X-OTA-Password':otap.value}}).catch(function(){otaSay('No reply');});}
+function otaWatch(done,nax){
+  var n=0,stamp=document.getElementById('fw').textContent,t=setInterval(function(){
+    fetch('/api/state').then(function(r){return r.json();}).then(function(s){
+      show(s); if(done(s,stamp))clearInterval(t);
+    }).catch(function(){otaSay('rebooting');});
+    if(++n>(nax||40))clearInterval(t);
+  },1000);
+}
+document.getElementById('up').onclick=function(){
+  var f=document.getElementById('bin').files[0]; if(!f){otaSay('Choose a .bin');return;}
+  var x=new XMLHttpRequest(); x.open('POST','/update');
+  x.setRequestHeader('X-OTA-Password',otap.value);
+  x.upload.onprogress=function(e){if(e.lengthComputable)otaSay('send '+Math.round(100*e.loaded/e.total)+'%');};
+  x.onload=function(){otaSay(x.status+' '+(x.responseText||'')); if(x.status==200)setTimeout(function(){location.reload();},5000);};
+  x.onerror=function(){otaSay('closed — orange bar means reboot'); setTimeout(function(){location.reload();},8000);};
+  x.send(f);
+};
+document.getElementById('chk').onclick=function(){
+  otaSay('checking'); otaPost('/api/ota/check');
+  otaWatch(function(s){if(s.ota=='checked'||s.ota=='error'){otaSay((s.otaMsg||s.ota)+' '+(s.ghVersion||'')+' '+(s.ghSize||''));return 1;}},30);
+};
+document.getElementById('gh').onclick=function(){
+  otaSay('downloading — watch the panel'); otaPost('/api/ota/apply');
+  otaWatch(function(s,stamp){
+    if(s.ota=='error'){otaSay(s.otaMsg||'failed');return 1;}
+    if(s.fw&&document.getElementById('fw').textContent!=stamp){otaSay('updated '+s.fw);setTimeout(function(){location.reload();},600);return 1;}
+    if(s.ota&&s.ota!='idle')otaSay(s.ota+' '+(s.otaPct||0)+'% '+(s.otaMsg||''));
+  },90);
+};
 function poll(){
   if(busy||pending||drag)return;
   fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});
@@ -1119,7 +1138,9 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,"
     "\"serpentine\":%s,\"flipX\":%s,\"flipY\":%s,\"rotate\":%u,"
-    "\"powerBudgetMa\":%u}",
+    "\"powerBudgetMa\":%u,"
+    "\"fw\":\"%s\",\"built\":\"%s\",\"ota\":\"%s\",\"otaPct\":%d,"
+    "\"otaMsg\":\"%s\",\"ghVersion\":\"%s\",\"ghSize\":%ld}",
     ok ? "true" : "false",
     err ? err : "",
     modeName(mode),
@@ -1149,7 +1170,9 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     PANEL_FLIP_X ? "true" : "false",
     PANEL_FLIP_Y ? "true" : "false",
     (unsigned)(PANEL_ROTATE & 3),
-    (unsigned)POWER_BUDGET_MA);
+    (unsigned)POWER_BUDGET_MA,
+    FW_VERSION, FW_BUILT, g_otaState, g_otaPct,
+    g_otaMsg, g_ghVer, g_ghSize);
 }
 
 static void httpBegin(int code, const char* reason, const char* type,
@@ -1189,9 +1212,16 @@ static void httpJson(bool ok, const char* err) {
             "application/json", g_json, (uint16_t)n);
 }
 
+static void rememberIp(const IPAddress& ip);
+
+#include "lamp_ota.h"
+
 static void httpStop() {
   g_client.stop();
   g_http = PH_IDLE;
+  g_ghJob = 0;
+  g_otaApply = 0;
+  g_rebootAfter = 0;
 }
 
 static void httpHandle() {
@@ -1220,7 +1250,11 @@ static void httpHandle() {
     query[qlen] = 0;
   }
   if (!strcmp(path, "/") || !strcmp(path, "/index.html")) {
-    httpBegin(200, "OK", "text/html; charset=utf-8", PAGE, g_pageLen);
+    if (g_setupAp) {
+      httpBegin(200, "OK", "text/html; charset=utf-8", SETUP_PAGE, (uint16_t)strlen(SETUP_PAGE));
+    } else {
+      httpBegin(200, "OK", "text/html; charset=utf-8", PAGE, g_pageLen);
+    }
     return;
   }
   if (!strcmp(path, "/favicon.ico")) {
@@ -1252,19 +1286,35 @@ static void httpRead(uint32_t now) {
       if (n > 0) {
         g_reqLen = (uint16_t)(g_reqLen + n);
         g_req[g_reqLen] = 0;
+        g_clientMs = now;
       }
     }
   }
-  bool full = g_reqLen >= (sizeof g_req) - 1;
+  bool post = strncmp(g_req, "POST ", 5) == 0;
   bool hdr = g_reqLen > 0 && strstr(g_req, "\r\n\r\n") != 0;
+  bool full = g_reqLen >= (sizeof g_req) - 1;
   bool timed = (uint32_t)(now - g_clientMs) >= HTTP_READ_TIMEOUT_MS;
-  if (hdr || full || timed) {
-    if (g_reqLen == 0) {
+  if (!hdr) {
+    if (g_reqLen == 0 && timed) {
       httpStop();
       return;
     }
-    httpHandle();
+    if (post && full) {
+      otaReply(413, "Payload Too Large", "headers\n");
+      return;
+    }
+    if (post && timed) {
+      otaReply(408, "Request Timeout", "timeout\n");
+      return;
+    }
+    if (!post && (full || timed) && g_reqLen > 0) httpHandle();
+    return;
   }
+  if (post) {
+    otaDispatchPost(now);
+    return;
+  }
+  httpHandle();
 }
 
 static void httpWrite() {
@@ -1292,12 +1342,31 @@ static void httpWrite() {
     g_bodyOff = (uint16_t)(g_bodyOff + w);
     return;
   }
+  uint8_t job = g_ghJob;
+  uint8_t apply = g_otaApply;
+  uint8_t reboot = g_rebootAfter;
+  g_ghJob = 0;
+  g_otaApply = 0;
+  g_rebootAfter = 0;
+  if (apply || reboot) {
+    g_client.flush();
+    delay(500);
+  }
   httpStop();
+  if (apply) {
+    Serial.println(F("OTA apply"));
+    InternalStorage.apply();
+    Serial.println(F("OTA apply failed"));
+    otaResumeLamp();
+    return;
+  }
+  if (reboot) NVIC_SystemReset();
+  if (job) githubRun(job);
 }
 
 static void wifiBegin() {
-  if (WIFI_PASS[0] == 0) WiFi.begin(WIFI_SSID);
-  else WiFi.begin(WIFI_SSID, WIFI_PASS);
+  if (g_creds.pass[0] == 0) WiFi.begin(g_creds.ssid);
+  else WiFi.begin(g_creds.ssid, g_creds.pass);
   g_joinSince = millis();
 }
 
@@ -1403,9 +1472,16 @@ static void wifiPollStatus(uint32_t now) {
 static void webSetup() {
   size_t n = strlen(PAGE);
   g_pageLen = (n > 65535u) ? 65535u : (uint16_t)n;
-  if (WIFI_SSID[0] == 0) {
+  credsBoot();
+  if (g_setupAp) {
+    startSetupAp();
+    WiFi.setTimeout(0);
+    modem.timeout(MODEM_CMD_BUDGET_MS);
+    return;
+  }
+  if (g_creds.ssid[0] == 0) {
     g_wifi = WIFI_OFF;
-    Serial.println(F("WiFi skipped (no WIFI_SSID in secrets.h)"));
+    Serial.println(F("WiFi skipped (no credentials in EEPROM or secrets.h)"));
     return;
   }
   g_wifi = WIFI_JOINING;
@@ -1427,8 +1503,23 @@ static void webSetup() {
 
 static void webPoll(uint32_t now) {
   if (g_wifi == WIFI_OFF) return;
+  if (g_http == PH_OTA) { otaHttpRead(now); return; }
   if (g_http == PH_READ) { httpRead(now); return; }
   if (g_http == PH_WRITE) { httpWrite(); return; }
+  if (g_setupAp) {
+    if (g_serverUp && (uint32_t)(now - g_lastAccept) >= WIFI_ACCEPT_MS) {
+      g_lastAccept = now;
+      WiFiClient incoming = g_server.available();
+      if (incoming) {
+        g_client = incoming;
+        g_reqLen = 0;
+        g_req[0] = 0;
+        g_clientMs = now;
+        g_http = PH_READ;
+      }
+    }
+    return;
+  }
   if (g_wifi == WIFI_ONLINE && g_serverUp && (uint32_t)(now - g_lastAccept) >= WIFI_ACCEPT_MS) {
     g_lastAccept = now;
     WiFiClient incoming = g_server.available();
@@ -1476,6 +1567,9 @@ static void pollArcade(uint32_t now) {
 void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
+  Serial.println(FW_MARK);
+  Serial.print(F("OTA max bytes "));
+  Serial.println(InternalStorage.maxSize());
   Serial.print(F("Panel "));
   Serial.print(PANEL_W);
   Serial.print(F("x"));
@@ -1492,6 +1586,10 @@ void setup() {
   g_btnRed.stable = g_btnRed.raw = (uint8_t)digitalRead(PIN_RED);
   g_btnWhite.stable = g_btnWhite.raw = (uint8_t)digitalRead(PIN_WHITE);
   g_btnRed.since = g_btnWhite.since = millis();
+  if (bothHeld()) {
+    g_forceSetup = 1;
+    Serial.println(F("Red and white held: setup AP"));
+  }
   modesMetaBoot();
   matrixFireReset();
   matrixFireSetIntensity(50);
@@ -1510,8 +1608,10 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
-  pollArcade(now);
+  if (!g_otaActive) pollArcade(now);
   webPoll(now);
-  tickScroll(now);
-  tickPanel(now);
+  if (!g_otaActive) {
+    tickScroll(now);
+    tickPanel(now);
+  }
 }
