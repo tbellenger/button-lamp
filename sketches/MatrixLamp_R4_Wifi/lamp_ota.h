@@ -38,6 +38,12 @@ static void otaReply(int code, const char* reason, const char* msg) {
   httpBegin(code, reason, "text/plain; charset=utf-8", msg, (uint16_t)strlen(msg));
 }
 
+static void otaSolid(uint8_t r, uint8_t g, uint8_t b) {
+  uint32_t c = g_panel.Color(r, g, b);
+  for (int i = 0; i < PANEL_N; i++) g_panel.setPixelColor((uint16_t)i, c);
+  g_panel.show();
+}
+
 static void otaPaint(int pct) {
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
@@ -208,11 +214,72 @@ static void otaConsume(const uint8_t* p, uint32_t n) {
 
 static void otaFail(const char* msg) {
   otaCloseStorage();
-  otaResumeLamp();
-  otaSet("error", msg);
   Serial.print(F("OTA rejected: "));
-  Serial.println(g_otaMsg);
+  Serial.println(msg);
+  otaSet("error", msg);
+  otaSolid(180, 0, 0);
+  delay(1000);
+  otaResumeLamp();
   otaReply(400, "Bad Request", msg);
+}
+
+// ArduinoOTA 1.1.1 apply() erases (pageAlignedLength / pageSize) + 1 blocks.
+// pageAlignedLength is already a whole number of 2 KB blocks, so the extra
+// block is the first block of the staged image (the vector table). The copy
+// then resets into 0xFF and the panel stays on the last frame. Do not call it.
+extern "C" fsp_err_t r_flash_lp_cf_erase(flash_lp_instance_ctrl_t* p_ctrl,
+                                        uint32_t block_address,
+                                        uint32_t num_blocks,
+                                        uint32_t block_size);
+extern "C" fsp_err_t r_flash_lp_cf_write(flash_lp_instance_ctrl_t* p_ctrl,
+                                        uint32_t src,
+                                        uint32_t dest,
+                                        uint32_t num_bytes);
+
+static bool otaCommit() {
+  uint32_t start = (uint32_t)&__ROM_Start;
+  uint32_t maxSketch = (262144u - start) / 2u;
+  maxSketch = (maxSketch / 2048u) * 2048u;
+  uint32_t storage = start + maxSketch;
+  uint32_t pages = (g_otaLen / 2048u) + 1u;
+  uint32_t bytes = pages * 2048u;
+  if (pages == 0 || storage + bytes > 262144u) {
+    Serial.println(F("OTA size"));
+    return false;
+  }
+  Serial.print(F("OTA apply "));
+  Serial.println(pages);
+  otaSolid(255, 255, 255);
+  flash_lp_instance_ctrl_t ctrl;
+  flash_cfg_t cfg;
+  memset(&ctrl, 0, sizeof ctrl);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.data_flash_bgo = false;
+  cfg.ipl = BSP_IRQ_DISABLED;
+  cfg.irq = FSP_INVALID_VECTOR;
+  cfg.err_ipl = BSP_IRQ_DISABLED;
+  cfg.err_irq = FSP_INVALID_VECTOR;
+  if (R_FLASH_LP_Open(&ctrl, &cfg) != FSP_SUCCESS) {
+    Serial.println(F("OTA flash open"));
+    return false;
+  }
+  __disable_irq();
+  fsp_err_t rv = r_flash_lp_cf_erase(&ctrl, start, pages, 2048u);
+  uint32_t off = 0;
+  while (rv == FSP_SUCCESS && off < bytes) {
+    uint8_t buf[128];
+    const uint8_t* s = (const uint8_t*)(storage + off);
+    for (int i = 0; i < 128; i++) buf[i] = s[i];
+    rv = r_flash_lp_cf_write(&ctrl, (uint32_t)buf, start + off, 128u);
+    off += 128u;
+  }
+  if (rv != FSP_SUCCESS || off != bytes) {
+    __enable_irq();
+    Serial.println(F("OTA copy failed"));
+    __disable_irq();
+  }
+  NVIC_SystemReset();
+  return false;
 }
 
 static void otaBeginUpload() {
@@ -283,9 +350,8 @@ static void otaFinishUpload() {
     return;
   }
   otaSet("applying", "rebooting");
-  otaPaint(100);
-  g_otaApply = 1;
   Serial.println(F("OTA stored"));
+  g_otaApply = 1;
   otaReply(200, "OK", "ok\n");
 }
 
@@ -496,11 +562,13 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
   int phase = 0;
   long got = 0;
   uint32_t idle = millis();
-  while ((uint32_t)(millis() - idle) < 20000) {
+  // Return 1 when the body is complete, 2 when the socket stalls.
+  // WiFiSSLClient::connected() stays true after GitHub closes, and available()
+  // blocks inside a modem command, so do not wait on EOF past Content-Length.
+  while ((uint32_t)(millis() - idle) < 8000) {
     if (phase == 1 && h->length >= 0 && got >= h->length) return 1;
     if (c.available() <= 0) {
-      if (!c.connected()) return (phase == 1 && h->length >= 0 && got == h->length) ? 1 : 0;
-      delay(2);
+      delay(5);
       continue;
     }
     uint8_t buf[128];
@@ -523,7 +591,8 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
           if (ln == 0) {
             phase = 1;
             if (onHead && !onHead(h)) return 0;
-            if (h->chunked) return 0;
+            // A real length wins. Chunked with no length cannot be stored safely.
+            if (h->chunked && h->length < 0) return 0;
             if (h->code >= 300 && h->code < 400) return 1;
             if (h->length == 0) return 1;
             i++;
@@ -562,7 +631,9 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
       }
     }
   }
-  return 0;
+  if (phase == 1 && h->length >= 0 && got >= h->length) return 1;
+  Serial.println(F("OTA body timeout"));
+  return 2;
 }
 
 static bool ghTakeLocation() {
@@ -600,11 +671,19 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
   bool sent = ghSend(c, "GET ") && ghSend(c, g_ghPath) &&
               ghSend(c, " HTTP/1.0\r\nHost: ") && ghSend(c, g_ghHost) &&
               ghSend(c, "\r\nUser-Agent: MatrixLamp\r\nConnection: close\r\n\r\n");
-  // ghSend uses g_ghPath, and a redirect Location overwrites it during the read.
-  // The request path was already copied into the GET line, so that is fine.
-  int ok = sent && ghReadResponse(c, h, onHead, onBody);
+  // Short modem timeout: a stalled SSL read must not sit forever.
+  modem.timeout(1500);
+  int rd = sent ? ghReadResponse(c, h, onHead, onBody) : 0;
+  modem.timeout(400);
   c.stop();
-  if (!ok) {
+  modem.timeout(20000);
+  if (rd == 2) {
+    otaSet("error", "timeout");
+    otaSolid(0, 0, 160);
+    delay(1000);
+    return false;
+  }
+  if (rd != 1) {
     if (!g_otaMsg[0]) otaSet("error", "github read failed");
     return false;
   }
@@ -774,18 +853,26 @@ static bool ghFetchBin() {
       otaCloseStorage();
       if (!imageOk()) {
         otaSet("error", "bad image");
+        Serial.println(F("OTA bad image"));
+        otaSolid(180, 0, 0);
+        delay(1000);
         return false;
       }
       if (sum != g_ghCrc) {
         otaSet("error", "bad crc");
+        Serial.print(F("OTA bad crc "));
+        Serial.println(sum, HEX);
+        otaSolid(180, 0, 0);
+        delay(1000);
         return false;
       }
       otaSet("applying", "rebooting");
-      otaPaint(100);
-      Serial.println(F("OTA apply"));
-      delay(200);
-      InternalStorage.apply();
-      otaSet("error", "apply failed");
+      if (!otaCommit()) {
+        otaSet("error", "apply failed");
+        otaSolid(180, 0, 0);
+        delay(1000);
+        return false;
+      }
       return false;
     }
     if (h.code >= 300 && h.code < 400 && h.loc && ghTakeLocation()) continue;

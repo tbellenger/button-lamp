@@ -60,10 +60,12 @@ tools/upload_matrixlamp.sh --ota
 
 That compiles a `.bin` and POSTs it to `http://matrixlamp.local/update` (or the IP you pass). The password comes from the `OTA_PASSWORD` environment variable, then `secrets.h`, then a prompt. Success is printed only when the lamp reboots into that build. If `matrixlamp.local` does not resolve on Windows, use the IP shown on the web page and on the serial monitor.
 
-On the phone, open the lamp's page, enter the OTA password under Firmware, and either pick a `.bin` or tap Update from GitHub. The 16×16 fills orange while the image is stored. A short or bad file is not applied. The project README, section 5, has the size limit (122880 bytes), the GitHub release tags, and the setup AP.
+On the phone, open the lamp's page, enter the OTA password under Firmware, and either pick a `.bin` or tap Update from GitHub. Orange is the download, white means it is copying into the sketch, red is a rejected file, blue is a stall. A rejected file leaves the current sketch running.
+
+If the panel stays white, or the board never comes back, double-tap reset until the onboard LED breathes, then `tools\upload_matrixlamp.bat` (or the `.sh`) over USB. That recovery does not need WiFi. The project README, section 5, has the size limit (122880 bytes) and the GitHub release tags.
 
 ```text
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122632 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122640 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122680 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122688 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
