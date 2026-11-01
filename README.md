@@ -279,7 +279,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 110204 B flash (42% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, empty `WIFI_SSID` (no `secrets.h`): 110596 B flash (42% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. The old 128-frame nibble buffer is gone. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. Flash moves a little with the length of the SSID and password.
 
 ## Sketches
 
