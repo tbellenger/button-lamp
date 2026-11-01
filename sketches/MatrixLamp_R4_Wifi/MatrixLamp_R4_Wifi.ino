@@ -40,7 +40,7 @@
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
    Core 1.6.0, Adafruit NeoPixel 1.15.5, empty WIFI_SSID (no secrets.h):
-   105092 B flash (40% of 262144), 11544 B globals (35% of 32768),
+   110204 B flash (42% of 262144), 11544 B globals (35% of 32768),
    21224 B left for locals. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -313,6 +313,13 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 .fade .thumb{position:absolute;top:18%;width:12%;height:64%;margin-left:-6%;border-radius:3px;
  background:linear-gradient(#3a3a3a,#111);box-shadow:0 3px 0 #000,0 4px 8px rgba(0,0,0,.45)}
 .fade .thumb i{display:block;height:2px;margin:46% 15% 0;background:#eee}
+details{background:#1a120c;border:1px solid #5c4630;border-radius:.55rem;margin:.35rem 0}
+summary{padding:.7rem .85rem;cursor:pointer;font-weight:650}
+details ol{margin:.15rem .9rem .75rem;padding-left:1.15rem;color:#e7d8c6;font-size:.92rem}
+details li{margin:.28rem 0}
+.w,.r{display:inline-block;padding:.02rem .42rem;border-radius:99px;font-weight:700;font-size:.84em;line-height:1.45}
+.w{background:#f4f4f4;color:#222}
+.r{background:#c62828;color:#fff}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=note id=link>connecting</p>
@@ -342,8 +349,91 @@ button{font:inherit;color:inherit;border:0;padding:0;background:transparent;curs
 </div>
 </div>
 <pre id=st>loading</pre>
-<p class=note>Same switches as the spiral lamp, in the printed panel's places. Rocker is power. Toggle with the rocker runs Jumbo and cycles its colour; toggle alone is Music. The key is Rainbow. Open the red cover and flip the switch for Wave. The mushroom is Lava. White and red cycle the lava colours while Chaos is on; with the rocker on they also take the classic code. With every switch off, white-white, red-red, white-white, red-red (rrllrrll) starts Metaballs, red-red, white-white, red-red, white-white (llrrllrr) starts Plasma, and white-white-white, red-red, white-white-white (rrrllrrr) starts Sun. In Metaballs those buttons are not a code: red adds a blob (up to 8) and white removes one (down to 1). In Plasma they are not a code either: red zooms in and white zooms out. In Sun, red grows the sun and white shrinks it. Turning any other switch on leaves the mode. The fader is brightness, halfway is 20 of 255. The knob is speed. Switches at rest, before that code, play the matrix fire. The red and white buttons are also D8 and D4, active low, same as the spiral lamp. The lava fire trail is on. The 12×8 matrix scrolls the IP.</p>
+<p class=note>Presets. Tap a name. Fader halfway is brightness 20 of 255 (cap 40). Red is D8, white is D4, both active low. The mushroom overrides every other switch. The 12×8 matrix scrolls the IP.</p>
+<details><summary>Fire</summary><ol>
+<li>Turn the rocker, toggle, key, wave cover, and mushroom off.</li>
+<li>If Metaballs, Plasma, or Sun is still showing, turn any one of those switches on, then off again. That clears the code.</li>
+<li>The panel plays the matrix fire. The knob is the flame speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Jumbo</summary><ol>
+<li>Mushroom off, key off, wave cover off.</li>
+<li>Rocker on. If the picture is one flat colour, Classic is still armed: flip the toggle on once to clear it, then Jumbo is the rocker.</li>
+<li>Toggle on cycles white, red, purple, blue, green, yellow, orange. Toggle off holds the colour.</li>
+<li>The knob is the bottom-up wipe speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Classic</summary><ol>
+<li>Mushroom off, key off, wave cover off, toggle off, rocker on.</li>
+<li>Press <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
+<li>The whole panel is one colour from the knob: left orange, middle yellow, right white. The fader is brightness.</li>
+<li>Flip the toggle on to leave. That returns to Jumbo.</li>
+</ol></details>
+<details><summary>Rainbow</summary><ol>
+<li>Mushroom off and wave cover off. The key wins over the rocker.</li>
+<li>Turn the key on. The toggle reverses the rainbow.</li>
+<li>The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave</summary><ol>
+<li>Mushroom off, key off, toggle off. Leave the rocker off if you also want to avoid Secret.</li>
+<li>Tap the red wave cover. It opens and the switch goes on.</li>
+<li>A bright band ripples up the rows. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave modifier</summary><ol>
+<li>Mushroom off, key off, rocker off.</li>
+<li>Toggle on, then tap the red wave cover so Wave is on.</li>
+<li>The band crossfades a colour pair. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave rainbow</summary><ol>
+<li>Mushroom off, toggle off, rocker off.</li>
+<li>Key on, and the red wave cover on.</li>
+<li>Each row is a hue and the band still travels. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Wave epic</summary><ol>
+<li>Mushroom off and rocker off. Rocker on with these switches is Secret instead.</li>
+<li>Key on, toggle on, and the red wave cover on.</li>
+<li>One row flashes through the epic colours. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Secret</summary><ol>
+<li>Mushroom off.</li>
+<li>Rocker on, toggle on, key on, and the red wave cover on. All four.</li>
+<li>The knob fills the panel from the bottom. Low on the fader mixes in the violet-to-red gradient. The fader is also brightness.</li>
+</ol></details>
+<details><summary>Lava</summary><ol>
+<li>Press the red mushroom. It overrides every other switch.</li>
+<li><span class=w>White</span> cycles the top ball. <span class=r>Red</span> cycles the bottom ball: red, purple, blue, green, yellow, orange, off.</li>
+<li>The fire trail is on at boot. There is no switch for it.</li>
+<li>The knob is speed. The fader is brightness. Press the mushroom again to leave.</li>
+</ol></details>
+<details><summary>Music</summary><ol>
+<li>Mushroom off, rocker off, key off, wave cover off.</li>
+<li>Toggle on.</li>
+<li>A dim pulse and a short built-in phrase. No MIDI on this lamp. The knob is speed. The fader is brightness.</li>
+</ol></details>
+<details><summary>Metaballs</summary><ol>
+<li>Every switch off, so the fire is showing. These presses are not the Classic code.</li>
+<li>Press <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span>.</li>
+<li>After that, <span class=r>red</span> adds a blob, up to 8, and <span class=w>white</span> removes one, down to 1. Those presses are not another code.</li>
+<li>The knob is blob speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
+<details><summary>Plasma</summary><ol>
+<li>Every switch off.</li>
+<li>Press <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span>.</li>
+<li>After that, <span class=r>red</span> zooms in and <span class=w>white</span> zooms out, five steps, held at the ends. Not another code.</li>
+<li>The knob is the rotate and zoom speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
+<details><summary>Sun</summary><ol>
+<li>Every switch off.</li>
+<li>Press <span class=w>white</span> <span class=w>white</span> <span class=w>white</span> <span class=r>red</span> <span class=r>red</span> <span class=w>white</span> <span class=w>white</span> <span class=w>white</span>.</li>
+<li>After that, <span class=r>red</span> grows the sun and <span class=w>white</span> shrinks it, five steps, held at the ends. Not another code.</li>
+<li>The knob is the pulse and ray speed. The fader is brightness. Turn any other switch on to leave.</li>
+</ol></details>
 <script>
+var presets=document.querySelectorAll('details');
+for(var pi=0;pi<presets.length;pi++){
+  presets[pi].ontoggle=function(){
+    if(!this.open)return;
+    for(var pj=0;pj<presets.length;pj++) if(presets[pj]!==this) presets[pj].open=false;
+  };
+}
 var S={rocker:0,toggle:0,key:0,wave:0,chaos:0,fader:50,speed:50,cover:0};
 var link=document.getElementById('link'),st=document.getElementById('st');
 var pending='',busy=0,drag=0;

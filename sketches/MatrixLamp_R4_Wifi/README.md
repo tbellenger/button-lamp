@@ -54,4 +54,4 @@ Windows can double-click `tools/upload_matrixlamp.bat`. The window waits at the 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, no `secrets.h`: 105092 B flash (40% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, no `secrets.h`: 110204 B flash (42% of 262144), 11544 B globals (35% of 32768), 21224 B left for locals. NeoPixel mallocs another 768 B for the 256 LEDs.
