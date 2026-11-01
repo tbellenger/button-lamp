@@ -1,6 +1,6 @@
 from nurb import *
 
-from system import layout, teardrop
+from system import crowned_profile, layout, teardrop
 
 
 @part
@@ -8,13 +8,15 @@ def matrix_16x16_arduino_shell(
     wall=2.4,
     floor_thickness=2.4,
     standoff_height=6.0,
-    interior_height=23.0,
+    interior_height=57.6,
     draft=False,
 ):
     """wall: bay wall thickness (mm)
     floor_thickness: floor that bolts against the matrix housing backplate (mm)
     standoff_height: height of the Arduino standoffs above the floor (mm)
-    interior_height: open depth from the floor up to the cover rim (mm)
+    interior_height: open depth from the floor up to the cover rim (mm).
+        This is the stacked shield (standoffs + Uno + header gap + 24 mm
+        terminals) plus tb_wire_clearance. It has to match layout().
     """
     L = layout()
     m3_hole = measured("m3_clearance")
@@ -28,9 +30,16 @@ def matrix_16x16_arduino_shell(
         reject("floor_thickness under 2.0mm will not hold the shell screws", param="floor_thickness")
     if standoff_height < measured("insert_length") + 1.5:
         reject("standoff_height leaves no plastic under the heat-set insert", param="standoff_height")
-    if interior_height < standoff_height + measured("uno_board_thickness") + measured("uno_jack_z") + 7.0:
+    need = (
+        standoff_height
+        + measured("uno_board_thickness")
+        + measured("tb_stack_gap")
+        + measured("tb_stack_height")
+        + measured("tb_wire_clearance")
+    )
+    if interior_height + 1e-6 < need:
         reject(
-            "interior_height is too short for the barrel-jack plug under the cover",
+            "interior_height is shorter than the stacked shield plus the wire clearance",
             param="interior_height",
         )
 
@@ -83,16 +92,19 @@ def matrix_16x16_arduino_shell(
     cx, cy, cw, ch = L["cable_slot"]
     body -= Pos(cx, cy, -0.5) * extrude(RectangleRounded(cw, ch, 2.0), amount=floor_thickness + 1.0)
 
-    # USB-C and barrel-jack slots, open at the rim (the cover caps them) so there
-    # is no bridge over the plug. Widths clear a USB-C plug and a 5.5 mm barrel plug.
-    def side_slot(y_center, z_center, width, below):
-        z0 = floor_thickness + z_center - below
-        return Pos(ix0 - 1.0, y_center, (z0 + shell_h + 1.0) / 2.0) * Box(
-            wall + 3.0, width, shell_h + 1.0 - z0
-        )
+    # USB-C and barrel openings. A slot open all the way up a 60 mm wall would
+    # take the connector side out, and a flat bridge over a 14 mm hole sags.
+    # The crown is 45 degrees, same idea as the desk-stand bores, so the roof
+    # prints with the cavity facing up and no supports. z_center is already
+    # the connector height above the cavity floor.
+    def crowned_port(y_center, z_above_floor, width, below, above):
+        z_center = floor_thickness + z_above_floor
+        face = Plane.YZ * Pos(y_center, z_center) * crowned_profile(width / 2.0, below, above)
+        span = (ix0 + 1.0) - (ox0 - 1.0)
+        return Pos(ox0 - 1.0, 0.0, 0.0) * extrude(face, amount=span)
 
-    body -= side_slot(L["usb_y"], L["usb_z"], 15.0, 5.0)
-    body -= side_slot(L["jack_y"], L["jack_z"], 14.0, 7.0)
+    body -= crowned_port(L["usb_y"], L["usb_z"], 15.0, 5.0, 6.0)
+    body -= crowned_port(L["jack_y"], L["jack_z"], 14.0, 7.0, 6.0)
 
     # External 5 V lead: notch in the wiring-bay wall, open at the rim, plus a
     # teardrop zip-tie eye beside it.
@@ -103,8 +115,8 @@ def matrix_16x16_arduino_shell(
         notch_x1 - notch_x0, 8.0, shell_h + 1.0 - notch_z0
     )
     # Zip-tie eye on solid floor just inboard of the notch. 10 mm wide so the
-    # Ø4.2 teardrop keeps 2 mm of plastic on either side, and it stops short of
-    # the cover-screw boss at Y = 67.
+    # Ø4.2 teardrop keeps 2 mm of plastic on either side. The cover boss on
+    # this side is at Y = 69.2, above the eye.
     eye_x = 46.0
     eye_y0, eye_y1 = 53.0, 61.0
     eye_z = floor_thickness + 8.0
@@ -113,6 +125,34 @@ def matrix_16x16_arduino_shell(
     )
     bore = Plane.XZ * Pos(eye_x, eye_z) * teardrop(2.1)
     body -= Pos(0.0, eye_y0, 0.0) * extrude(bore, amount=eye_y1 - eye_y0)
+
+    # Matrix leads: a bar across the +Y end of the floor slot, with a Ø4.2
+    # teardrop the zip tie passes through. The -Y end of the slot stays open
+    # into the matrix pocket. The bar fills the slot down to the bed, so the
+    # hole is not a bridge.
+    bx, by, bw, bh = L["matrix_bridge"]
+    bridge_h = 14.0
+    body += Pos(bx, by, 0.0) * Box(bw, bh, floor_thickness + bridge_h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    bridge_bore = Plane.YZ * Pos(by, floor_thickness + 7.0) * teardrop(2.1)
+    body -= Pos(bx - bw / 2.0, 0.0, 0.0) * extrude(bridge_bore, amount=bw)
+
+    # Arcade buttons (red D8, white D4, and their grounds). Notch in the -Y
+    # wall, open at the rim, and a zip-tie eye just inside. -Y is down toward
+    # the lamp when the matrix is standing.
+    bnx = L["button_notch_x"]
+    bnw = L["button_notch_w"]
+    bnz0 = floor_thickness + 4.0
+    bny0, bny1 = oy0 - 1.0, iy0 + 1.0
+    body -= Pos(bnx, (bny0 + bny1) / 2.0, (bnz0 + shell_h + 1.0) / 2.0) * Box(
+        bnw, bny1 - bny0, shell_h + 1.0 - bnz0
+    )
+    ex, ey, ew, eh = L["button_eye"]
+    body += Pos(ex, ey, floor_thickness) * Box(
+        ew, eh, 13.0, align=(Align.CENTER, Align.CENTER, Align.MIN)
+    )
+    # Wires run in Y out the notch, so the zip-tie bore runs in X.
+    button_bore = Plane.YZ * Pos(ey, floor_thickness + 8.0) * teardrop(2.1)
+    body -= Pos(ex - ew / 2.0, 0.0, 0.0) * extrude(button_bore, amount=ew)
 
     # 1000 uF can lying on its side. Channel is open toward the cable slot.
     cap_x, cap_y, cap_w, cap_l = L["cap"]
@@ -129,14 +169,22 @@ def matrix_16x16_arduino_shell(
     )
 
     # Vent slots, 3 mm wide, short enough to bridge and clear of the ports.
-    vent_z0 = floor_thickness + 6.0
-    vent_h = 10.0
-    vent_zc = vent_z0 + vent_h / 2.0
-    for vx in (-20.0, 0.0, 20.0):
-        body -= Pos(vx, (oy0 - 1.0 + iy0 + 1.0) / 2.0, vent_zc) * Box(3.0, (iy0 + 1.0) - (oy0 - 1.0), vent_h)
-        body -= Pos(vx, (iy1 - 1.0 + oy1 + 1.0) / 2.0, vent_zc) * Box(3.0, (oy1 + 1.0) - (iy1 - 1.0), vent_h)
-    for vy in (36.0, 66.0):
-        body -= Pos((ix1 - 1.0 + ox1 + 1.0) / 2.0, vy, vent_zc) * Box((ox1 + 1.0) - (ix1 - 1.0), 3.0, vent_h)
+    # The low row is the original one. The high row is there because the bay
+    # is now deep enough to cover the shield, and the low slots alone would
+    # leave the terminals in a closed pocket.
+    def wall_vents(z0, height):
+        zc = z0 + height / 2.0
+        for vx in (-20.0, 0.0, 20.0):
+            body_cuts.append(Pos(vx, (oy0 - 1.0 + iy0 + 1.0) / 2.0, zc) * Box(3.0, (iy0 + 1.0) - (oy0 - 1.0), height))
+            body_cuts.append(Pos(vx, (iy1 - 1.0 + oy1 + 1.0) / 2.0, zc) * Box(3.0, (oy1 + 1.0) - (iy1 - 1.0), height))
+        for vy in (36.0, 66.0):
+            body_cuts.append(Pos((ix1 - 1.0 + ox1 + 1.0) / 2.0, vy, zc) * Box((ox1 + 1.0) - (ix1 - 1.0), 3.0, height))
+
+    body_cuts = []
+    wall_vents(floor_thickness + 6.0, 10.0)
+    wall_vents(floor_thickness + 36.0, 12.0)
+    for cut in body_cuts:
+        body -= cut
 
     if draft:
         return body

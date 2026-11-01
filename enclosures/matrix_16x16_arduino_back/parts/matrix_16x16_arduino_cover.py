@@ -52,8 +52,9 @@ def matrix_16x16_arduino_cover(
         amount=lip_height + 1.0,
     )
 
-    # Notch the lip where the shell slots are open, so the lip does not close
-    # the top of the USB, barrel or 5 V entry. The plate still caps them.
+    # Notch the lip where a shell slot is open at the rim. USB-C and the barrel
+    # jack are crowned holes below the rim, so the lip stays whole on that wall.
+    # The plate still caps the shell.
     notch_top = plate_thickness + lip_height + 0.5
 
     def lip_notch(x, y, w, h):
@@ -69,20 +70,22 @@ def matrix_16x16_arduino_cover(
             x0, x1 = ix1 - reach, ox1 + 1.0
         return lip_notch((x0 + x1) / 2.0, y, x1 - x0, opening + 2.0 * fit_clearance)
 
-    body -= edge_notch(L["usb_y"], 15.0, True)
-    body -= edge_notch(L["jack_y"], 14.0, True)
+    def edge_notch_y(x, opening, on_bottom):
+        reach = lip_thickness + 2.0
+        if on_bottom:
+            y0, y1 = oy0 - 1.0, iy0 + reach
+        else:
+            y0, y1 = iy1 - reach, oy1 + 1.0
+        return lip_notch(x, (y0 + y1) / 2.0, opening + 2.0 * fit_clearance, y1 - y0)
+
     body -= edge_notch(L["power_notch_y"], 8.0, False)
+    body -= edge_notch_y(L["button_notch_x"], L["button_notch_w"], True)
 
     for sx, sy in L["cover_screws"]:
         body -= Pos(sx, sy, -0.5) * extrude(Circle(m3_hole / 2.0), amount=plate_thickness + 1.5)
 
-    # Window over the R4's 12x8 matrix. 28 x 20 mm clears the 24.8 x 16.4 mm
-    # LED extent measured on the official STEP, with about 1.5 mm of margin.
-    body -= Pos(L["matrix_x"], L["matrix_y"], -0.5) * extrude(
-        RectangleRounded(28.0, 20.0, 3.0), amount=plate_thickness + 1.0
-    )
-
-    # A few vents in the plate, clear of the window and the screw holes.
+    # The shield covers the R4's 12x8 matrix, so there is no window over those LEDs.
+    # Vents stay clear of the cover screws.
     for vx, vy in ((-28.0, 40.0), (28.0, 18.0), (28.0, 58.0)):
         body -= Pos(vx, vy, -0.5) * extrude(RectangleRounded(3.0, 14.0, 1.2), amount=plate_thickness + 1.0)
 

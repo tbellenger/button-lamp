@@ -132,3 +132,36 @@ how = "ruthex RX-M3Sx4.0 (M3 short) nominal length 4.0 mm, datasheet RX-Serie"
 value = 1.6
 unit = "mm"
 how = "ruthex RX-M3Sx4.0 minimum wall W around the insert, datasheet RX-Serie. Bosses here use 2.2 mm, above both that floor and the 2 mm project wall"
+
+[tb_board_length]
+value = 68.5
+unit = "mm"
+how = "ElectroCookie EC_PS_UNO_TB_V1 (Amazon B092LQXSLG) product-listing dimension drawing: 2.7 in, labeled 68.5 mm. 2.7*25.4 = 68.58 mm, so 68.5 is that length rounded to 0.1 mm. The keep-out uses the larger of this and the Uno's 68.58 mm Gerber length. The shield is origin-aligned with the Uno (connector edge / analog edge)."
+
+[tb_board_width]
+value = 53.5
+unit = "mm"
+how = "Same ElectroCookie drawing: 2.1 in, labeled 53.5 mm. 2.1*25.4 = 53.34 mm, the Uno width, so 53.5 is the rounded callout. The keep-out uses the larger of this and the Uno width."
+
+[tb_stack_height]
+value = 24.0
+unit = "mm"
+provisional = true
+how = "Same drawing labels 0.95 in (24 mm) beside the four spring-terminal rows. 0.95*25.4 = 24.13 mm. Read as the underside of the shield PCB up through the terminal housings (the stacking pins hang below the PCB and are outside the arrow). Tom should caliper from the shield's underside to the top of the tallest terminal, and check that the stacking-header pins do not stick up past the terminals."
+
+[tb_stack_gap]
+value = 11.0
+unit = "mm"
+provisional = true
+how = "Conventional Uno stack, not measured on this kit: male-header plastic is 2.54 mm above the Uno PCB and a standard stacking-header body is 8.5 mm, so the shield underside sits about 11 mm above the R4 top face. Tom should caliper the seated gap. CUI PJ-102AH (the R4 barrel jack) is 11.0 mm above the PCB, so a shield that is not notched over the jack will touch it at this gap."
+
+[tb_board_thickness]
+value = 1.6
+unit = "mm"
+provisional = true
+how = "Not on the ElectroCookie drawing. Assumed 1.6 mm, the Uno thickness and the thickness ElectroCookie prints on its Uno proto shields, so the M3 screw grip can be sized. Tom should caliper the shield PCB. The 24 mm stack height already includes this thickness; it is not added again on top of the terminals."
+
+[tb_wire_clearance]
+value = 15.0
+unit = "mm"
+how = "Design clearance above the terminal tops, under the cover. Room to push a wire into the top entry and to press the release with a screwdriver while the cover is off, and room for the dressed wires once the cover is on. Not a measured board dimension. Do not set it below 15 mm."
