@@ -5,9 +5,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nurb import Pos, assembly, use
+from nurb import assembly, use
 
-from system import clipped_turn_numbers, frame_at, placement_angles, specs
+from system import clipped_turn_numbers, frame_at, placement_angles, print_location, specs
 
 
 @assembly
@@ -45,7 +45,7 @@ def spiral_tube_assembly(
     for theta, z_base in placement_angles(spec):
         for turn in clipped_turn_numbers(spec):
             z = z_base + (turn - 1) * spec.pitch
-            clip = Pos(0, 0, -float(clip_width) / 2.0) * use(
+            printed = use(
                 "spiral_tube_clip",
                 tube_od=float(tube_od),
                 coil_diameter=float(coil_diameter),
@@ -55,5 +55,7 @@ def spiral_tube_assembly(
                 pad_thickness=float(pad_thickness),
                 clip_width=float(clip_width),
             )
-            parts.append(frame_at(spec, theta, z) * clip)
+            # The STL stands on a helical end. Put that pose back on the coil.
+            local = print_location(spec).inverse() * printed
+            parts.append(frame_at(spec, theta, z) * local)
     return tuple(parts)

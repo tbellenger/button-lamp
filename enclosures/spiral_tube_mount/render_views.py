@@ -84,22 +84,49 @@ def render_base():
 
 
 def render_clip_views():
-    """End, side, and top of one clip, matching the three views in Tom's sketch."""
-    mesh = to_poly(clip_centered(SPEC), 0.05)
-    # Centred on the origin: +Y is the saddle axis, +Z runs  along the tube.
+    """The printable clip: the bow shows in the top view, the rise in the side view."""
+    from parts.spiral_tube_clip import spiral_tube_clip
+
+    mesh = to_poly(spiral_tube_clip(draft=True), 0.05)
+    center = (0, 0, 8)
     views = [
-        ((0, 0, 1), (0, 1, 0), "Along the tube: sleeve, stem, saddles"),
-        ((1, 0, 0), (0, 0, 1), "Side: 14 mm band, saddle curve top and bottom"),
-        ((0.85, -0.55, 0.55), (0, 0, 1), "Iso, opening facing out"),
+        ((0, 0, 1), (0, 1, 0), "Top: 0.72 mm bow toward the coil centre"),
+        ((0, -1, 0.15), (0, 0, 1), "Side: the band rises 1.5 mm as it curves"),
+        ((0.9, -0.7, 0.55), (0, 0, 1), "Iso, one helical end on the bed"),
     ]
     pl = pv.Plotter(shape=(1, 3), off_screen=True, window_size=(1800, 720))
     pl.set_background("#f7f9fc")
     for i, (direction, up, caption) in enumerate(views):
         pl.subplot(0, i)
         add_solid(pl, mesh, "#e0a045", "#6a4a16")
-        shot(pl, (0, 0, 0), direction, 80, up=up, zoom=1.35)
+        shot(pl, center, direction, 70, up=up, zoom=1.3)
         pl.add_text(caption, font_size=12, color="#1a222c")
     pl.screenshot(os.path.join(REND, "clip_views.png"))
+    pl.close()
+
+
+def render_curve_compare():
+    """Old straight extrusion beside the helical sweep, both in print orientation."""
+    from build123d import extrude
+
+    from system import clip_profile
+    from parts.spiral_tube_clip import spiral_tube_clip
+
+    curved = to_poly(spiral_tube_clip(draft=True), 0.05).translate((-28, 0, 0), inplace=False)
+    straight = extrude(clip_profile(SPEC), amount=SPEC.clip_width / 2.0, both=True)
+    straight = to_poly(straight, 0.05).translate((0, 0, SPEC.clip_width / 2.0), inplace=False)
+    straight = straight.translate((28, 0, 0), inplace=False)
+    pl = pv.Plotter(shape=(1, 2), off_screen=True, window_size=(1600, 900))
+    pl.set_background("#f7f9fc")
+    pl.subplot(0, 0)
+    add_solid(pl, curved, "#e0a045", "#6a4a16")
+    shot(pl, (-28, 0, 8), (0.35, -1, 0.25), 80, zoom=1.45)
+    pl.add_text("New: swept on the helix\n0.72 mm bow, 1.52 mm rise", font_size=13, color="#1a222c")
+    pl.subplot(0, 1)
+    add_solid(pl, straight, "#8aa0b4", "#2c3e50")
+    shot(pl, (28, 0, 7), (0.35, -1, 0.25), 80, zoom=1.45)
+    pl.add_text("Previous print: straight extrusion\nThe tube had to bend into this", font_size=13, color="#1a222c")
+    pl.screenshot(os.path.join(REND, "curve_vs_straight.png"))
     pl.close()
 
 
@@ -144,7 +171,7 @@ def render_stack():
     pl.add_text(
         "Along the tube at one base-clip angle\n"
         "Turns 2 and 4 carry clips. Turn 3 sits in both saddles.\n"
-        "10.6 mm of air between the two clips.",
+        "10.4 mm of air between the two curved clips.",
         font_size=11,
         color="#1a222c",
     )
@@ -160,7 +187,9 @@ def render_print_layout():
     pl.add_mesh(bed.extract_feature_edges(45), color="#7a8694", line_width=1.5)
     base = to_poly(spiral_tube_base(draft=True)).translate((0, 20, 0), inplace=False)
     add_solid(pl, base, "#3d6b99", "#183049")
-    clip = to_poly(clip_centered(SPEC), 0.08).translate((0, 0, SPEC.clip_width / 2.0), inplace=False)
+    from parts.spiral_tube_clip import spiral_tube_clip
+
+    clip = to_poly(spiral_tube_clip(draft=True), 0.08)
     # Eight copies, print orientation, around the base. Footprint of each is
     # about 16 x 35 mm, 14 mm tall.
     spots = [(-70, -70), (-25, -70), (25, -70), (70, -70),
@@ -170,7 +199,7 @@ def render_print_layout():
     shot(pl, (0, -30, 10), (0.2, -1.1, 1.05), 420, zoom=1.15)
     pl.add_text(
         "CR-10 300 x 300 mm, PLA, supports off\n"
-        "Base flat on the ring. Eight clips standing on a band end (14 mm tall).",
+        "Base flat on the ring. Eight clips on a helical end (16 mm tall, curved).",
         font_size=12,
         color="#1a222c",
     )
@@ -181,6 +210,7 @@ def render_print_layout():
 if __name__ == "__main__":
     render_base()
     render_clip_views()
+    render_curve_compare()
     render_assembly()
     render_stack()
     render_print_layout()

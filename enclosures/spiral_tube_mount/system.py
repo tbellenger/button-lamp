@@ -5,10 +5,10 @@ Two printed parts share one helix:
 - ``spiral_tube_base`` bolts to the lamp's top deck and carries four C-clips.
   The clips are 90 degrees apart and one quarter-pitch apart in height, so the
   first turn of the tube climbs at the real helix slope.
-- ``spiral_tube_clip`` is one identical sleeve. Its saddles cradle the turn
-  above and the turn below. Clips go on alternating turns (2, 4, 6, ...),
-  in line with the base clips, so every gap has exactly one saddle and the
-  clips never meet.
+- ``spiral_tube_clip`` is one identical sleeve, swept along the helix so the
+  bore and the saddles follow the tube. Clips go on alternating turns
+  (2, 4, 6, ...), in line with the base clips, so every gap has exactly one
+  saddle and the clips never meet.
 
 All lengths are millimetres. The coil diameter is the outside diameter of the
 finished coil (tube included), 12.5 percent under the original printed spiral.
@@ -17,7 +17,22 @@ finished coil (tube included), 12.5 percent under the original printed spiral.
 import math
 from types import SimpleNamespace
 
-from nurb import Circle, Cylinder, Polygon, Pos, Rectangle, Rot, Box, Plane, Vector, extrude, measured, reject
+from nurb import (
+    Box,
+    Circle,
+    Cylinder,
+    Edge,
+    Plane,
+    Polygon,
+    Pos,
+    Rectangle,
+    Rot,
+    Vector,
+    extrude,
+    measured,
+    reject,
+    sweep,
+)
 
 # Bore is a hair over the tube so the silicone and the LED strip are not crushed.
 # The snap opening, not the bore, is what holds the tube.
@@ -277,9 +292,70 @@ def clip_profile(spec):
     return sleeve + head + stem - bore - slot - top - bot
 
 
+def _helix_wire(spec):
+    """Helix segment of `clip_width` along the tube, midpoint at (radius, 0, 0).
+
+    The wire is reversed so its tangent is the descending direction. In that
+    frame the profile's +X is radial outward and its +Y is up, which is the
+    frame `frame_at` uses, and a Frenet sweep keeps both true along the curve.
+    """
+    radius = spec.radius
+    pitch = spec.pitch
+    climb = pitch / (2.0 * math.pi)
+    length = math.hypot(radius, climb)
+    turn = spec.clip_width / length
+    rise = climb * turn
+    wire = Edge.make_helix(pitch, rise, radius)
+    wire = Rot(0, 0, -math.degrees(turn) / 2.0) * wire
+    wire = Pos(0, 0, -rise / 2.0) * wire
+    return wire.reversed()
+
+
+def _start_plane(wire):
+    origin = wire.position_at(0)
+    tangent = wire.tangent_at(0)
+    outward = Vector(origin.X, origin.Y, 0).normalized()
+    return Plane(origin=origin, x_dir=outward, z_dir=tangent)
+
+
+def _swept(spec, profile):
+    """Profile swept along the helix, returned in the `frame_at` local frame."""
+    wire = _helix_wire(spec)
+    solid = sweep(_start_plane(wire) * profile, wire, is_frenet=True)
+    if len(solid.solids()) != 1:
+        reject("the helical sweep did not come back as a single solid", param="clip_width")
+    return frame_at(spec, 0.0, 0.0).location.inverse() * solid
+
+
 def clip_centered(spec):
-    """Clip with the sleeve centre at the origin and the tube axis on Z, from -w/2 to w/2."""
-    return extrude(clip_profile(spec), amount=spec.clip_width / 2.0, both=True)
+    """Curved clip in the local frame: origin on the tube, +Z along the helix tangent."""
+    return _swept(spec, clip_profile(spec))
+
+
+def _local_direction(frame, origin, direction):
+    start = frame.to_local_coords(Vector(origin.X, origin.Y, origin.Z))
+    end = frame.to_local_coords(
+        Vector(origin.X + direction.X, origin.Y + direction.Y, origin.Z + direction.Z)
+    )
+    return (end.X - start.X, end.Y - start.Y, end.Z - start.Z), start
+
+
+def print_location(spec):
+    """Maps a centred clip onto the bed: one helical end flat, the curve rising in +Z.
+
+    The first layer is that end face. The other end leans over by the helix's
+    own turning, about 24 degrees across the 14 mm band, which is under the
+    45 degree overhang limit.
+    """
+    wire = _helix_wire(spec)
+    origin = wire.position_at(0)
+    tangent = wire.tangent_at(0)
+    outward = Vector(origin.X, origin.Y, 0).normalized()
+    frame = frame_at(spec, 0.0, 0.0)
+    radial, start = _local_direction(frame, origin, outward)
+    axis, _ = _local_direction(frame, origin, tangent)
+    parked = Plane(origin=start, x_dir=radial, z_dir=axis).location.inverse()
+    return parked
 
 
 def base_clip_profile(spec):
@@ -312,7 +388,8 @@ def base_clip_profile(spec):
 
 
 def base_clip_centered(spec):
-    return extrude(base_clip_profile(spec), amount=spec.clip_width / 2.0, both=True)
+    """Base clip swept on the same helix as the standalone clip, foot and all."""
+    return _swept(spec, base_clip_profile(spec))
 
 
 def above_bed():

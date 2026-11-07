@@ -6,6 +6,7 @@ Two parts. The base carries the first turn. Identical clips, printed eight times
 
 Modelled with [nurb](https://pypi.org/project/nurb/) (build123d), same layout as the other enclosures: `measurements.toml`, `parts/*.py`, `printer.toml`.
 
+![Curved clip against the straight one](render/curve_vs_straight.png)
 ![Base](render/base_iso.png)
 ![Clip](render/clip_views.png)
 ![On the helix](render/assembled_iso.png)
@@ -26,7 +27,7 @@ Modelled with [nurb](https://pypi.org/project/nurb/) (build123d), same layout as
 | Helix angle | 6.24° |
 | Base footprint | **90.6 × 90.6 mm**, 40.6 mm tall |
 | Base clip centres | 13.5, 19.3, 25.0, 30.8 mm above the deck |
-| One clip | 16.2 × 35.2 mm profile, **14 mm** along the tube |
+| One clip, on the bed | **18.0 × 35.6 × 16.0 mm**. The band follows the helix: 0.72 mm of bow and 1.52 mm of rise over the 14 mm length |
 | Saddle | arc of a 13 mm circle, 1.2 mm deep, 7.6 mm across, 1.2 mm land each side |
 | Coil for a 1000 mm strip | 4.72 turns, 109 mm of rise, top of the tube about 129 mm above the deck |
 
@@ -51,11 +52,17 @@ Sources, in the order that settled it:
 
 The base opens a Ø14 window over the deck's Ø10 hole. The 13 mm tube cannot pass through the deck hole. The leads do, and the window is clear so the start of the coil can be pressed down onto the deck. The first clip is 40° past that window and 2.6 mm higher.
 
+## The curve
+
+The first print extruded every clip straight along the helix tangent. Over the 14 mm band the real tube bows **0.72 mm** toward the coil centre and rises **1.52 mm**. The straight bore made the silicone take that bend.
+
+The bore, the snap mouth, and both saddles are now swept along the helix (a Frenet frame, so the opening stays outward and the saddles stay toward the neighbouring turns). The four base clips use that same sweep, so the first turn bends as well as climbs. Measured along each clip, the tube centre stays 6.70 mm from the bore wall, which is the bore radius. The saddle crowns still land on the turns above and below.
+
 ## Clips
 
 Four per clipped turn, on the same four angles as the base clips. They are **in line**, not staggered.
 
-Each clip wraps one turn and its saddles cradle the turn above and the turn below. Putting a clip on every turn would park two saddles in the same gap. Skipping a turn fixes that: the bare turn sits in the top saddle of the clip below and the bottom saddle of the clip above, and those two clips miss each other by **10.6 mm**. The turn-2 saddle also clears the base clip's mouth by 0.75 mm.
+Each clip wraps one turn and its saddles cradle the turn above and the turn below. Putting a clip on every turn would park two saddles in the same gap. Skipping a turn fixes that: the bare turn sits in the top saddle of the clip below and the bottom saddle of the clip above, and those two clips miss each other by **10.4 mm**. The turn-2 saddle also clears the base clip's mouth by 0.7 mm.
 
 For the 1000 mm strip (`plywood/src/spiral.py` `strip_len`, 160 LEDs):
 
@@ -73,12 +80,12 @@ For the 1000 mm strip (`plywood/src/spiral.py` `strip_len`, 160 LEDs):
 
 Creality CR-10 (300 × 300 × 400), PLA, 0.4 mm nozzle, 0.20 mm layers, 3 walls, 15% gyroid, **supports off**. Tom slices in Cura. Both parts fit on one plate.
 
-| File | Qty | Size (mm) | Triangles | On the bed |
-|---|---|---|---|---|
-| `stl/spiral_tube_base.stl` | 1 | 90.6 × 90.6 × 40.6 | 8,002 | Ring down, as exported. Mouths face up. |
-| `stl/spiral_tube_clip.stl` | 8 | 16.2 × 35.2 × 14.0 | 1,558 | Band end down, as exported. 14 mm tall. |
+| File | Qty | Size (mm) | On the bed |
+|---|---|---|---|
+| `stl/spiral_tube_base.stl` | 1 | 90.6 × 90.6 × 40.6 | Ring down, as exported. Mouths face up. |
+| `stl/spiral_tube_clip.stl` | 8 | 18.0 × 35.6 × 16.0 | One helical end down, as exported. The band curves up from that face. |
 
-The base mouths are open upward and the tower sides are 45°, so nothing bridges. Each clip is a straight extrusion stood on end, so every wall is vertical.
+The base mouths stay open upward and the tower sides stay at 45° (they measure 44.7° once the helix tilt is included), so nothing bridges. Each clip's end face is the first layer. From there the band leans at most 15° off vertical, which is the helix turning through the 14 mm length. Supports stay off. No Cura profile is installed in this build environment; the overhang check is the face-normal measurement above, and `nurb check` reports both parts clean.
 
 ## Rebuild
 
