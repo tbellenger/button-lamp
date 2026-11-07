@@ -15,6 +15,7 @@ Ring that bolts to the Button Lamp top deck and holds the first turn of the 13 m
 - `coil_diameter` is the outside of the finished coil. 80 mm is 12.5 percent under the original spiral's 91.44 mm outside diameter, measured from that STL.
 - Pitch is `tube_od + gap` (23 mm). Each clip is 5.75 mm above the one before it, which is the helix slope.
 - The mouths face up, not out. The saddle clip on the next turn has to sit in that opening, and an upward mouth also prints without a bridged ceiling. The sides of each tower are 45 degrees so the cradle is supported.
+- Each cradle is swept along the helix, not extruded straight. The bore, the mouth, and the 45 degree sides follow the tube's bow and its rise. A straight cradle is what the first print got wrong.
 - The ring is the structure. Four spokes reach the screws. A Ø14 window sits on the deck's Ø10 wire hole at (+11.71, +32.24) mm so the leads drop through and the tube can be pressed down at the start of the coil.
 - The ring and spoke tops take a 0.8 mm chamfer. The snap mouths do not.
 
@@ -25,6 +26,7 @@ min_wall = 1.2
 
 ## Don't
 
+- Don't extrude the four cradles straight along the tangent. The tube bows 0.72 mm and rises 1.52 mm inside a 14 mm clip; a straight bore makes the silicone take that curve.
 - Don't open the base clips outward. The saddle on the turn above nests in the upward mouth, and an outward mouth puts a ceiling over the tube that the saddle cannot reach.
 - Don't put the four clips at one height. The first turn has to climb at the helix angle, a quarter pitch per clip.
 - Don't fill the ring in. A solid plate covers the wire hole and warps.
@@ -34,3 +36,4 @@ min_wall = 1.2
 ## Changelog
 
 - 2026-11-03: first base. Four ramped C-clips on the existing M3 square, coil 80 mm outside.
+- 2026-11-07: swept the four cradles along the helix so the bore follows the tube.

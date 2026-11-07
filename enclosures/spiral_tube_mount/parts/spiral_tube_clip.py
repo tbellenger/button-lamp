@@ -1,13 +1,13 @@
-"""Standalone saddle clip. Print the end on the bed; every wall is vertical."""
+"""Standalone saddle clip. One helical end sits on the bed; the band curves up with the coil."""
 
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nurb import Pos, concave_edges, polish, part
+from nurb import concave_edges, polish, part
 
-from system import clip_centered, specs
+from system import clip_centered, print_location, specs
 
 
 @part
@@ -30,8 +30,13 @@ def spiral_tube_clip(
     clip_width: length of the clip along the tube (mm)
     """
     spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, pad_thickness, clip_width)
-    # Sleeve centre sits at z = clip_width/2 so the band end is the first layer.
-    body = Pos(0, 0, clip_width / 2.0) * clip_centered(spec)
+    local = clip_centered(spec)
+    body = print_location(spec) * local
+    # The end face is the first layer. A hair of numerical noise can sit below z=0.
+    zmin = body.bounding_box().min.Z
+    if zmin < -1.0e-6 or zmin > 1.0e-4:
+        from nurb import Pos
+        body = Pos(0, 0, -zmin) * body
     if draft:
         return body
     keep = body.edges().filter_by(lambda e: e.bounding_box().min.Z > 0.2)
