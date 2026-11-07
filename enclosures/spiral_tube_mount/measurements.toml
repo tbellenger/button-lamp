@@ -1,0 +1,54 @@
+[tube_od]
+value = 13.0
+unit = "mm"
+how = "Silicone neon tube outside diameter, the 5 mm-strip version. plywood/src/spiral.py default_params(tube_od=13) and plywood/PLAN.md."
+
+[old_spiral_coil_od]
+value = 91.44
+unit = "mm"
+how = "Coil outside diameter of the original printed spiral. Measured from original-plans/3D Printable Parts (STL Files)/Spiral (with base).stl (Y and Z extents both 91.440 mm). plywood/PLAN.md records the same 91.44 mm outside diameter, a 22.35 mm tube, and a 68.6 mm centre-line (radius 34.3)."
+
+[coil_diameter]
+value = 80.0
+unit = "mm"
+how = "Outside diameter of the new coil, tube included. 12.5 percent under old_spiral_coil_od (91.44 * 0.875 = 80.01), the middle of the requested 10-15 percent tighter range. Centre-line diameter is coil_diameter - tube_od = 67.0 mm."
+
+[coil_gap]
+value = 10.0
+unit = "mm"
+how = "Clear gap between neighbouring turns of the silicone tube. Pitch = tube_od + coil_gap = 23 mm, so each base clip steps up by 5.75 mm."
+
+[strip_length]
+value = 1000.0
+unit = "mm"
+how = "LED strip in the coil: 160 LEDs. plywood/src/spiral.py strip_len and plywood/PLAN.md."
+
+[top_deck_flange_size]
+value = 92.0
+unit = "mm"
+how = "Keep-in square of the spiral cage flange and the matrix base mount (plywood/src/spiral.py flange=92, enclosures/matrix_16x16_mount). The top panel is only 122 mm front to back, so the mount stays inside this square."
+
+[top_deck_bolt_spacing]
+value = 76.2
+unit = "mm"
+how = "Button Lamp top-deck 4-bolt square, 76.2 mm (3.000 in, +/-38.1 mm). plywood/src/spiral.py bolt_sq=76.2 bolt_d=3.4. Same holes as enclosures/matrix_16x16_mount, verified there against fj125_top_qty1_mm.dxf and sm_al063_hood_qty1_mm.dxf."
+
+[top_deck_wire_offset_x]
+value = 11.71
+unit = "mm"
+how = "Deck wire hole, lateral offset from the bolt-pattern centre in mount coordinates (+X to the right). 116.712 - 105.0 = +11.712 mm. enclosures/matrix_16x16_mount/measurements.toml, from fj125_top_qty1_mm.dxf."
+
+[top_deck_wire_offset_y]
+value = 32.24
+unit = "mm"
+how = "Deck wire hole, rearward offset from the bolt-pattern centre (+Y toward the back of the lamp). 61.0 - 28.761 = 32.239 mm. enclosures/matrix_16x16_mount/measurements.toml, from fj125_top_qty1_mm.dxf."
+
+[top_deck_wire_hole_dia]
+value = 10.0
+unit = "mm"
+how = "Deck wire pass-through. enclosures/matrix_16x16_mount/measurements.toml, verified in fj125_top_qty1_mm.dxf. The 13 mm tube cannot pass through it; the leads do."
+
+[m3_clearance]
+value = 3.4
+unit = "mm"
+how = "M3 medium clearance, ISO 273. Matches plywood/src/spiral.py bolt_d=3.4 and the Ø3.4 mm holes in fj125_top_qty1_mm.dxf. The original Spiral (with base).stl used Ø6.35 mm holes on this same 76.2 mm square for the old plastic enclosure; the plywood and sheet-metal decks are M3."
