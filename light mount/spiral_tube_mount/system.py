@@ -1,368 +1,343 @@
-"""Shared geometry for the spiral tube mount.
+"""Stackable cross mount for the 13 mm silicone LED tube.
 
-Two printed parts share one helix:
+Each level is two diameter pieces that half-lap at the centre, printed flat so
+the C of each clip lies in the layer plane. A centre spacer sits on that lap,
+grips a pin, and holds the next level one pitch higher. The base plate bolts
+to the existing top-deck holes and carries the first pin.
 
-- ``spiral_tube_base`` bolts to the lamp's top deck and carries four C-clips.
-  The clips are 90 degrees apart and one quarter-pitch apart in height, so the
-  first turn of the tube climbs at the real helix slope.
-- ``spiral_tube_clip`` is one identical sleeve. Its saddles cradle the turn
-  above and the turn below. Clips go on alternating turns (2, 4, 6, ...),
-  in line with the base clips, so every gap has exactly one saddle and the
-  clips never meet.
-
-All lengths are millimetres. The coil diameter is the outside diameter of the
-finished coil (tube included), 12.5 percent under the original printed spiral.
+All lengths are millimetres.
 """
 
 import math
 from types import SimpleNamespace
 
-from nurb import Circle, Cylinder, Polygon, Pos, Rectangle, Rot, Box, Plane, Vector, extrude, measured, reject
+from nurb import (
+    Box,
+    Circle,
+    Cone,
+    Cylinder,
+    Plane,
+    Polygon,
+    Pos,
+    Rectangle,
+    Rot,
+    Vector,
+    extrude,
+    loft,
+    measured,
+    reject,
+)
 
-# Bore is a hair over the tube so the silicone and the LED strip are not crushed.
-# The snap opening, not the bore, is what holds the tube.
+# Bore is a hair over the tube so the silicone is not crushed. The mouth holds it.
 BORE_CLEAR = 0.2
-FLANGE_T = 4.0
-SPOKE_W = 10.0
-# Flat the base clip sits on, each side of centre. 8 mm total. The sides rise at 45 degrees.
-PED_HALF = 4.0
-# Saddle is this much narrower than the snap opening, total, so it nests in the base clip.
-SADDLE_SIDE_CLEAR = 1.5
-# First base clip sits this many degrees of helix past the deck wire hole.
+# Half-lap slot is this much wider than the other piece's thickness. Provisional.
+LAP_CLEAR = 0.3
+# Pin hole is this much larger than the pin, on the diameter. Provisional snug fit.
+PIN_CLEAR = 0.2
+PIN_R = 3.0
+FLAT_DEPTH = 1.5
+# Extra room past the pin flat so the flat locates without becoming a press fit.
+FLAT_CLEAR = 0.15
+HUB_H = 14.0
+BOSS_R = 14.0
+PLATE = 100.0
+FLANGE_T = 4.5
+# How far the pin continues past the hub into the next spacer or cap.
+PIN_ENGAGE = 4.5
 LEAD_IN_DEG = 40.0
-# How far the foot blank extends below the clip before the bed plane cuts it.
-FOOT_DROP = 80.0
+# Lowest clip centre. Keeps the clip body above the plate.
+HUB_Z0 = 24.0
 
 
-def specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, pad_thickness, clip_width):
-    """Derived sizes, or a refusal when a combination cannot be printed or assembled."""
+def specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width):
+    """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
-        reject("tube_od must stay between 8 and 20 mm for this sleeve", param="tube_od")
+        reject("tube_od must stay between 8 and 20 mm", param="tube_od")
     if gap < 6.0:
-        reject("gap under 6 mm leaves no room for a saddle between turns", param="gap")
-    if clip_wall < 1.6:
-        reject("clip_wall under 1.6 mm is under four perimeters on a 0.4 mm nozzle", param="clip_wall")
-    if clip_width < 10.0 or clip_width > 20.0:
-        reject("clip_width must stay between 10 and 20 mm along the tube", param="clip_width")
-    if snap_opening >= tube_od - 0.3:
+        reject("gap under 6 mm leaves no room between turns", param="gap")
+    if clip_wall < 2.0:
+        reject("clip_wall under 2 mm is under five perimeters on a 0.4 mm nozzle", param="clip_wall")
+    if clip_width < 12.0 or clip_width > 18.0:
+        reject("clip_width must stay between 12 and 18 mm along the tube", param="clip_width")
+    if snap_opening >= tube_od - 0.4:
         reject(
-            f"snap_opening {snap_opening:.1f} mm is not narrower than the {tube_od:.1f} mm tube; "
-            "drop it at least 0.4 mm under the tube",
+            f"snap_opening {snap_opening:.1f} mm is not narrower than the {tube_od:.1f} mm tube",
             param="snap_opening",
         )
-
     pitch = tube_od + gap
     radius = (coil_diameter - tube_od) / 2.0
-    if radius < 24.0:
-        reject(
-            "coil_diameter is too tight for a 13 mm tube on this deck; raise it",
-            param="coil_diameter",
-        )
-
+    if radius < 36.0 or radius > 55.0:
+        reject("coil centre-line radius must stay between 36 and 55 mm", param="coil_diameter")
     rb = tube_od / 2.0 + BORE_CLEAR
-    ro = rb + clip_wall
-    # Inner surface of an upward-opening cradle. Past 45 degrees above the equator
-    # the lip overhangs when the base is printed openings-up.
     if snap_opening / 2.0 >= rb:
-        reject("snap_opening is wider than the bore, so the clip cannot close on the tube", param="snap_opening")
-    lip_above_equator = math.degrees(math.acos((snap_opening / 2.0) / rb))
-    if lip_above_equator > 42.0:
-        need = 2.0 * rb * math.cos(math.radians(42.0))
+        reject("snap_opening is wider than the bore", param="snap_opening")
+    ro = rb + clip_wall
+    # The curved bore shifts outward at the ends of the clip by about this much.
+    sagitta = radius * (1.0 - math.cos((clip_width / 2.0) / radius))
+    if clip_wall - sagitta < 1.6:
         reject(
-            f"snap_opening {snap_opening:.1f} mm wraps so far over the tube that the base clip "
-            f"overhangs; raise it to at least {need:.1f} mm",
-            param="snap_opening",
+            "the helix bow thins the outer wall under 1.6 mm; raise clip_wall or the coil diameter",
+            param="clip_wall",
         )
-
-    half_chord = snap_opening / 2.0 - SADDLE_SIDE_CLEAR / 2.0
-    if half_chord < 3.0:
+    hole_r = PIN_R + PIN_CLEAR / 2.0
+    # 45-degree teardrop apex, measured from the hole centre along print +Z.
+    apex = hole_r * math.sqrt(2.0)
+    if apex + 1.0 > clip_width / 2.0:
         reject(
-            "snap_opening is too narrow to leave a saddle that nests in the base clip",
-            param="snap_opening",
-        )
-    if half_chord >= tube_od / 2.0:
-        reject(
-            "snap_opening leaves a saddle wider than the tube; lower it",
-            param="snap_opening",
-        )
-    if pad_thickness < 2.4:
-        reject("pad_thickness under 2.4 mm will not print as a solid spacer stem", param="pad_thickness")
-    if pad_thickness > 2.0 * half_chord - 1.0:
-        reject(
-            f"pad_thickness {pad_thickness:.1f} mm is wider than the saddle "
-            f"({2 * half_chord:.1f} mm), so the stem hits the base-clip arms; lower it",
-            param="pad_thickness",
-        )
-
-    alpha = math.atan(pitch / (2.0 * math.pi * radius))
-    # Saddle centres sit this far apart in the plane normal to the tube.
-    # Installed on the helix, that is exactly one pitch in world Z.
-    saddle_dist = pitch * math.cos(alpha)
-    neck = saddle_dist - tube_od / 2.0 - rb - clip_wall
-    if neck < 2.0:
-        reject(
-            f"gap {gap:.1f} mm leaves only {neck:.1f} mm of plastic between the sleeve and the saddle; raise gap",
-            param="gap",
-        )
-    # The real neighbour tube is this far along the clip from the saddle's midplane.
-    along = pitch * math.sin(alpha)
-    if clip_width / 2.0 < along + 2.0:
-        reject(
-            f"clip_width {clip_width:.1f} mm is shorter than the helix needs "
-            f"(the next turn meets the saddle {along:.1f} mm off centre); lengthen the clip",
+            "clip_width is too thin for a 45 degree teardrop over the centre pin hole",
             param="clip_width",
         )
-
-    deck = _deck()
-    keep_r = deck.keep / 2.0 - 0.4
-    if radius + ro > keep_r:
-        reject(
-            "coil_diameter plus the clip wall hangs past the 92 mm deck footprint; lower coil_diameter or clip_wall",
-            param="coil_diameter",
-        )
-    wire_r = math.hypot(deck.wire_x, deck.wire_y)
-    opening_r = deck.wire_d / 2.0 + 2.0
-    if abs(radius - wire_r) > opening_r - 1.0:
-        reject(
-            "coil_diameter moves the tube off the deck's wire hole; keep the tube centre near 34 mm from the bolt centre",
-            param="coil_diameter",
-        )
-
-    ring_in = min(radius - 12.0, wire_r - opening_r - 2.5)
-    ring_out = max(radius + ro + 1.2, wire_r + opening_r + 2.2)
-    if ring_out > keep_r:
-        reject(
-            "the base ring would hang past the 92 mm footprint; lower coil_diameter",
-            param="coil_diameter",
-        )
-    # Spoke tips stay inside the square, including the half-width of the spoke.
-    spoke_r_out = keep_r * math.sqrt(2.0) - SPOKE_W / 2.0 - 0.4
-    bolt_r = deck.bolt_sq / math.sqrt(2.0)
-    if spoke_r_out < bolt_r + deck.hole_d / 2.0 + 3.0:
-        reject("spokes cannot reach the M3 holes and stay inside the 92 mm square", param="coil_diameter")
-
-    z0 = _lowest_clip_z(ro, alpha, clip_width)
-    arc = math.hypot(2.0 * math.pi * radius, pitch)
-    strip = deck.strip
-    rise = strip / arc * pitch
+    if HUB_H / 2.0 < hole_r + 2.4:
+        reject("the half-lap tongue is too short to keep a wall past the pin hole", param="clip_width")
+    quarter = pitch / 4.0
     return SimpleNamespace(
         tube_od=tube_od,
         coil_diameter=coil_diameter,
         gap=gap,
         clip_wall=clip_wall,
         snap_opening=snap_opening,
-        pad_thickness=pad_thickness,
         clip_width=clip_width,
         pitch=pitch,
         radius=radius,
         rb=rb,
         ro=ro,
-        alpha=alpha,
-        saddle_dist=saddle_dist,
-        half_chord=half_chord,
-        beta=math.asin(half_chord / (tube_od / 2.0)),
-        along=along,
-        neck=neck,
-        z0=z0,
-        arc=arc,
-        turns=strip / arc,
-        rise=rise,
-        ring_in=ring_in,
-        ring_out=ring_out,
-        spoke_r_out=spoke_r_out,
-        bolt_r=bolt_r,
-        opening_r=opening_r,
-        wire_r=wire_r,
-        deck=deck,
-        angles=clip_angles(deck),
+        hole_r=hole_r,
+        quarter=quarter,
+        # Clip centres relative to the hub, lowest piece first.
+        low_v=(-1.5 * quarter, 0.5 * quarter),
+        high_v=(-0.5 * quarter, 1.5 * quarter),
+        climb=pitch / (2.0 * math.pi),
+        slot_w=clip_width + LAP_CLEAR,
+        web=pitch - HUB_H,
+        pin_len=HUB_H + PIN_ENGAGE,
+        shoulder=HUB_Z0 - HUB_H / 2.0,
     )
 
 
-def _deck():
+def deck():
+    """Deck holes. Values live in measurements.toml."""
+    cable = measured("light_cable_hole_dia")
+    window = measured("mount_cable_window_dia")
+    if window < cable + 4.0 - 1e-6:
+        reject("the mount window must stay at least 4 mm larger than the light-cable hole")
     return SimpleNamespace(
-        bolt_sq=measured("top_deck_bolt_spacing"),
-        hole_d=measured("m3_clearance"),
+        bolt=measured("top_deck_bolt_spacing"),
+        bolt_d=measured("m3_clearance"),
         wire_x=measured("top_deck_wire_offset_x"),
         wire_y=measured("top_deck_wire_offset_y"),
-        wire_d=measured("top_deck_wire_hole_dia"),
-        keep=measured("top_deck_flange_size"),
-        strip=measured("strip_length"),
+        cable_d=cable,
+        window_d=window,
+        as_cut=measured("top_deck_wire_hole_dia"),
     )
 
 
-def _lowest_clip_z(ro, alpha, clip_width):
-    """Tube-centre height of the lowest base clip.
+def levels_for_strip(strip_mm, radius, pitch):
+    """How many 4-clip levels a strip of this length needs.
 
-    The flat under the clip is tilted with the helix, so the downhill corner is
-    the low point. It embeds 0.3 mm into the ring top, which fuses the tower
-    to the ring without reaching the bore.
+    Stations are a quarter turn apart. The count includes station 0. A level
+    is one low cross and one high cross (four clips). The last level is printed
+    whole even when the strip ends on its third clip.
     """
-    return FLANGE_T + ro * math.cos(alpha) + (clip_width / 2.0) * math.sin(alpha) - 0.3
+    step = 0.5 * math.pi * math.hypot(radius, pitch / (2.0 * math.pi))
+    k = 0
+    while (k + 1) * step <= strip_mm + 1e-6:
+        k += 1
+    stations = k + 1
+    return max(1, math.ceil(stations / 4.0)), stations
 
 
-def clip_angles(deck):
-    """Four angles, lowest first, climbing counterclockwise off the wire hole."""
-    wire = math.degrees(math.atan2(deck.wire_y, deck.wire_x))
-    return tuple((wire + LEAD_IN_DEG + 90.0 * k) % 360.0 for k in range(4))
+def lowest_angle(wire_x, wire_y):
+    """Angle of the lowest clip: wire hole, then a lead-in along the helix."""
+    return math.atan2(wire_y, wire_x) + math.radians(LEAD_IN_DEG)
 
 
-def frame_at(spec, theta, z):
-    """Plane at a tube centre. Local +X is radial out, +Y is up across the tube, +Z runs along it."""
-    radial = (math.cos(theta), math.sin(theta), 0.0)
-    tangent = _tangent_pitched(theta, spec.radius, spec.pitch)
-    up = _up(tangent)
-    z_axis = _cross(radial, up)
-    origin = (spec.radius * radial[0], spec.radius * radial[1], z)
-    return Plane(origin=Vector(*origin), x_dir=Vector(*radial), z_dir=Vector(*z_axis))
+def _teardrop_prism(hole_r, length):
+    """Horizontal hole along Y, 45 degree roof toward print +Z, centred on the origin."""
+    a = hole_r * math.sqrt(2.0) / 2.0
+    apex = hole_r * math.sqrt(2.0)
+    face = Circle(hole_r) + Polygon([(a, a), (-a, a), (0.0, apex)])
+    prism = extrude(face, length)
+    # Extrude runs +Z. A +90 degree turn about X sends that axis to -Y and the
+    # apex (+Y in the sketch) to +Z.
+    return Pos(0, length / 2.0, 0) * Rot(90, 0, 0) * prism
 
 
-def _tangent_pitched(theta, radius, pitch):
-    c = pitch / (2.0 * math.pi)
-    tx, ty, tz = -radius * math.sin(theta), radius * math.cos(theta), c
-    n = math.hypot(tx, ty, tz)
-    return (tx / n, ty / n, tz / n)
+def hole_void(spec, with_flat):
+    """Pin hole through the hub. Optional flat on local +X clocks the low piece."""
+    void = _teardrop_prism(spec.hole_r, HUB_H + 4.0)
+    if with_flat:
+        flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
+        blocker = Pos(flat_x + 20.0, 0, 0) * Box(40, HUB_H + 8, spec.clip_width + 8)
+        void -= blocker
+    return void
 
 
-def _up(tangent):
-    """World up, flattened into the plane normal to the tube, then normalised."""
-    tz = tangent[2]
-    ux, uy, uz = -tangent[0] * tz, -tangent[1] * tz, 1.0 - tz * tz
-    n = math.hypot(ux, uy, uz)
-    return (ux / n, uy / n, uz / n)
+def _bore_void(spec, cx, cy, outward):
+    """Curved bore and mouth. Sections stay parallel to the bed so the walls only tilt a few degrees."""
+    radius = spec.radius
+    half = spec.clip_width / 2.0 + 1.4
+    alpha = math.asin(min(0.9, half / radius))
+    sign = 1.0 if outward[0] > 0 else -1.0
+    sections = []
+    for i in range(5):
+        dth = -alpha + 2.0 * alpha * i / 4.0
+        x = cx - radius * (1.0 - math.cos(dth))
+        y = cy + spec.climb * dth
+        z = -radius * math.sin(dth)
+        bore = Pos(x, y, z) * Circle(spec.rb)
+        mouth = Pos(x + sign * spec.ro, y, z) * Rectangle(2.0 * spec.ro + 4.0, spec.snap_opening)
+        sections.append(bore + mouth)
+    solid = loft(sections)
+    if len(solid.solids()) != 1:
+        reject("the curved bore did not loft as a single solid", param="clip_width")
+    return solid
 
 
-def _cross(a, b):
-    return (
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
+def _cross_blank(spec, vs, with_flat, keep_top):
+    """One diameter piece, in its print frame.
 
-
-def clip_profile(spec):
-    """Cross-section of the standalone clip, in the plane normal to the tube.
-
-    +X opens outward (the snap). +Y is toward the next turn. The sleeve is a
-    band around the middle tube. A stem of ``pad_thickness`` rises and falls
-    into saddle heads. Each saddle is a circular cradle of the tube radius,
-    centred exactly one installed pitch away.
+    Profile in XY, thickness along Z. Local +X runs toward the first clip of
+    this piece. Local +Y is up once the piece is stood on the pin.
     """
-    ro = spec.ro
-    sd = spec.saddle_dist
-    rt = spec.tube_od / 2.0
-    # Stop the cradle short of a knife edge. `half_chord` is as wide as the
-    # base opening allows; the last 1.2 mm of that width is a flat land beside
-    # the arc so the lip prints as a real wall. The arc's crown is unchanged,
-    # so the turn still sits at exactly one pitch.
-    land = 1.2
-    reach = spec.half_chord - land
-    phi = math.asin(reach / rt)
-    lip = sd - rt * math.cos(phi)
-    crown = sd - rt
-    sleeve = Circle(ro)
-    # The saddle head is only the cradle itself. The stem between the sleeve
-    # and that cradle is `pad_thickness` wide, which is the vertical bar in
-    # the side view. The head is wider so the cradle can be a real arc, and
-    # it still fits through the base clip's upward opening.
-    head_h = lip - (crown - 0.6)
-    head_c = (lip + crown - 0.6) / 2.0
-    head = Pos(0, head_c) * Rectangle(2.0 * spec.half_chord, head_h)
-    head += Pos(0, -head_c) * Rectangle(2.0 * spec.half_chord, head_h)
-    stem = Rectangle(spec.pad_thickness, 2.0 * (crown + 0.4))
-    bore = Circle(spec.rb)
-    # Slot opens the bore to +X. It starts at the bore centre so the lips remain.
-    slot = Pos(ro, 0) * Rectangle(2.0 * ro + 2.0, spec.snap_opening)
-    top = Pos(0, sd) * Circle(spec.tube_od / 2.0)
-    bot = Pos(0, -sd) * Circle(spec.tube_od / 2.0)
-    return sleeve + head + stem - bore - slot - top - bot
+    radius = spec.radius
+    bar = Rectangle(2.0 * (radius - spec.ro + 3.0), HUB_H)
+    body = bar
+    for v in vs:
+        body += Pos(radius, v) * Circle(spec.ro)
+        body += Pos(-radius, v) * Circle(spec.ro)
+    # keep_top means this piece is the upper half of the lap, so the slot
+    # opens downward. The low piece keeps the bottom and the slot opens up.
+    if keep_top:
+        slot_y = -HUB_H / 4.0
+    else:
+        slot_y = HUB_H / 4.0
+    body -= Pos(0, slot_y) * Rectangle(spec.slot_w, HUB_H / 2.0 + 0.2)
+    solid = Pos(0, 0, -spec.clip_width / 2.0) * extrude(body, spec.clip_width)
+    solid -= hole_void(spec, with_flat)
+    solid -= _bore_void(spec, radius, vs[0], (1.0, 0.0, 0.0))
+    solid -= _bore_void(spec, -radius, vs[1], (-1.0, 0.0, 0.0))
+    if len(solid.solids()) != 1:
+        reject("the cross did not come back as a single solid", param="clip_width")
+    return solid
 
 
-def clip_centered(spec):
-    """Clip with the sleeve centre at the origin and the tube axis on Z, from -w/2 to w/2."""
-    return extrude(clip_profile(spec), amount=spec.clip_width / 2.0, both=True)
+def cross_low(spec):
+    """Lower half of the lap. Its +X clip is the lowest clip of the level."""
+    return _cross_blank(spec, spec.low_v, with_flat=True, keep_top=False)
 
 
-def base_clip_profile(spec):
-    """Upward-opening C with a flat foot and 45 degree sides, so the base prints support-free.
-
-    The top is open. The standalone clip's lower saddle nests in that opening,
-    which is why the base clip does not wrap over the tube.
-    """
-    ro = spec.ro
-    ped = PED_HALF
-    if ped >= ro - 1.0:
-        reject("clip_wall is too small for the 45 degree foot under the base clip", param="clip_wall")
-    y_bot = -ro
-    y_shoulder = y_bot + (ro - ped)  # 45 degrees: run equals rise
-    y_top = ro
-    outer = Polygon(
-        (-ped, y_bot),
-        (ped, y_bot),
-        (ro, y_shoulder),
-        (ro, y_top),
-        (-ro, y_top),
-        (-ro, y_shoulder),
-        align=None,
-    )
-    # Foot blank. The bed plane cuts it flat after the clip is stood on the helix.
-    foot = Pos(0, y_bot - FOOT_DROP / 2.0 + 0.4) * Rectangle(2.0 * ped, FOOT_DROP)
-    bore = Circle(spec.rb)
-    slot = Pos(0, ro) * Rectangle(spec.snap_opening, 2.0 * ro + 2.0)
-    return outer + foot - bore - slot
+def cross_high(spec):
+    """Upper half of the lap. Sits in the low piece's slot, turned 90 degrees."""
+    return _cross_blank(spec, spec.high_v, with_flat=False, keep_top=True)
 
 
-def base_clip_centered(spec):
-    return extrude(base_clip_profile(spec), amount=spec.clip_width / 2.0, both=True)
+def _pin(length):
+    """Vertical pin with a flat on +X. Base of the pin is z=0. Tip is chamfered."""
+    pin = Pos(0, 0, length / 2.0) * Cylinder(PIN_R, length)
+    flat_x = PIN_R - FLAT_DEPTH
+    pin -= Pos(flat_x + 8.0, 0, length / 2.0) * Box(16, 2.0 * PIN_R, length)
+    return pin
 
 
-def above_bed():
-    """Half-space z >= 0, large enough to contain the base."""
-    return Pos(0, 0, 400) * Box(900, 900, 800)
+def _socket_void(spec, web):
+    """Hole up from z=0. A 45 degree cone closes it so the spacer prints without a bridge."""
+    # Stop the cone at 0.6 mm instead of a point so the mesh stays watertight.
+    # The remaining ceiling is under 1.2 mm across and sits inside the pin.
+    tip = 0.6
+    cone_h = spec.hole_r - tip
+    grip = web - cone_h - 0.8
+    if grip < 4.0:
+        reject("the spacer socket is under 4 mm deep; lower the hub or the pin", param="clip_width")
+    void = Pos(0, 0, grip / 2.0) * Cylinder(spec.hole_r, grip + 0.2)
+    void += Pos(0, 0, grip + cone_h / 2.0) * Cone(spec.hole_r, tip, cone_h)
+    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
+    void -= Pos(flat_x + 15.0, 0, web / 2.0) * Box(30, 40, web + 4)
+    return void, grip
 
 
-def ring_and_spokes(spec):
-    deck = spec.deck
-    ring = extrude(Circle(spec.ring_out) - Circle(spec.ring_in), amount=FLANGE_T)
-    body = ring
-    length = spec.spoke_r_out - (spec.ring_in + 2.0)
-    mid = spec.ring_in + 2.0 + length / 2.0
-    for ang in (45.0, 135.0, 225.0, 315.0):
-        spoke = Pos(mid, 0, FLANGE_T / 2.0) * Box(length, SPOKE_W, FLANGE_T)
-        body += Rot(0, 0, ang) * spoke
-    half = deck.bolt_sq / 2.0
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            body -= Pos(sx * half, sy * half, FLANGE_T / 2.0) * Cylinder(deck.hole_d / 2.0, FLANGE_T + 4.0)
-    # Round window over the deck's wire hole. The 13 mm tube stays above the
-    # flange; the leads drop through this window into the Ø10 hole.
-    body -= Pos(deck.wire_x, deck.wire_y, FLANGE_T / 2.0) * Cylinder(spec.opening_r, FLANGE_T + 4.0)
+def spacer(spec):
+    """Disk that clamps one level and a pin that carries the next. Print upright, socket down."""
+    web = spec.web
+    void, grip = _socket_void(spec, web)
+    disk = Pos(0, 0, web / 2.0) * Cylinder(BOSS_R, web)
+    # Root is buried in the disk, wider than the socket, so the pin is part of the disk.
+    root = Pos(0, 0, (grip + web) / 2.0) * Cylinder(PIN_R + 2.2, web - grip)
+    body = disk + root + Pos(0, 0, web - 0.6) * _pin(spec.pin_len + 0.6) - void
+    if len(body.solids()) != 1:
+        reject("the spacer did not come back as a single solid", param="clip_width")
     return body
 
 
-def clipped_turn_numbers(spec):
-    """Even turns whose four in-line clips all still land on the 1000 mm strip.
-
-    Turn 1 is the base. Turn 2 is the first standalone set. The turn between
-    two clipped turns sits in both saddles, so the clips do not touch.
-    """
-    found = []
-    n = 2
-    while True:
-        # Distance along the strip from the lowest clip to this turn at the highest base angle.
-        along = 3.0 * (spec.pitch / 4.0) + (n - 1) * spec.pitch
-        if along > spec.rise + 1.0:
-            break
-        if n % 2 == 0:
-            found.append(n)
-        n += 1
-        if n > 24:
-            break
-    return tuple(found)
+def cap(spec):
+    """Top clamp. A through hole, so it prints without a bridge. No pin above it."""
+    web = spec.web
+    disk = Pos(0, 0, web / 2.0) * Cylinder(BOSS_R, web)
+    hole = Pos(0, 0, web / 2.0) * Cylinder(spec.hole_r, web + 2.0)
+    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
+    hole -= Pos(flat_x + 15.0, 0, web / 2.0) * Box(30, 30, web + 4)
+    body = disk - hole
+    if len(body.solids()) != 1:
+        reject("the cap did not come back as a single solid", param="clip_width")
+    return body
 
 
-def placement_angles(spec):
-    """(theta radians, base tube-centre z) for the four base clips, lowest first."""
-    out = []
-    for i, deg in enumerate(spec.angles):
-        out.append((math.radians(deg), spec.z0 + i * (spec.pitch / 4.0)))
-    return tuple(out)
+def base_plate(spec, holes):
+    """Square plate, centre pin, bolt holes, and the light-cable window."""
+    plate = extrude(Rectangle(PLATE, PLATE), FLANGE_T)
+    boss_h = spec.shoulder - FLANGE_T
+    if boss_h < 6.0:
+        reject("the centre boss is under 6 mm; the lowest clip would hit the plate", param="coil_diameter")
+    boss = Pos(0, 0, FLANGE_T) * extrude(Circle(BOSS_R), boss_h)
+    # Flat faces the lowest clip, not world +X. Bolts and the cable window stay put.
+    theta = math.degrees(lowest_angle(holes.wire_x, holes.wire_y))
+    pin = Pos(0, 0, spec.shoulder - 1.0) * Rot(0, 0, theta) * _pin(spec.pin_len + 1.0)
+    body = plate + boss + pin
+    half = holes.bolt / 2.0
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            body -= Pos(sx * half, sy * half, FLANGE_T / 2.0) * Cylinder(holes.bolt_d / 2.0, FLANGE_T + 2)
+    body -= Pos(holes.wire_x, holes.wire_y, FLANGE_T / 2.0) * Cylinder(holes.window_d / 2.0, FLANGE_T + 2)
+    if len(body.solids()) != 1:
+        reject("the base did not come back as a single solid", param="coil_diameter")
+    return body
+
+
+def place_cross(solid, theta, z_hub):
+    """Stand a print-frame cross on the pin. theta is the angle of its +X clip."""
+    radial = Vector(math.cos(theta), math.sin(theta), 0)
+    z_dir = Vector(math.sin(theta), -math.cos(theta), 0)
+    plane = Plane(origin=Vector(0, 0, z_hub), x_dir=radial, z_dir=z_dir)
+    return plane * solid
+
+
+def fit_coupon(spec):
+    """Lap tongues, a pin, and a socket, joined by break tabs. Clearances are design choices."""
+    return _coupon_solid(spec)
+
+
+def _coupon_solid(spec):
+    """Tongues lie in their print pose. A 2 mm floor ties them to a pin and a socket."""
+    def hub_slice():
+        return extrude(Rectangle(36, HUB_H), spec.clip_width)
+
+    low = hub_slice()
+    low -= Pos(0, HUB_H / 4.0, spec.clip_width / 2.0) * Box(spec.slot_w, HUB_H / 2.0 + 0.2, spec.clip_width + 2)
+    low -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec, True)
+    high = hub_slice()
+    high -= Pos(0, -HUB_H / 4.0, spec.clip_width / 2.0) * Box(spec.slot_w, HUB_H / 2.0 + 0.2, spec.clip_width + 2)
+    high -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec, False)
+    high = Pos(48, 0, 0) * high
+    floor = Pos(24, 0, 1.0) * Box(20, 6, 2.0)
+    # The lap slot removes the middle of each tongue, so the spine sits off to one side.
+    puck = Pos(-12, 30, spec.web / 2.0) * Cylinder(12, spec.web)
+    hole = Pos(-12, 30, spec.web / 2.0) * Cylinder(spec.hole_r, spec.web + 2)
+    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
+    hole -= Pos(-12 + flat_x + 10.0, 30, spec.web / 2.0) * Box(20, 20, spec.web + 4)
+    puck -= hole
+    pin = Pos(14, 30, 0) * _pin(spec.pin_len)
+    spine = Pos(-12, 16, 1.0) * Box(6, 24, 2.0)
+    tie = Pos(2, 30, 1.0) * Box(22, 6, 2.0)
+    body = low + high + floor + puck + pin + spine + tie
+    if len(body.solids()) != 1:
+        reject("the fit coupon did not come back as a single solid", param="clip_width")
+    return body

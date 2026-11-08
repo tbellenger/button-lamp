@@ -112,7 +112,7 @@
    {
     "name": "wire_hole",
     "face": 1,
-    "to_bend_mm": 22.5,
+    "to_bend_mm": 20.0,
     "ok": true
    },
    {
@@ -346,7 +346,7 @@
    {
     "name": "wire_hole",
     "face": 1,
-    "to_bend_mm": 22.39,
+    "to_bend_mm": 19.89,
     "ok": true
    },
    {

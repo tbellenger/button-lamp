@@ -1,8 +1,8 @@
-"""Preview renders of the spiral tube mount: base, clip, stack, and print layout.
-
-Run from this directory:
+"""Renders of the stackable cross mount.
 
     xvfb-run -a python3 render_views.py
+
+No slicer is installed here. These are geometry previews, not sliced toolpaths.
 """
 
 import math
@@ -11,17 +11,41 @@ import os
 import numpy as np
 import pyvista as pv
 
-from system import FLANGE_T, clip_centered, clipped_turn_numbers, frame_at, placement_angles, specs
-from parts.spiral_tube_base import spiral_tube_base
+from system import (
+    HUB_H,
+    HUB_Z0,
+    base_plate,
+    cap,
+    cross_high,
+    cross_low,
+    fit_coupon,
+    levels_for_strip,
+    lowest_angle,
+    place_cross,
+    spacer,
+    specs,
+)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REND = os.path.join(HERE, "render")
 os.makedirs(REND, exist_ok=True)
 
-SPEC = specs(13.0, 80.0, 10.0, 2.4, 11.5, 5.0, 14.0)
+SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0)
+WIRE = (11.71, 32.24)
+THETA = lowest_angle(*WIRE)
+N_LEVELS, _STATIONS = levels_for_strip(1000.0, SPEC.radius, SPEC.pitch)
 
 
-def to_poly(shape, tol=0.12):
+class Holes:
+    bolt = 76.2
+    bolt_d = 3.4
+    wire_x = WIRE[0]
+    wire_y = WIRE[1]
+    cable_d = 15.0
+    window_d = 19.0
+
+
+def to_poly(shape, tol=0.15):
     verts, faces = shape.tessellate(tol)
     pts = np.array([[p.X, p.Y, p.Z] for p in verts], float)
     fac = np.asarray(faces, np.int64)
@@ -31,157 +55,143 @@ def to_poly(shape, tol=0.12):
     return mesh
 
 
-def helix_tube():
-    """The silicone tube from the deck wire hole through the 1000 mm strip."""
-    first = placement_angles(SPEC)[0][0]
-    wire = math.atan2(SPEC.deck.wire_y, SPEC.deck.wire_x)
-    end = first + SPEC.turns * 2.0 * math.pi
-    theta = np.linspace(wire, end, 700)
-    z = SPEC.z0 + (SPEC.pitch / (2.0 * math.pi)) * (theta - first)
+def tube_mesh():
+    """Silicone from just before the first clip to the 15th station (end of 1 m)."""
+    z0 = HUB_Z0 - 1.5 * SPEC.quarter
+    climb = SPEC.pitch / (2.0 * math.pi)
+    last = 14 * math.pi / 2.0
+    theta = np.linspace(THETA - 0.35, THETA + last, 600)
+    z = z0 + climb * (theta - THETA)
     pts = np.c_[SPEC.radius * np.cos(theta), SPEC.radius * np.sin(theta), z]
-    return pv.Spline(pts, len(pts)).tube(radius=SPEC.tube_od / 2.0, n_sides=24)
+    return pv.Spline(pts, len(pts)).tube(radius=SPEC.tube_od / 2.0, n_sides=20)
 
 
-def placed_clips():
-    blank = clip_centered(SPEC)
-    meshes = []
-    for theta, z_base in placement_angles(SPEC):
-        for turn in clipped_turn_numbers(SPEC):
-            z = z_base + (turn - 1) * SPEC.pitch
-            meshes.append(to_poly(frame_at(SPEC, theta, z) * blank))
-    return meshes
+def stack(explode=0.0):
+    """Placed parts. explode adds a gap between levels, in mm."""
+    low = cross_low(SPEC)
+    high = cross_high(SPEC)
+    sp = spacer(SPEC)
+    top = cap(SPEC)
+    base = to_poly(base_plate(SPEC, Holes))
+    parts = [("base", base)]
+    spin = math.degrees(THETA)
+    for i in range(N_LEVELS):
+        lift = i * explode
+        z = HUB_Z0 + i * SPEC.pitch + lift
+        parts.append(("low", to_poly(place_cross(low, THETA, z))))
+        parts.append(("high", to_poly(place_cross(high, THETA + math.pi / 2.0, z))))
+        seat = z + HUB_H / 2.0 + (explode * 0.45 if i < N_LEVELS - 1 or explode else 0.0)
+        blank = sp if i < N_LEVELS - 1 else top
+        moved = pv_rotate(to_poly(blank), spin)
+        moved.translate((0, 0, seat), inplace=True)
+        parts.append(("spacer" if i < N_LEVELS - 1 else "cap", moved))
+    return parts
 
 
-def add_solid(pl, mesh, color, edge):
-    pl.add_mesh(mesh, color=color, specular=0.35, smooth_shading=False)
-    pl.add_mesh(mesh.extract_feature_edges(35), color=edge, line_width=1.0)
+def pv_rotate(mesh, degrees):
+    mesh.rotate_z(degrees, inplace=True)
+    return mesh
 
 
-def shot(pl, center, direction, distance, up=(0, 0, 1), zoom=1.15):
-    d = np.array(direction, float)
-    d /= np.linalg.norm(d)
+COLORS = {
+    "base": "#c4b8a5",
+    "low": "#e07a3d",
+    "high": "#3d7ea6",
+    "spacer": "#e2c14a",
+    "cap": "#6e6a64",
+}
+
+
+def add_solid(pl, mesh, color):
+    pl.add_mesh(mesh, color=color, specular=0.3, smooth_shading=False)
+    pl.add_mesh(mesh.extract_feature_edges(35), color="#2a2622", line_width=1.0)
+
+
+def shot(pl, center, direction, distance, up=(0, 0, 1), zoom=1.05):
     c = np.array(center, float)
-    pl.camera_position = [tuple(c + d * distance), tuple(c), up]
-    pl.reset_camera()
+    d = np.array(direction, float)
+    d = d / np.linalg.norm(d)
+    pl.camera.focal_point = c
+    pl.camera.position = c + d * distance
+    pl.camera.up = up
     pl.camera.zoom(zoom)
-    pl.enable_anti_aliasing("ssaa")
 
 
-def render_base():
-    pl = pv.Plotter(off_screen=True, window_size=(1600, 1200))
-    pl.set_background("#f7f9fc")
-    add_solid(pl, to_poly(spiral_tube_base(draft=True)), "#3d6b99", "#183049")
-    shot(pl, (0, 0, 16), (1.15, -1.35, 0.85), 280, zoom=1.2)
-    pl.add_text(
-        "Base  90.6 x 90.6 x 40.6 mm\n"
-        "Four M3 holes on the 76.2 mm deck square. Clips step up 5.75 mm.\n"
-        "Print flat on the ring, openings up. No supports.",
-        font_size=11,
-        color="#1a222c",
-    )
-    pl.screenshot(os.path.join(REND, "base_iso.png"))
+def save(pl, name):
+    pl.render()
+    path = os.path.join(REND, name)
+    pl.screenshot(path)
     pl.close()
+    print(path)
 
 
-def render_clip_views():
-    """End, side, and top of one clip, matching the three views in Tom's sketch."""
-    mesh = to_poly(clip_centered(SPEC), 0.05)
-    # Centred on the origin: +Y is the saddle axis, +Z runs  along the tube.
-    views = [
-        ((0, 0, 1), (0, 1, 0), "Along the tube: sleeve, stem, saddles"),
-        ((1, 0, 0), (0, 0, 1), "Side: 14 mm band, saddle curve top and bottom"),
-        ((0.85, -0.55, 0.55), (0, 0, 1), "Iso, opening facing out"),
-    ]
-    pl = pv.Plotter(shape=(1, 3), off_screen=True, window_size=(1800, 720))
-    pl.set_background("#f7f9fc")
-    for i, (direction, up, caption) in enumerate(views):
-        pl.subplot(0, i)
-        add_solid(pl, mesh, "#e0a045", "#6a4a16")
-        shot(pl, (0, 0, 0), direction, 80, up=up, zoom=1.35)
-        pl.add_text(caption, font_size=12, color="#1a222c")
-    pl.screenshot(os.path.join(REND, "clip_views.png"))
-    pl.close()
+def assembled():
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 1100))
+    pl.set_background("white")
+    for kind, mesh in stack(0.0):
+        add_solid(pl, mesh, COLORS[kind])
+    tube = tube_mesh()
+    pl.add_mesh(tube, color="#f4f1ea", opacity=0.55, smooth_shading=True)
+    shot(pl, (0, 0, 55), (1.3, -1.5, 0.9), 280, zoom=1.15)
+    save(pl, "assembled_iso.png")
 
 
-def render_assembly():
-    pl = pv.Plotter(off_screen=True, window_size=(1700, 1300))
-    pl.set_background("#f7f9fc")
-    deck = pv.Box(bounds=(-60, 60, -60, 60, -3.2, 0))
-    pl.add_mesh(deck, color="#e6c89a", specular=0.15, opacity=0.95)
-    add_solid(pl, to_poly(spiral_tube_base(draft=True)), "#3d6b99", "#183049")
-    for mesh in placed_clips():
-        add_solid(pl, mesh, "#e0a045", "#6a4a16")
-    pl.add_mesh(helix_tube(), color="#f4f1ea", opacity=0.55, specular=0.4)
-    shot(pl, (0, 0, 60), (1.2, -1.25, 0.7), 340, zoom=1.18)
-    pl.add_text(
-        "1000 mm strip, 4.72 turns, pitch 23 mm\n"
-        "8 identical clips on turns 2 and 4, in line with the base clips\n"
-        "The turn between two clips sits in both saddles. The clips do not touch.",
-        font_size=11,
-        color="#1a222c",
-    )
-    pl.screenshot(os.path.join(REND, "assembled_iso.png"))
-    pl.close()
+def exploded():
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 1600))
+    pl.set_background("white")
+    for kind, mesh in stack(36.0):
+        add_solid(pl, mesh, COLORS[kind])
+    shot(pl, (0, 0, 170), (1.2, -1.4, 0.85), 520, zoom=0.95)
+    save(pl, "exploded.png")
 
 
-def render_stack():
-    """Look along the tube at the lowest base angle so the saddles read as arcs."""
-    pl = pv.Plotter(off_screen=True, window_size=(1100, 1400))
-    pl.set_background("#f7f9fc")
-    add_solid(pl, to_poly(spiral_tube_base(draft=True), 0.08), "#3d6b99", "#183049")
-    for mesh in placed_clips():
-        add_solid(pl, mesh, "#e0a045", "#6a4a16")
-    pl.add_mesh(helix_tube(), color="#ffd9a0", opacity=0.45, specular=0.3)
-    theta = placement_angles(SPEC)[0][0]
-    target = np.array([
-        SPEC.radius * math.cos(theta),
-        SPEC.radius * math.sin(theta),
-        SPEC.z0 + 2.0 * SPEC.pitch,
-    ])
-    # Camera sits on the helix tangent so the turns stack as circles.
-    tangent = np.array([-math.sin(theta), math.cos(theta), 0.0])
-    shot(pl, target, tangent, 160, zoom=1.35)
-    pl.add_text(
-        "Along the tube at one base-clip angle\n"
-        "Turns 2 and 4 carry clips. Turn 3 sits in both saddles.\n"
-        "10.6 mm of air between the two clips.",
-        font_size=11,
-        color="#1a222c",
-    )
-    pl.screenshot(os.path.join(REND, "stack_section.png"))
-    pl.close()
+def joint_closeup():
+    """One level, pulled apart just enough to see the lap and the pin."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 1000))
+    pl.set_background("white")
+    low = to_poly(place_cross(cross_low(SPEC), THETA, HUB_Z0))
+    high = to_poly(place_cross(cross_high(SPEC), THETA + math.pi / 2.0, HUB_Z0 + 18))
+    sp = to_poly(spacer(SPEC))
+    sp.rotate_z(math.degrees(THETA), inplace=True)
+    sp.translate((0, 0, HUB_Z0 + HUB_H / 2.0 + 36), inplace=True)
+    base = to_poly(base_plate(SPEC, Holes))
+    add_solid(pl, base, COLORS["base"])
+    add_solid(pl, low, COLORS["low"])
+    add_solid(pl, high, COLORS["high"])
+    add_solid(pl, sp, COLORS["spacer"])
+    shot(pl, (0, 0, 30), (1.1, -0.8, 0.7), 90, zoom=1.3)
+    save(pl, "lap_and_pin.png")
 
 
-def render_print_layout():
-    pl = pv.Plotter(off_screen=True, window_size=(1600, 1200))
-    pl.set_background("#f7f9fc")
-    bed = pv.Box(bounds=(-150, 150, -150, 150, -2, 0))
-    pl.add_mesh(bed, color="#dde3ea", specular=0.1)
-    pl.add_mesh(bed.extract_feature_edges(45), color="#7a8694", line_width=1.5)
-    base = to_poly(spiral_tube_base(draft=True)).translate((0, 20, 0), inplace=False)
-    add_solid(pl, base, "#3d6b99", "#183049")
-    clip = to_poly(clip_centered(SPEC), 0.08).translate((0, 0, SPEC.clip_width / 2.0), inplace=False)
-    # Eight copies, print orientation, around the base. Footprint of each is
-    # about 16 x 35 mm, 14 mm tall.
-    spots = [(-70, -70), (-25, -70), (25, -70), (70, -70),
-             (-70, -115), (-25, -115), (25, -115), (70, -115)]
-    for x, y in spots:
-        add_solid(pl, clip.translate((x, y, 0), inplace=False), "#e0a045", "#6a4a16")
-    shot(pl, (0, -30, 10), (0.2, -1.1, 1.05), 420, zoom=1.15)
-    pl.add_text(
-        "CR-10 300 x 300 mm, PLA, supports off\n"
-        "Base flat on the ring. Eight clips standing on a band end (14 mm tall).",
-        font_size=12,
-        color="#1a222c",
-    )
-    pl.screenshot(os.path.join(REND, "parts_print_layout.png"))
-    pl.close()
+def print_layout():
+    """How each part sits on the bed. Crosses lie flat. Spacer and base stand up."""
+    pl = pv.Plotter(off_screen=True, window_size=(1600, 1000))
+    pl.set_background("white")
+    low = to_poly(cross_low(SPEC))
+    low.translate((0, 0, 7), inplace=True)  # bed face was at z=-7
+    high = to_poly(cross_high(SPEC))
+    high.translate((115, 10, 7), inplace=True)
+    base = to_poly(base_plate(SPEC, Holes))
+    base.translate((-120, -10, 0), inplace=True)
+    sp = to_poly(spacer(SPEC))
+    sp.translate((20, 55, 0), inplace=True)
+    top = to_poly(cap(SPEC))
+    top.translate((60, 55, 0), inplace=True)
+    coupon = to_poly(fit_coupon(SPEC))
+    coupon.translate((-50, 50, 0), inplace=True)
+    add_solid(pl, low, COLORS["low"])
+    add_solid(pl, high, COLORS["high"])
+    add_solid(pl, base, COLORS["base"])
+    add_solid(pl, sp, COLORS["spacer"])
+    add_solid(pl, top, COLORS["cap"])
+    add_solid(pl, coupon, "#b9b4ae")
+    pl.add_text("crosses flat, C in the layers    base flange down    spacer socket down", position="upper_edge", font_size=12, color="black")
+    shot(pl, (10, 15, 0), (0.15, -0.35, 1.6), 420, zoom=0.95)
+    save(pl, "print_orientation.png")
 
 
 if __name__ == "__main__":
-    render_base()
-    render_clip_views()
-    render_assembly()
-    render_stack()
-    render_print_layout()
-    print("wrote", REND)
+    assembled()
+    exploded()
+    joint_closeup()
+    print_layout()

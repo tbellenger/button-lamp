@@ -96,7 +96,7 @@ def bottom_block(p):
 def backer_mesh(sp, cinfo):
     body, cuts = SP.backer(sp, 3.0)
     hx, hy = cinfo['wire_hole_xy']
-    cuts.append(cyl(5.0, 7, hx, hy, -1))
+    cuts.append(cyl(7.5, 7, hx, hy, -1))  # Ø15, matches the deck light-cable hole
     return diff(body, cuts)
 
 COLORS = dict(side_L='#d9b382', side_R='#d9b382', back='#cfa774', top='#e2be8e', slope='#d4ad7b', front='#cfa774',

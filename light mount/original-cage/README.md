@@ -2,7 +2,7 @@
 
 This is the **older printed cage**: one part, four columns, clips up the helix, flange bolted to the plywood top. It is not the stackable cross mount in [`../spiral_tube_mount/`](../spiral_tube_mount/).
 
-The shape is unchanged. These files were moved here so the cage is easy to find. The generator is still [`container/plywood/src/spiral.py`](../../container/plywood/src/spiral.py), which also makes `top_backer_plate.stl` and the bottom blocks. Those stay with the box, under [`container/plywood/stl/`](../../container/plywood/stl/). `src/build_all.py` writes the cage, the end cap, the clip fit test, and `spiral_holder_13mm.png` into this folder.
+The shape is unchanged, including the cage's own Ø8 mm internal wire channel. That channel is not the deck hole. The deck light-cable hole is a separate cut in the plywood (design target Ø15 mm). These files were moved here so the cage is easy to find. The generator is still [`container/plywood/src/spiral.py`](../../container/plywood/src/spiral.py), which also makes `top_backer_plate.stl` and the bottom blocks. Those stay with the box, under [`container/plywood/stl/`](../../container/plywood/stl/). `src/build_all.py` writes the cage, the end cap, the clip fit test, and `spiral_holder_13mm.png` into this folder.
 
 | File | What |
 |---|---|

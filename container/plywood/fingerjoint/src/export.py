@@ -24,7 +24,7 @@ def stats(poly):
 NOTES = dict(
     side='wedge profile; 8 open notches (2 back, 2 top, 3 slope, 1 front) with dogbones; make 2 (flip one). Unchanged from the ordered set',
     back='v2: as ordered + 12.2 mm DC jack hole (y 72, z 24). 2 tabs each end, 3 tabs into the top; USB-C slot 10 x 4.5 + USB window 20 x 18 (drawn from INSIDE)',
-    top='unchanged: 4 x 3.4 cage holes on 76.2 sq + 10 mm wire hole (drawn from ABOVE)',
+    top='4 x 3.4 cage holes on 76.2 sq + 15 mm light-cable hole (drawn from ABOVE)',
     slope='v2 CONTROL SLOPE: replaces the printed Switch Panel. 3 tabs each end; 11 control cut-outs in the printed layout (drawn from OUTSIDE)',
     front='unchanged: 1 tab (12 mm) each end; 28 mm tall',
     bottom='unchanged removable tray: 6 x 3.4 screw holes, 4 x 3.2 Uno holes, 12 x 8 vents',

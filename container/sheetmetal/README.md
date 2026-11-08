@@ -16,7 +16,7 @@ The flat patterns differ slightly because each uses its own material's bend radi
 
 | Part | Flat (mm), Al / steel | Bends | What it carries |
 |---|---|---|---|
-| **hood** | 423.4 × 210 / 423.2 × 210 | 3: **90°, 35.7°, 54.3°**, all the same direction | back: USB window (Uno R4 USB-C), old USB-C slot, **Ø12.2 DC jack**. Top: 4 × M3 cage holes + Ø10 wire hole. Slope: **all 11 control cut-outs**. 6 × Ø3.4 screw holes into the cheek tabs |
+| **hood** | 423.4 × 210 / 423.2 × 210 | 3: **90°, 35.7°, 54.3°**, all the same direction | back: USB window (Uno R4 USB-C), old USB-C slot, **Ø12.2 DC jack**. Top: 4 × M3 cage holes + Ø15 light-cable hole (was Ø10). Slope: **all 11 control cut-outs**. 6 × Ø3.4 screw holes into the cheek tabs |
 | cheek_right / cheek_left | 255.3 × 135.3 / 255.3 × 135.0 | 4 × 90° each, tabs inward | wedge profile, pulled in by the sheet thickness so it nests inside the hood. Back, top and slope tabs (11 mm, 1 screw each) and a long bottom tab (2 screws). Ø2.5 pilots for M3 thread-forming / #4 sheet-metal screws |
 | bottom | 250 × 210 | 0 | removable electronics tray: 4 Uno holes, 12 × Ø8 vents, 4 screw holes into the cheek bottom tabs |
 

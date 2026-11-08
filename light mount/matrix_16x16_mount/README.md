@@ -17,7 +17,7 @@ All three printed parts are designed with [`nurb`](https://pypi.org/project/nurb
 |---|---|---|
 | **Top-deck flange outline** | `92.0 × 92.0 mm` (`R8.0` corners) | Matches `spiral_cage_tube13mm.stl` (`light mount/original-cage/`) and `top_backer_plate.stl` (`container/plywood/src/spiral.py`) |
 | **Top-deck 4-bolt pattern** | `76.2 × 76.2 mm` (`3.000" × 3.000"`) square (`±38.1 mm`) | `4 × Ø3.4 mm` M3 clearance holes verified in `fj125_top_qty1_mm.dxf` and `sm_al063_hood_qty1_mm.dxf` |
-| **Top-deck wire pass-through** | `Ø10.0 mm` at `(+11.71, +32.24) mm` from bolt center + `(0, 0)` center | Base mount provides a `36 × 37 mm` rear wire bay (`Y = +3 .. +40 mm`) covering the SendCutSend laser-cut wire hole at `(+11.71, +32.24) mm` **plus** a `36 × 17 mm` front-center wire bay |
+| **Top-deck wire pass-through** | Design target `Ø15 mm` at `(+11.71, +32.24) mm` (was `Ø10`). The committed DXF is still the as-cut `Ø10` until regenerated. | Base mount's `36 × 37 mm` rear bay already clears `Ø15`. A plywood top already cut at `Ø10` has to be opened by hand. |
 | **LED Matrix PCB** | `160.0 × 160.0 mm` (`2.5 mm` pocket height) | BTF-LIGHTING WS2812B 16×16 256-LED flexible FPCB (`B01DC0IOCK`); `161.0 × 161.0 mm` (`0.5 mm`/side clearance) captive lower pocket |
 | **Pixel Grid Pitch** | `10.0 mm` center-to-center (`16 × 16` cells) | `1.2 mm` internal divider walls (3 perimeters at `0.4 mm` nozzle), `8.8 × 8.8 mm` cell openings over each `5.0 × 5.0 mm` 5050 RGB LED, `8.5 mm` optical mixing depth |
 | **Polycarbonate Diffuser** | `162.0 × 162.0 × 1.0 mm` (1 or 2 stacked sheets) | Akamino `0.039"` (`1.0 mm`) polycarbonate sheet, score-and-snap to `162 × 162 mm`; slides down the `163.0 mm`-wide × `2.5 mm`-deep front track from the open top edge |
@@ -52,7 +52,7 @@ Slice directly in **UltiMaker Cura** for the **Creality CR-10** (`300 × 300 × 
 5. **Slide in the 16×16 Pixel Baffle**: Slide `matrix_16x16_baffle_insert` (`162.4 × 162.4 × 8.5 mm`) straight down through the open top mouth of `matrix_16x16_housing` into the rear track (`Z = 7.7 .. 16.2 mm`). It clamps the flexible PCB flat around its perimeter and isolates all 256 LEDs into individual `10 × 10 mm` cells.
 6. **Slide in the Polycarbonate Diffuser**: Slide the `162.0 × 162.0 mm` polycarbonate sheet(s) down through the open top mouth into the `2.5 mm` front slot (`Z = 16.2 .. 18.7 mm`) in front of the baffle.
 7. **Mount on the Button Lamp Top Deck**:
-   - Route the 3-pin data + 5V/GND leads down through the base mount's rear wire bay directly into the top deck's `Ø10.0 mm` wire hole.
+   - Route the 3-pin data + 5V/GND leads down through the base mount's rear wire bay into the top deck's light-cable hole. Design target is `Ø15 mm`. An already-cut `Ø10` hole has to be opened up.
    - Bolt the `92.0 × 92.0 mm` flange onto the top deck's `76.2 × 76.2 mm` (`3.000"`) bolt pattern with `4 × M3 × 16 mm` screws into `top_backer_plate.stl`.
 
 ---

@@ -12,7 +12,7 @@ Swappable 4-bolt top-deck pedestal mount that bolts `matrix_16x16_housing` onto 
 ## Design notes
 
 - **Exact Button Lamp top-deck footprint**: `92.0 x 92.0 mm` base flange (`R8.0 mm` corners) with `4 x Ø3.4 mm` M3 clearance holes at `(+/-38.1, +/-38.1) mm` (`76.2 mm` square), matching `fj125_top_qty1_mm.dxf`, `sm_al063_hood_qty1_mm.dxf`, and `top_backer_plate.stl`.
-- **Dual-compatible wire pass-through**: The rear-center flange opening (`36 x 37 mm`, `Y = +3.0 .. +40.0 mm`) uncovers the existing `Ø10.0 mm` laser-cut wire hole at `(+11.71, +32.24) mm` on the SendCutSend birch and sheet-metal top decks without drilling a new hole, while the front-center opening also supports center-drilled decks.
+- **Dual-compatible wire pass-through**: The rear-center flange opening (`36 x 37 mm`, `Y = +3.0 .. +40.0 mm`) uncovers the light-cable hole at `(+11.71, +32.24) mm`. The design target is Ø15 mm (the committed DXF is still the as-cut Ø10). The bay already clears Ø15. A top already cut at Ø10 has to be opened by hand. The front-center opening also supports center-drilled decks.
 - **Compression cradle + twin gusseted pillars**: The bottom edge of `matrix_16x16_housing` sits in compression on the `Z = 10.5 mm` front cradle shelf (clearing the M3 base bolt heads), while `4 x M3` bolts pass horizontally through the twin `12 x 12 mm` pillars (`X = +/-30.0 mm`, `Z = 36.0` and `66.0 mm`) into the recessed mounting holes in the housing backplate.
 - **45° truncated gussets and teardrop horizontal bores**: Rear `22.0 mm` 45° gussets brace the pillars against forward/backward bending while ending at `Z = 32.0 mm` so the rear nut faces at `Z = 36.0` and `66.0 mm` remain flat. Horizontal M3 bores carry 45° teardrop crowns so they print round without bridge sag.
 
