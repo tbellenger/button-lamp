@@ -31,7 +31,7 @@ how = "Akamino 0.039 in (1.0 mm) polycarbonate sheet"
 [top_deck_flange_size]
 value = 92.0
 unit = "mm"
-how = "Button Lamp top-deck spiral cage flange outline 92.0 x 92.0 mm from plywood/src/spiral.py and top_backer_plate.stl"
+how = "Button Lamp top-deck spiral cage flange outline 92.0 x 92.0 mm from container/plywood/src/spiral.py and top_backer_plate.stl"
 
 [top_deck_bolt_spacing]
 value = 76.2

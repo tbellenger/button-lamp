@@ -1,7 +1,7 @@
 [matrix_pcb_size]
 value = 160.0
 unit = "mm"
-how = "BTF-LIGHTING WS2812B 16x16 256-LED flexible FPCB (B01DC0IOCK) published outer dimension 160.0 x 160.0 mm; same value as enclosures/matrix_16x16_mount"
+how = "BTF-LIGHTING WS2812B 16x16 256-LED flexible FPCB (B01DC0IOCK) published outer dimension 160.0 x 160.0 mm; same value as light mount/matrix_16x16_mount"
 
 [matrix_pcb_thickness]
 value = 2.5

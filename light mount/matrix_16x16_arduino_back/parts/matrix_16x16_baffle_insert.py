@@ -32,7 +32,7 @@ def matrix_16x16_baffle_insert(
     if frame_rim < 1.2:
         reject("frame_rim under 1.2mm is too thin to seat in the housing pocket", param="frame_rim")
 
-    # Identical envelope to enclosures/matrix_16x16_mount so either print drops
+    # Identical envelope to light mount/matrix_16x16_mount so either print drops
     # into this housing: 162.4 x 162.4 x 8.5 mm, 0.3 mm per side in the 163 mm track.
     grid_span = grid_count * pitch
     outer_size = grid_span - grid_wall + 2.0 * frame_rim

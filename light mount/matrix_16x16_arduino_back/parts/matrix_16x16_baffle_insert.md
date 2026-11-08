@@ -7,7 +7,7 @@ Checks: clean
 
 ## What it is
 
-16×16 pixel baffle, the same 162.4 × 162.4 × 8.5 mm insert as `enclosures/matrix_16x16_mount`. Either print drops into this housing.
+16×16 pixel baffle, the same 162.4 × 162.4 × 8.5 mm insert as `light mount/matrix_16x16_mount`. Either print drops into this housing.
 
 ## Design notes
 
