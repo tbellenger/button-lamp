@@ -20,8 +20,7 @@ def tower_cap(
     clip_width=14.0,
     rib_radial=6.0,
     rib_tangential=3.2,
-    clip_arm=6.0,
-    arm_bevel=3.0,
+    clip_arm=4.0,
     joint_clear=0.2,
     strip_length=1000.0,
     extra_stations=0,
@@ -35,10 +34,9 @@ def tower_cap(
     rib_radial: radial depth of the running rib (mm)
     rib_tangential: width of the running rib the cap pocket clears (mm)
     clip_arm: unused on the cap; kept so the stack shares one set of sliders
-    arm_bevel: unused on the cap; kept so the stack shares one set of sliders
     joint_clear: extra opening on each cap pocket, both ways (mm). Same value as the ring slots.
     strip_length: LED strip length the towers are sized for (mm)
     extra_stations: clips added past the strip, one quarter turn each
     """
-    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, arm_bevel, joint_clear, strip_length, extra_stations)
+    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations)
     return build_cap(spec)

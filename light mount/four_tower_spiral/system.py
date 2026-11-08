@@ -19,7 +19,6 @@ from nurb import (
     Circle,
     Cylinder,
     Plane,
-    Polygon,
     Pos,
     Rectangle,
     Rot,
@@ -52,15 +51,13 @@ RIB_TANGENTIAL = 3.2
 # First clip centre above the ring. The tab below it fills the slot.
 FOOT_CLEAR = 16.0
 CAP_T = 8.0
-# Spoke height along the tower. Matches the rib's radial width, not a full-height web.
-CLIP_ARM = 6.0
-# 45° gusset where that spoke meets the tower. Leg length, both ways.
-ARM_BEVEL = 3.0
+# Vertical size of the spoke at each clip. Local. Not a full-height web.
+CLIP_ARM = 4.0
 
 
 def specs(
     tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width,
-    rib_radial, rib_tangential, clip_arm, arm_bevel, joint_clear, strip_length, extra_stations,
+    rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations,
 ):
     """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
@@ -79,17 +76,8 @@ def specs(
         )
     if rib_radial < 4.0 or rib_radial > 16.0:
         reject("rib_radial must stay between 4 and 16 mm", param="rib_radial")
-    if clip_arm < rib_radial or clip_arm > 16.0:
-        reject(
-            "clip_arm must stay between the tower's radial width and 16 mm. "
-            "Narrower than the rib, the spoke is a partial-width neck again.",
-            param="clip_arm",
-        )
-    if arm_bevel < 1.5 or arm_bevel > 6.0:
-        reject(
-            "arm_bevel must stay between 1.5 and 6 mm. Under 1.5 mm it is a nick, not the slope at the tower.",
-            param="arm_bevel",
-        )
+    if clip_arm < 3.0 or clip_arm > 12.0:
+        reject("clip_arm must stay between 3 and 12 mm", param="clip_arm")
     if joint_clear < 0.2 or joint_clear > 1.0:
         reject(
             "joint_clear must stay between 0.2 and 1.0 mm. 0.2 mm is the snug dry-fit; tighter is a press, not a trial fit.",
@@ -106,12 +94,6 @@ def specs(
         reject("extra_stations must stay between 0 and 12", param="extra_stations")
 
     pitch = tube_od + gap
-    # Same tower's next clip is one full pitch away. Leave a gap between the gussets.
-    if clip_arm + 2.0 * arm_bevel > pitch - 4.0:
-        reject(
-            "the spoke plus its two bevels runs into the next clip on the same tower. Shorten arm_bevel or clip_arm.",
-            param="arm_bevel",
-        )
     radius = (coil_diameter - tube_od) / 2.0
     if radius < 36.0 or radius > 55.0:
         reject("coil centre-line radius must stay between 36 and 55 mm", param="coil_diameter")
@@ -152,7 +134,6 @@ def specs(
         rib_radial=rib_radial,
         rib_tangential=rib_tangential,
         clip_arm=clip_arm,
-        arm_bevel=arm_bevel,
         joint_clear=joint_clear,
         strip_length=strip_length,
         extra_stations=int(extra_stations),
@@ -254,37 +235,6 @@ def _slab(face, z0, height):
     return Pos(0, 0, z0) * extrude(face, height)
 
 
-def _arm_face(spec, y):
-    """Spoke profile in the print plane. +X is radial, +Y is up the tower.
-
-    The spoke is as tall as the tower is deep, and it crosses the whole rib.
-    A 45° gusset fills each elbow where the spoke meets the tower's outer face.
-    The far end stops short of the bore. The clip circle and the mouth are separate.
-    """
-    half = spec.clip_arm / 2.0
-    bevel = spec.arm_bevel
-    x_in = -spec.rib_radial / 2.0
-    x_face = spec.rib_radial / 2.0
-    x_knee = x_face + bevel
-    x_end = spec.tube_x - spec.rb - 0.4
-    if x_knee > x_end - 1.0:
-        reject("arm_bevel reaches the clip bore. Shorten it.", param="arm_bevel")
-    # Concave outline. The two triangles outside the outer face are added material.
-    pts = [
-        (x_in, y - half),
-        (x_face, y - half),
-        (x_face, y - half - bevel),
-        (x_knee, y - half),
-        (x_end, y - half),
-        (x_end, y + half),
-        (x_knee, y + half),
-        (x_face, y + half + bevel),
-        (x_face, y + half),
-        (x_in, y + half),
-    ]
-    return Polygon(pts)
-
-
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up, +Z print-up (tangent once stood).
 
@@ -303,7 +253,10 @@ def build_tower(spec, index):
     for k in stations_for(spec, index):
         y = clip_y(spec, k)
         clip = Pos(spec.tube_x, y) * Circle(spec.ro)
-        solid += _slab(clip + _arm_face(spec, y), spec.bed_z, spec.clip_width)
+        arm_x0 = spec.rib_radial / 2.0 - 1.5
+        arm_x1 = spec.tube_x - spec.rb - 0.4
+        arm = Pos((arm_x0 + arm_x1) / 2.0, y) * Rectangle(max(arm_x1 - arm_x0, 1.0), spec.clip_arm)
+        solid += _slab(clip + arm, spec.bed_z, spec.clip_width)
         solid -= Pos(0, 0, spec.bed_z + spec.clip_width / 2.0) * _bore_void(spec, y)
     if len(solid.solids()) != 1:
         reject("the tower did not come back as a single solid", param="rib_radial")
@@ -417,8 +370,11 @@ def _coupon_solid(spec):
     rib = Pos(0, (28.0 - FLANGE_T) / 2.0) * Rectangle(spec.rib_radial, rib_h)
     solid = _slab(rib, z0, spec.rib_tangential)
     solid -= _tower_mark(spec, 1)
+    arm_x0 = spec.rib_radial / 2.0 - 1.5
+    arm_x1 = spec.tube_x - spec.rb - 0.4
+    arm = Pos((arm_x0 + arm_x1) / 2.0, y_clip) * Rectangle(max(arm_x1 - arm_x0, 1.0), spec.clip_arm)
     clip = Pos(spec.tube_x, y_clip) * Circle(spec.ro)
-    solid += _slab(clip + _arm_face(spec, y_clip), z0, spec.clip_width)
+    solid += _slab(clip + arm, z0, spec.clip_width)
     solid -= Pos(0, 0, z0 + spec.clip_width / 2.0) * _bore_void(spec, y_clip)
     # Two cheeks and a back wall. The gap is the ring slot, open on top so it needs no support.
     radial = spec.rib_radial + spec.joint_clear
