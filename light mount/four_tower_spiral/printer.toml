@@ -1,0 +1,7 @@
+# Creality CR-10 family, regular PLA, open frame. No shipped cr_10 profile.
+# Tom slices in Cura himself. This file only tells nurb the bed and the material.
+material = "pla"
+bed = [300.0, 300.0, 400.0]
+
+[export]
+formats = ["3mf", "stl"]
