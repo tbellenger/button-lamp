@@ -11,7 +11,7 @@ A ring that drops onto the four tenons and holds the towers on their circle. It 
 
 ## Design notes
 
-- The hoop is only wide enough for the 6 mm rib plus a 2.4 mm wall each side. The pockets match that rib, 0.2 mm loose. Not measured.
+- The hoop is only wide enough for the 6 mm rib plus a 2.4 mm wall each side. Each pocket is 6.2 × 3.4 mm, the rib plus the same 0.2 mm used on the ring. Not measured. There is no pin in the pocket.
 - Outer radius stays inside the tube. The clips are below the cap and still open from the outside.
 
 ```toml
@@ -26,3 +26,4 @@ min_wall = 1.2
 ## Changelog
 
 - 2026-11-08: first cap.
+- 2026-11-08: pockets stay the rib section. Same clearance as the ring slots.

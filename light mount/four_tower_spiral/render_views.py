@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REND = os.path.join(HERE, "render")
 os.makedirs(REND, exist_ok=True)
 
-SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 4.0, 1000.0, 0)
+SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 4.0, 0.2, 1000.0, 0)
 
 
 class Holes:
@@ -148,6 +148,22 @@ def clip_closeup():
     save(pl, "clip_closeup.png")
 
 
+def joint_closeup():
+    """Tab lifted out of its slot, with the recessed 1 on the rib and on the ring."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 1000))
+    pl.set_background("white")
+    base = to_poly(build_base(SPEC, Holes)).clip_box((-24, 22, 10, 46, -1, 8), invert=False)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), tower_angle(1)))
+    tower.translate((0, 0, 18.0), inplace=True)
+    # Keep the foot and the recessed digit. The first clip starts above this box.
+    tower = tower.clip_box((-4, 14, 14, 30, 10, 40), invert=False)
+    add_solid(pl, base, COLORS["base"])
+    add_solid(pl, tower, COLORS[1])
+    # From the numbered face, so the tab sits over the slot and both 1s face the camera.
+    shot(pl, (2.0, 27.0, 16.0), (1.15, 0.45, 0.55), 78, zoom=1.15)
+    save(pl, "four_tower_joint.png")
+
+
 def print_layout():
     pl = pv.Plotter(off_screen=True, window_size=(1600, 1000))
     pl.set_background("white")
@@ -172,4 +188,5 @@ if __name__ == "__main__":
     through_view("four_tower_front.png", (0.0, -1.0, 0.15))
     through_view("four_tower_side.png", (1.0, 0.05, 0.12))
     clip_closeup()
+    joint_closeup()
     print_layout()

@@ -19,11 +19,11 @@ from nurb import (
     Circle,
     Cylinder,
     Plane,
-    Polygon,
     Pos,
     Rectangle,
     Rot,
     Vector,
+    Text,
     extrude,
     loft,
     measured,
@@ -31,19 +31,11 @@ from nurb import (
 )
 
 BORE_CLEAR = 0.2
-# Across the flats of the diamond pin. Just over the 5 mm printed-pin floor.
-# Diagonal is this times sqrt(2). Not a measured load; it is the smallest pin
-# the print rules will treat as a real pin rather than a perimeter tube.
-PIN_ACROSS = 5.2
-# Extra on the across-flats opening. Snug. Not measured.
-PIN_CLEAR = 0.2
-TOOTH_W = 1.2
-TOOTH_H = 3.0
-# One lug per tower, close to the pin, so the foot can stay a small pad.
-# Offsets are along the tower's radial axis, from the pin.
-LUG_OFFSET = {0: -4.5, 1: -1.5, 2: 1.5, 3: 4.5}
-LUG_W = 2.0
-LUG_DROP = 4.0
+# Dry-fit opening, snug. Tom glues after the trial fit. Not measured.
+JOINT_CLEAR = 0.2
+# Recessed digit. Shallow so it does not eat the rib or the ring.
+MARK_DEPTH = 0.6
+MARK_FONT = 5.0
 # 0 = +X (right), 1 = +Y (back), 2 = -X, 3 = -Y (front).
 TOWER_NAMES = ("0", "90", "180", "270")
 # Lowest clip is on the back tower. Cable hole is about 20 degrees before it.
@@ -52,12 +44,11 @@ R_PIN = 22.0
 R_OUT = 64.0
 R_IN = 8.0
 FLANGE_T = 4.5
-PIN_H = 8.0
 # Running rib between the foot, the clips, and the cap. Tunable.
 # Radial is the in-plane depth (the uncoil bend). Tangential is the visual width.
 RIB_RADIAL = 6.0
 RIB_TANGENTIAL = 3.2
-# First clip centre above the foot. Clears the socket and the ring.
+# First clip centre above the ring. The tab below it fills the slot.
 FOOT_CLEAR = 16.0
 CAP_T = 8.0
 # Vertical size of the spoke at each clip. Local. Not a full-height web.
@@ -66,7 +57,7 @@ CLIP_ARM = 4.0
 
 def specs(
     tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width,
-    rib_radial, rib_tangential, clip_arm, strip_length, extra_stations,
+    rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations,
 ):
     """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
@@ -87,6 +78,11 @@ def specs(
         reject("rib_radial must stay between 4 and 16 mm", param="rib_radial")
     if clip_arm < 3.0 or clip_arm > 12.0:
         reject("clip_arm must stay between 3 and 12 mm", param="clip_arm")
+    if joint_clear < 0.2 or joint_clear > 1.0:
+        reject(
+            "joint_clear must stay between 0.2 and 1.0 mm. 0.2 mm is the snug dry-fit; tighter is a press, not a trial fit.",
+            param="joint_clear",
+        )
     if snap_opening >= tube_od - 0.4:
         reject(
             f"snap_opening {snap_opening:.1f} mm is not narrower than the {tube_od:.1f} mm tube",
@@ -105,11 +101,6 @@ def specs(
     if snap_opening / 2.0 >= rb:
         reject("snap_opening is wider than the bore", param="snap_opening")
     ro = rb + clip_wall
-    pin_half = PIN_ACROSS * math.sqrt(2.0) / 2.0
-    hole_half = pin_half + PIN_CLEAR * math.sqrt(2.0) / 2.0
-    # Local foot only. The running rib does not have to contain the diamond.
-    foot_half = hole_half + 2.4
-    foot_t = 2.0 * foot_half
 
     climb = pitch / (2.0 * math.pi)
     quarter_arc = 0.5 * math.pi * math.hypot(radius, climb)
@@ -143,6 +134,7 @@ def specs(
         rib_radial=rib_radial,
         rib_tangential=rib_tangential,
         clip_arm=clip_arm,
+        joint_clear=joint_clear,
         strip_length=strip_length,
         extra_stations=int(extra_stations),
         pitch=pitch,
@@ -156,14 +148,10 @@ def specs(
         k_max=k_max,
         cap_y=cap_y,
         tower_len=tower_len,
-        pin_half=pin_half,
-        hole_half=hole_half,
-        foot_half=foot_half,
-        foot_t=foot_t,
-        # Bed side of the foot. The rib and the clips share this face.
-        bed_z=-foot_half,
-        rib_z_center=-foot_half + rib_tangential / 2.0,
-        # Tube centre in the tower frame. The pin is at local x = 0.
+        # Rib sits on z=0. Its centre is what the slot and the cap line up with.
+        bed_z=0.0,
+        rib_z_center=rib_tangential / 2.0,
+        # Tube centre in the tower frame. The slot is at local x = 0.
         tube_x=radius - R_PIN,
     )
 
@@ -206,17 +194,6 @@ def clip_y(spec, k):
     return FOOT_CLEAR + k * spec.quarter
 
 
-def _diamond_face(half):
-    """Square diamond. Points on the axes, so every side is 45 degrees."""
-    return Polygon([(half, 0.0), (0.0, half), (-half, 0.0), (0.0, -half)])
-
-
-def _diamond_along_y(half, length):
-    """Diamond prism along Y, centred on the origin. Sketch +Y becomes print +Z."""
-    prism = extrude(_diamond_face(half), length)
-    return Pos(0, length / 2.0, 0) * Rot(90, 0, 0) * prism
-
-
 def _bore_void(spec, cy):
     """Curved bore and outward mouth. Sections stay parallel to the bed."""
     radius = spec.radius
@@ -238,30 +215,20 @@ def _bore_void(spec, cy):
     return solid
 
 
-def _tooth(spec):
-    """45 degree tooth on the outward side of the socket. Blocks a 180 degree turn."""
-    w = TOOTH_W
-    x_wall = spec.hole_half + 0.5
-    x_tip = spec.hole_half - w
-    face = Polygon([(x_wall, w), (x_wall, -w), (x_tip, 0.0)])
-    prism = extrude(face, TOOTH_H)
-    # Sketch +Y becomes print +Z. The extrude runs to -Y, then shifts up into the foot.
-    return Pos(0, TOOTH_H, 0) * Rot(90, 0, 0) * prism
+# Helix order, counterclockwise and up. 1 is the lowest clip.
+# Index 0 is +X, 1 is +Y (back), 2 is -X, 3 is -Y (front).
+TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 
-def _notches(spec, index):
-    """1, 2, 3 or 4 shallow bites on the inboard edge of the rib. Count is the label."""
-    count = index + 1
-    width = 1.4
-    gap = 0.8
-    y0 = spec.cap_y - 6.0 - count * (width + gap)
-    edge = -spec.rib_radial / 2.0
-    cut = None
-    for n in range(count):
-        y = y0 + n * (width + gap)
-        bite = Pos(edge + 0.35, y + width / 2.0) * Rectangle(1.0, width)
-        cut = bite if cut is None else cut + bite
-    return cut
+def _digit(char):
+    """A small numeral, centred on the origin, in the sketch plane."""
+    return Text(str(char), font_size=MARK_FONT, font="DejaVu Sans")
+
+
+def _tower_mark(spec, index):
+    """Recess the numeral into the top face of the rib, just above the ring."""
+    face = _digit(TOWER_MARK[index])
+    return Pos(0, 8.0, spec.rib_tangential - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
 def _slab(face, z0, height):
@@ -275,79 +242,75 @@ def build_tower(spec, index):
     the spoke into that clip are local and thicker. They share the bed face, so
     nothing hangs below the rib.
     """
-    if index not in LUG_OFFSET:
+    if index not in TOWER_MARK:
         reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
-    z0 = spec.bed_z
-    rib = Pos(0, spec.cap_y / 2.0) * Rectangle(spec.rib_radial, spec.cap_y)
+    # The tab is the same rib, long enough to fill the ring. No separate pin.
+    rib_h = spec.cap_y + FLANGE_T
+    rib = Pos(0, (spec.cap_y - FLANGE_T) / 2.0) * Rectangle(spec.rib_radial, rib_h)
     tenon = Pos(0, spec.cap_y + CAP_T / 2.0) * Rectangle(spec.rib_radial, CAP_T)
-    # The foot is a local pad around the diamond. It is thicker than the rib.
-    foot = Pos(0, FOOT_CLEAR / 2.0) * Rectangle(spec.foot_t, FOOT_CLEAR)
-    lug = Pos(LUG_OFFSET[index], -LUG_DROP / 2.0 + 0.3) * Rectangle(LUG_W, LUG_DROP + 0.6)
-    solid = _slab(rib + tenon - _notches(spec, index), z0, spec.rib_tangential)
-    solid += _slab(foot + lug, z0, spec.foot_t)
+    solid = _slab(rib + tenon, spec.bed_z, spec.rib_tangential)
+    solid -= _tower_mark(spec, index)
     for k in stations_for(spec, index):
         y = clip_y(spec, k)
         clip = Pos(spec.tube_x, y) * Circle(spec.ro)
         arm_x0 = spec.rib_radial / 2.0 - 1.5
         arm_x1 = spec.tube_x - spec.rb - 0.4
         arm = Pos((arm_x0 + arm_x1) / 2.0, y) * Rectangle(max(arm_x1 - arm_x0, 1.0), spec.clip_arm)
-        solid += _slab(clip + arm, z0, spec.clip_width)
-        solid -= Pos(0, 0, z0 + spec.clip_width / 2.0) * _bore_void(spec, y)
-    socket = Pos(0, PIN_H / 2.0, 0) * _diamond_along_y(spec.hole_half, PIN_H + 2.0)
-    solid -= socket
-    solid += _tooth(spec)
+        solid += _slab(clip + arm, spec.bed_z, spec.clip_width)
+        solid -= Pos(0, 0, spec.bed_z + spec.clip_width / 2.0) * _bore_void(spec, y)
     if len(solid.solids()) != 1:
         reject("the tower did not come back as a single solid", param="rib_radial")
     return solid
 
 
-def _pin_groove(spec):
-    """Flat cut on local +X, open at the top of the pin. That side faces outward."""
-    depth = TOOTH_W + PIN_CLEAR + 0.4
-    span = spec.pin_half * 2.0 + 4.0
-    return Pos(spec.pin_half - depth / 2.0 + 0.3, 0, PIN_H) * Box(depth + 0.6, span, PIN_H * 2.0 + 2.0)
-
-
-def _placed_pin(spec, angle):
-    pin = extrude(_diamond_face(spec.pin_half), PIN_H + 0.8)
-    pin -= _pin_groove(spec)
+def _slot(spec, angle):
+    """Through-slot the rib drops into. Same size at every tower."""
+    radial = spec.rib_radial + spec.joint_clear
+    tangent = spec.rib_tangential + spec.joint_clear
     x = R_PIN * math.cos(angle)
     y = R_PIN * math.sin(angle)
-    return Pos(x, y, FLANGE_T - 0.6) * Rot(0, 0, math.degrees(angle)) * pin
-
-
-def _lug_pocket(spec, index, angle):
-    lug_x = LUG_OFFSET[index]
-    radius = R_PIN + lug_x
-    px = radius * math.cos(angle)
-    py = radius * math.sin(angle)
-    # Local X is radial, local Y is the tangent. The lug is clip_width thick along the tangent.
-    return Pos(px, py, FLANGE_T / 2.0) * Rot(0, 0, math.degrees(angle)) * Box(
-        LUG_W + PIN_CLEAR, spec.foot_t + PIN_CLEAR, FLANGE_T + 2.0
+    # Same tangential shift as the cap pocket, so the rib and the slot share a centre.
+    return (
+        Pos(x, y, FLANGE_T / 2.0)
+        * Rot(0, 0, math.degrees(angle))
+        * Pos(0, -spec.rib_z_center, 0)
+        * Box(radial, tangent, FLANGE_T + 2.0)
     )
 
 
+def _base_mark(spec, index, angle):
+    """Recessed numeral on the top of the ring, just outboard of the slot."""
+    # Upright when looking down on the ring, so 1–4 read the same way at every slot.
+    face = Text(TOWER_MARK[index], font_size=MARK_FONT, font="DejaVu Sans")
+    pocket = extrude(face, MARK_DEPTH + 0.2)
+    radius = R_PIN + spec.rib_radial / 2.0 + 4.5
+    x = radius * math.cos(angle)
+    y = radius * math.sin(angle)
+    return Pos(x, y, FLANGE_T - MARK_DEPTH) * pocket
+
+
 def build_base(spec, holes):
-    """Ring. Four diamond pins, four lug pockets, bolts, cable window."""
+    """Ring. Four identical slots, a recessed number by each, bolts, cable window."""
     ring = extrude(Circle(R_OUT) - Circle(R_IN), FLANGE_T)
     body = ring
     for index in range(4):
         ang = tower_angle(index)
-        body += _placed_pin(spec, ang)
-        body -= _lug_pocket(spec, index, ang)
+        body -= _slot(spec, ang)
+        body -= _base_mark(spec, index, ang)
     half = holes.bolt / 2.0
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             body -= Pos(sx * half, sy * half, FLANGE_T / 2.0) * Cylinder(holes.bolt_d / 2.0, FLANGE_T + 2.0)
     body -= Pos(holes.wire_x, holes.wire_y, FLANGE_T / 2.0) * Cylinder(holes.window_d / 2.0, FLANGE_T + 2.0)
-    # Keep the cable window off the pins. A closer coil or a bigger pin would eat it.
+    # Keep every slot off the cable window.
+    half_slot = 0.5 * math.hypot(spec.rib_radial + spec.joint_clear, spec.rib_tangential + spec.joint_clear)
     for index in range(4):
         ang = tower_angle(index)
         px = R_PIN * math.cos(ang)
         py = R_PIN * math.sin(ang)
         dist = math.hypot(px - holes.wire_x, py - holes.wire_y)
-        if dist < spec.pin_half + holes.window_d / 2.0 + 1.5:
-            reject("a tower pin is too close to the light-cable window", param="coil_diameter")
+        if dist < half_slot + holes.window_d / 2.0 + 1.0:
+            reject("a tower slot is too close to the light-cable window", param="coil_diameter")
     if len(body.solids()) != 1:
         reject("the base ring did not come back as a single solid", param="coil_diameter")
     return body
@@ -362,8 +325,8 @@ def build_cap(spec):
         reject("rib_radial leaves no hole in the middle of the cap", param="rib_radial")
     ring = extrude(Circle(outer) - Circle(inner), CAP_T)
     body = ring
-    radial = spec.rib_radial + PIN_CLEAR
-    tangent = spec.rib_tangential + PIN_CLEAR
+    radial = spec.rib_radial + spec.joint_clear
+    tangent = spec.rib_tangential + spec.joint_clear
     # Tower +Z is the clockwise tangent. Cap local +Y is the opposite direction.
     pocket_y = -spec.rib_z_center
     for index in range(4):
@@ -383,7 +346,7 @@ def build_cap(spec):
 
 
 def place_tower(solid, angle):
-    """Stand a print-frame tower on its pin. Local +X is radial, +Y is up."""
+    """Stand a print-frame tower on its slot. Local +X is radial, +Y is up."""
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     # radial × up, so local +Y maps to world up. This +Z is the clockwise tangent.
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
@@ -392,39 +355,35 @@ def place_tower(solid, angle):
 
 
 def build_coupon(spec):
-    """Foot, a diamond gauge, and one clip, in the tower's print pose.
+    """A short rib with its tab, one clip, and a block with the same slot.
 
-    Snap the tab. The gauge should slide into the socket. This lug is the
-    0 degree tower's lug. Clearances are design choices.
+    Snap the link. The tab should drop into the slot. The opening is joint_clear
+    larger than the rib. That allowance is a design choice.
     """
     return _coupon_solid(spec)
 
 
 def _coupon_solid(spec):
-    """Short foot and one clip, plus a diamond gauge on the same bed face."""
     z0 = spec.bed_z
-    y = 24.0
-    rib = Pos(0, 16.0) * Rectangle(spec.rib_radial, 32.0)
-    foot = Pos(0, 8.0) * Rectangle(spec.foot_t, 16.0)
-    lug = Pos(LUG_OFFSET[0], -LUG_DROP / 2.0 + 0.3) * Rectangle(LUG_W, LUG_DROP + 0.6)
+    y_clip = 22.0
+    rib_h = 28.0 + FLANGE_T
+    rib = Pos(0, (28.0 - FLANGE_T) / 2.0) * Rectangle(spec.rib_radial, rib_h)
     solid = _slab(rib, z0, spec.rib_tangential)
-    solid += _slab(foot + lug, z0, spec.foot_t)
+    solid -= _tower_mark(spec, 1)
     arm_x0 = spec.rib_radial / 2.0 - 1.5
     arm_x1 = spec.tube_x - spec.rb - 0.4
-    arm = Pos((arm_x0 + arm_x1) / 2.0, y) * Rectangle(max(arm_x1 - arm_x0, 1.0), spec.clip_arm)
-    clip = Pos(spec.tube_x, y) * Circle(spec.ro)
+    arm = Pos((arm_x0 + arm_x1) / 2.0, y_clip) * Rectangle(max(arm_x1 - arm_x0, 1.0), spec.clip_arm)
+    clip = Pos(spec.tube_x, y_clip) * Circle(spec.ro)
     solid += _slab(clip + arm, z0, spec.clip_width)
-    solid -= Pos(0, 0, z0 + spec.clip_width / 2.0) * _bore_void(spec, y)
-    solid -= Pos(0, PIN_H / 2.0, 0) * _diamond_along_y(spec.hole_half, PIN_H + 2.0)
-    solid += _tooth(spec)
-    # Gauge sits with its bottom point just under the bed, then the tip is shaved flat.
-    gauge = Pos(0, 12.0, spec.bed_z - 1.0 + spec.pin_half) * _diamond_along_y(spec.pin_half, 14.0)
-    gauge -= Pos(spec.pin_half, 12.0, 0) * Box(spec.pin_half * 4.0, 20.0, TOOTH_W * 2.0 + PIN_CLEAR)
-    # Shave the gauge flush with the foot's bed face, leaving about a 2 mm flat.
-    gauge -= Pos(0, 12.0, spec.bed_z - 8.0) * Box(24.0, 30.0, 16.0)
-    gauge = Pos(-28.0, 0, 0) * gauge
-    tab = Pos(-16.0, 8.0, spec.bed_z + 1.0) * Box(20.0, 3.0, 2.0)
-    body = solid + gauge + tab
+    solid -= Pos(0, 0, z0 + spec.clip_width / 2.0) * _bore_void(spec, y_clip)
+    # Two cheeks and a back wall. The gap is the ring slot, open on top so it needs no support.
+    radial = spec.rib_radial + spec.joint_clear
+    tall = spec.rib_tangential + spec.joint_clear
+    block = Pos(-22.0, 4.0, tall / 2.0) * Box(16.0, 12.0, tall)
+    channel = Pos(-22.0, 7.0, tall / 2.0) * Box(radial, 14.0, tall + 2.0)
+    gauge = block - channel
+    link = Pos(-9.0, 2.0, spec.rib_tangential / 2.0) * Box(18.0, 2.4, 2.0)
+    body = solid + gauge + link
     if len(body.solids()) != 1:
         reject("the fit coupon did not come back as a single solid", param="rib_radial")
     return body
