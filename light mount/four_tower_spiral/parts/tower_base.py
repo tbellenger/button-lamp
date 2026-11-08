@@ -20,7 +20,8 @@ def tower_base(
     clip_width=14.0,
     rib_radial=6.0,
     rib_tangential=3.2,
-    clip_arm=4.0,
+    clip_arm=6.0,
+    arm_bevel=3.0,
     joint_clear=0.2,
     strip_length=1000.0,
     extra_stations=0,
@@ -33,10 +34,11 @@ def tower_base(
     clip_width: length of each clip along the tube (mm). The rib is thinner.
     rib_radial: radial depth of the running rib (mm). Raise this first if a tower flexes.
     rib_tangential: width of the running rib across the view through the coil (mm)
-    clip_arm: vertical size of the spoke at each clip (mm)
+    clip_arm: height of the spoke along the tower (mm). Unused on the ring; kept so the stack shares one set of sliders.
+    arm_bevel: unused on the ring; kept so the stack shares one set of sliders
     joint_clear: extra opening on each slot, both ways (mm). 0.2 is the snug dry-fit.
     strip_length: LED strip length the towers are sized for (mm)
     extra_stations: clips added past the strip, one quarter turn each
     """
-    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations)
+    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, arm_bevel, joint_clear, strip_length, extra_stations)
     return build_base(spec, deck())

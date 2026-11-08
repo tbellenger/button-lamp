@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REND = os.path.join(HERE, "render")
 os.makedirs(REND, exist_ok=True)
 
-SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 4.0, 0.2, 1000.0, 0)
+SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 6.0, 3.0, 0.2, 1000.0, 0)
 
 
 class Holes:
