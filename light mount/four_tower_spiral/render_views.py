@@ -164,6 +164,42 @@ def joint_closeup():
     save(pl, "four_tower_joint.png")
 
 
+def arm_ramp_views():
+    """Print-pose views of the spoke. +Z is up. The top falls from the clip to the rib."""
+    y = clip_y(SPEC, 0)
+    mesh = to_poly(build_tower(SPEC, 1))
+    # A cut through the spoke. Feature edges carry the print-+Z profile; the
+    # faces of a paper-thin cut face away from this camera.
+    section = mesh.clip_box((-6, 34, y - 0.4, y + 0.4, -1, 16), invert=False)
+    pl = pv.Plotter(off_screen=True, window_size=(1100, 640))
+    pl.set_background("white")
+    pl.add_mesh(section.extract_feature_edges(25), color="#1c3d52", line_width=3)
+    pl.camera.parallel_projection = True
+    pl.camera.focal_point = (14, y, 6)
+    pl.camera.position = (14, y - 80, 6)
+    pl.camera.up = (0, 0, 1)
+    pl.camera.parallel_scale = 14
+    pl.add_text("print cross-section, +Z up. Low end is the far rib face, X=-3", position="upper_edge", font_size=11, color="black")
+    pl.add_point_labels(
+        [[-3.0, y, 3.6], [12.62, y, 14.4]],
+        ["far edge  X=-3   Z=3.2", "clip  X=12.62   Z=14"],
+        font_size=14,
+        text_color="black",
+        point_color="black",
+        point_size=10,
+        always_visible=True,
+        shape_opacity=0,
+    )
+    save(pl, "four_tower_arm_ramp_far_section.png")
+
+    chunk = mesh.clip_box((-6, 36, y - 12, y + 12, -1, 16), invert=False)
+    pl = pv.Plotter(off_screen=True, window_size=(1100, 800))
+    pl.set_background("white")
+    add_solid(pl, chunk, COLORS[1])
+    shot(pl, (14, y, 6), (0.35, -1.15, 0.7), 48, up=(0, 0, 1), zoom=1.2)
+    save(pl, "four_tower_arm_ramp_far_oblique.png")
+
+
 def print_layout():
     pl = pv.Plotter(off_screen=True, window_size=(1600, 1000))
     pl.set_background("white")
@@ -189,4 +225,5 @@ if __name__ == "__main__":
     through_view("four_tower_side.png", (1.0, 0.05, 0.12))
     clip_closeup()
     joint_closeup()
+    arm_ramp_views()
     print_layout()

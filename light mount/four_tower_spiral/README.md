@@ -17,9 +17,29 @@ What sets it:
 - **3.2 mm tangential** is the width you see edge-on through the coil. It is eight perimeters on a 0.4 mm nozzle, solid, on the 3 mm wall floor. Thinner than 2.4 mm is a ribbon that splits when the tube is pushed into the clip.
 - **6.0 mm radial** is the depth that takes the uncoil bend. That bend is in the layer plane, because the tower prints on its side. Six millimetres is enough to read as a beam over the span from the ring to the cap, and still much smaller than the 10 mm gap between turns. It is not derived from a tube force.
 - The **foot is the same rib**, carried 4.5 mm down through the ring. There is no pad under it.
-- Each **clip stays 14 mm** along the tube, standing off one face of the rib. The spoke into the clip is 4 mm tall.
+- Each **clip stays 14 mm** along the tube, standing off one face of the rib. In the plan of the print the spoke is still 4 mm along the tower. In print-up, its top slopes from that 14 mm clip down to the 3.2 mm rib.
 
 If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. Raise `rib_tangential` only if the rib twists. Raise `clip_arm` if a spoke at the clip root bends. All three are sliders. The slot and the cap pocket follow the rib, plus `joint_clear`.
+
+## The spoke, in the print
+
+The tower lies on its side. +X is radial, out toward the tube. +Y runs along the tower. +Z is print-up, and it is only 3.2 mm on the rib and 14 mm on the clip.
+
+The spoke's outline along the tower is still 4.0 mm. It runs from the far face of the rib to 0.4 mm short of the bore. The tube centre stays at X = 21.5. The mouth stays 11.5 mm. Away from that 4 mm band the rib is still 6.0 by 3.2.
+
+The top is one slope. It crosses the whole rib and meets the far face, the face away from the clip.
+
+| | Print +Z |
+|---|---|
+| Far face of the rib, X = −3.0 | 3.2 mm, flush with the rib top. Measured on the solid. |
+| Clip-facing face of the rib, X = +3.0 | 7.35 mm, partway up the same slope |
+| Where the whole 4 mm of the spoke has entered the clip, X = 12.62 | 14.0 mm, the clip's exterior top |
+| From there to X = 14.4 | stays at 14.0 mm, inside the clip wall and short of the bore |
+| Underside | on the bed, Z = 0, the whole way, including across the rib |
+
+The drop is 10.8 mm over 15.62 mm of radial travel, 34.7° from the bed. Every station measures the same two exterior heights. The helix tilts the bore inside the clip, about ±8 mm along the clip, and that does not lower the tower-side wall: stations 0, 4, 8 and 12 all have a clip solid whose top is 14.0 mm there, and the rib top is 3.2 mm.
+
+The wedge is solid down to the bed, so the slope is a top surface, not a shelf. This is not a measured strength change.
 
 ## Why the towers print on their side
 
@@ -121,5 +141,7 @@ The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are �
 | `render/four_tower_side.png` | Through the side |
 | `render/exploded.png` | Ring, towers, cap |
 | `render/four_tower_joint.png` | Number 1's tab over its slot |
+| `render/four_tower_arm_ramp_far_section.png` | Print cross-section. The low end is the far face of the rib |
+| `render/four_tower_arm_ramp_far_oblique.png` | Same spoke, oblique, slope running across the rib |
 | `render/clip_closeup.png` | Lowest clip, in the print pose |
 | `render/print_orientation.png` | Bed poses, with the numbers |
