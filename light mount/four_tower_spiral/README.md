@@ -2,11 +2,13 @@
 
 A separate way to hold the 13 mm silicone tube. It does not replace the cross mount in [`../spiral_tube_mount/`](../spiral_tube_mount/).
 
-The base is only a ring: the existing M3 bolts, a clear path for the light cable, and four attachment points. Four towers stand at 0°, 90°, 180° and 270°. Clips on the towers follow one helix. A cap drops onto the four tops and holds them on their circle.
+The base is only a ring: the existing M3 bolts, a clear path for the light cable, and four slots. Four towers stand at 0°, 90°, 180° and 270°. Clips on the towers follow one helix. A cap drops onto the four tops and holds them on their circle.
+
+The four feet are the same shape. The towers differ only in clip height and in a recessed number. Tom dry-fits them, then glues. The numbers are the placement guide.
 
 ## How thin the rib is
 
-The first version of this mount was a slab: **26 mm radial by 14 mm tangential**, full height. That blocked the view through the coil. The running member is now a rib **6.0 mm radial by 3.2 mm tangential**. The foot, each clip, and the spoke into that clip are local pads. The cap is a hoop about 11 mm wide instead of a 22 mm band.
+The first version of this mount was a slab: **26 mm radial by 14 mm tangential**, full height. That blocked the view through the coil. The running member is a rib **6.0 mm radial by 3.2 mm tangential**. Each clip and the spoke into that clip are local. The cap is a hoop about 11 mm wide instead of a 22 mm band.
 
 nurb has no stress solver, and there is no measured uncoil force for this tube. The 6.0 × 3.2 mm section is a printable default, not a calculated minimum.
 
@@ -14,10 +16,10 @@ What sets it:
 
 - **3.2 mm tangential** is the width you see edge-on through the coil. It is eight perimeters on a 0.4 mm nozzle, solid, on the 3 mm wall floor. Thinner than 2.4 mm is a ribbon that splits when the tube is pushed into the clip.
 - **6.0 mm radial** is the depth that takes the uncoil bend. That bend is in the layer plane, because the tower prints on its side. Six millimetres is enough to read as a beam over the span from the ring to the cap, and still much smaller than the 10 mm gap between turns. It is not derived from a tube force.
-- The **foot is local**, about 12.4 mm by 12.4 mm and 16 mm tall, only so a 5.2 mm-across-flats diamond pin (the print-rule floor for a pin, diagonal 7.35 mm) has 2.4 mm of wall. That pad does not run up the tower.
+- The **foot is the same rib**, carried 4.5 mm down through the ring. There is no pad under it.
 - Each **clip stays 14 mm** along the tube, standing off one face of the rib. The spoke into the clip is 4 mm tall.
 
-If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. Raise `rib_tangential` only if the rib twists. Raise `clip_arm` if a spoke at the clip root bends. All three are sliders.
+If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. Raise `rib_tangential` only if the rib twists. Raise `clip_arm` if a spoke at the clip root bends. All three are sliders. The slot and the cap pocket follow the rib, plus `joint_clear`.
 
 ## Why the towers print on their side
 
@@ -31,19 +33,40 @@ Clips printed upright, with the layer lines running along the tube, broke across
 | Centre-line radius | 43.5 mm. Outside of the coil is 100 mm. |
 | Pitch | 23 mm. Quarter turn is 5.75 mm of rise. |
 | Towers | 0° (+X, right), 90° (+Y, back), 180° (−X), 270° (−Y, front) |
-| Where the helix starts | The **90° tower**, two notches. Lowest clip. |
+| Where the helix starts | **Number 1**, the 90° tower. Lowest clip. |
 | Lead-in | The cable hole is at (+11.71, +32.24), about 70° from +X. The first clip is at 90°, so the tube climbs about 20° from the hole to that clip, counterclockwise. |
 
 A 1 m strip is 15 clip stations (k = 0…14). Station 15 is past the strip.
 
-| Tower | Notches | Clips on a 1 m strip | Stations |
-|---|---|---|---|
-| `tower_0` | 1 | 3 | 3, 7, 11 |
-| `tower_90` | 2 | 4, including the lowest | 0, 4, 8, 12 |
-| `tower_180` | 3 | 4 | 1, 5, 9, 13 |
-| `tower_270` | 4 | 4, including the highest | 2, 6, 10, 14 |
+The number is helix order, counterclockwise and up. The same digit is recessed into the tower and into the ring beside that tower's slot.
+
+| Number | Tower | Place | Clips on a 1 m strip | Stations |
+|---|---|---|---|---|
+| 1 | `tower_90` | 90°, back, +Y | 4, including the lowest | 0, 4, 8, 12 |
+| 2 | `tower_180` | 180°, −X | 4 | 1, 5, 9, 13 |
+| 3 | `tower_270` | 270°, front, −Y | 4, including the highest | 2, 6, 10, 14 |
+| 4 | `tower_0` | 0°, right, +X | 3 | 3, 7, 11 |
 
 `strip_length` and `extra_stations` change the count and the tower height together. The four towers, the cap, and the ring have to use the same values.
+
+## The joint
+
+Every tower uses the same slot. The rib is the tab. Nothing else is inside the slot.
+
+| | Radial | Tangential | Length |
+|---|---|---|---|
+| Tab (the rib) | 6.0 mm | 3.2 mm | 4.5 mm through the ring, flush with the underside |
+| Ring slot | 6.2 mm | 3.4 mm | through the 4.5 mm ring |
+| Cap tenon | 6.0 mm | 3.2 mm | 8 mm, the rib continued |
+| Cap pocket | 6.2 mm | 3.4 mm | through the 8 mm hoop |
+
+`joint_clear` is 0.2 mm, added on both the radial and the tangential opening. That is the snug row of the fit table. It is a design allowance, not a measured fit. The slider refuses anything under 0.2 mm, because that would be a press, and it allows up to 1.0 mm if a trial is tight. The bore clearance on the tube is a separate 0.2 mm (`BORE_CLEAR`) and is unchanged.
+
+The 4.5 mm of rib inside the ring is the glue length. If the glue wets all four faces, that is about 83 mm² of side contact. That is a practical prototype joint, not a tested strength.
+
+The slots are identical, so a tower will also drop into the wrong slot. The recessed numbers are what keep the helix in order. Match 1 to 1, then 2, 3, and 4, dry-fit the cap, then glue.
+
+The digit is DejaVu Sans, 5 mm font, recessed 0.6 mm. Each glyph is about 2.2–2.7 mm wide and 3.7 mm tall, so it sits inside the 6 mm rib and in the top of the 4.5 mm ring. On the tower it is on the top face of the print, 8 mm above the ring, so the pocket is open upward. On the ring it is just outboard of the slot, also open upward. Both read upright: the tower digit reads up the tower once it is stood, and the ring digits all read the same way when you look down on the deck.
 
 ## Print
 
@@ -51,40 +74,43 @@ Creality CR-10, PLA, 0.4 mm nozzle. Tom slices in Cura. No slicer is installed h
 
 | Part | Qty | Size (mm) | On the bed |
 |---|---|---|---|
-| `tower_base` | 1 | 128 × 128 × 12.7 | Ring down. Pins up. |
-| `tower_0` | 1 | 35 × 122 × 14 overall | On its side. The rib is 6.0 × 3.2. One notch. |
-| `tower_90` | 1 | 35 × 122 × 14 overall | On its side. Two notches. Start of the coil. |
-| `tower_180` | 1 | 35 × 122 × 14 overall | On its side. Three notches. |
-| `tower_270` | 1 | 35 × 122 × 14 overall | On its side. Four notches. |
+| `tower_base` | 1 | 128 × 128 × 4.5 | Ring down. Slots are vertical holes. |
+| `tower_90` | 1 | 32 × 122 × 14 overall | On its side. Number 1. Start of the coil. |
+| `tower_180` | 1 | 32 × 122 × 14 overall | On its side. Number 2. |
+| `tower_270` | 1 | 32 × 122 × 14 overall | On its side. Number 3. |
+| `tower_0` | 1 | 32 × 122 × 14 overall | On its side. Number 4. Three clips. |
 | `tower_cap` | 1 | 55 × 55 × 8 | Ring down. Hoop about 11 mm wide. |
-| `tower_coupon` | 1 | 67 × 35 × 14 | On its side. Print this first. |
+| `tower_coupon` | 1 | 59 × 36 × 14 | On its side. Print this first. |
 
-The diamond socket in the foot points up in that side pose, so the roof is 45°. The top of each tower is a tenon that is part of the same extrusion, full thickness, so it sits on the bed. A pin sticking out the end would have hung in the air.
+The rib is 6.0 × 3.2 and sits on the bed. The top of each tower is the same rib continued, full thickness, so the tenon sits on the bed too. The slot in the ring and the pocket in the cap are vertical through-holes. The digit pockets open on the top face. `nurb check` reports nothing to fix. It does warn: the curved bore meets the bed at 5–8°, which polishes the first layer, and the engraved digits leave small faces and a 0.36 mm section at the glyph stroke. That stroke is the number, not the rib.
 
 ## Fits — not measured
 
 | Fit | Allowance |
 |---|---|
-| Diamond pin into the foot | 0.2 mm extra across the flats. Pin diagonals 8 × 8 mm (5.66 mm across the flats). Hole diagonals 8.28 × 8.28 mm (5.86 mm across the flats). |
-| Lug into its pocket | 0.2 mm extra on the width. Each tower's lug is at a different radius. |
-| Tenon into the cap | 0.2 mm extra on the width and on the thickness. |
+| Rib into the ring slot | 0.2 mm extra on the 6.0 mm radial and on the 3.2 mm tangential. Opening 6.2 × 3.4 mm. |
+| Rib into the cap pocket | The same 0.2 mm, both ways. |
+| Coupon gauge | The same opening: a 6.2 mm gap between cheeks that are 3.4 mm tall, open on top. |
 
-Snug, from the fit table. Nothing here has been printed. The coupon's gauge should slide into the socket. If it binds, change `PIN_CLEAR` and reprint the coupon, not all four towers.
+Nothing here has been printed. Print the coupon, snap the link, and set the tab into the gauge. If it binds, raise `joint_clear` and reprint the coupon before the four towers.
 
 ## Assembly
 
-The ring's pins and the lugs stop two mistakes. A tower turned 180° puts its tooth into solid pin. A tower on the wrong pad puts its lug onto solid ring. The 90° tower, the one with two notches, goes at the back. Its lowest clip faces out, toward the back of the lamp.
+1. Bolt the ring down. Number 1 is at the back, next to the cable window. Then 2, 3, and 4 going counterclockwise as you look down.
+2. Drop each tower into the slot with the same number. The lowest clip on number 1 faces out, toward the back of the lamp.
+3. Dry-fit the cap. It is inboard of the tube.
+4. Either snap the tube in from the outside, starting at the lowest clip and winding counterclockwise, or snap the tube first and drop the cap on from above. The cap does not have to pass the tube.
+5. Glue the feet and the cap once the coil sits where you want it.
 
-The cap is inboard of the tube. Two orders both work:
+The clips stay reachable either way. The cap is what keeps the tops from spreading while the glue sets. There is no pin, tooth, or lug to stop a tower going in the wrong slot or turned end for end. The numbers do that job, and the glue holds it after the trial fit.
 
-1. Towers, then the cap, then snap the tube into the clips from the outside, starting at the lowest clip and winding counterclockwise.
-2. Towers, snap the tube, then drop the cap on from above. The cap does not have to pass the tube.
+## Already-printed towers
 
-The clips stay reachable either way. The cap is what keeps the tops from spreading. The diamond pins keep the feet from twisting.
+The previous four-tower parts (diamond pins, a foot pad, and a lug at a different radius on each tower) do not fit these slots. Reprint the ring, all four towers, and the cap. The cross mount in `spiral_tube_mount/` is a different part and is unchanged.
 
 ## Cable
 
-The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are Ø15. The nearest pin is the back tower's, and it clears that window. USB, the DC jack, and the button holes are not part of this mount.
+The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are Ø15. The nearest slot is number 1, and it clears that window. USB, the DC jack, and the button holes are not part of this mount.
 
 ## Files
 
@@ -94,5 +120,6 @@ The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are �
 | `render/four_tower_front.png` | Through the front, far coil visible |
 | `render/four_tower_side.png` | Through the side |
 | `render/exploded.png` | Ring, towers, cap |
+| `render/four_tower_joint.png` | Number 1's tab over its slot |
 | `render/clip_closeup.png` | Lowest clip, in the print pose |
-| `render/print_orientation.png` | Bed poses |
+| `render/print_orientation.png` | Bed poses, with the numbers |

@@ -21,6 +21,7 @@ def tower_assembly(
     rib_radial=6.0,
     rib_tangential=3.2,
     clip_arm=4.0,
+    joint_clear=0.2,
     strip_length=1000.0,
     extra_stations=0,
 ):
@@ -33,13 +34,14 @@ def tower_assembly(
     rib_radial: radial depth of the running rib (mm)
     rib_tangential: width of the running rib across the view through the coil (mm)
     clip_arm: vertical size of the spoke at each clip (mm)
+    joint_clear: extra opening on the slots and the cap pockets (mm). 0.2 is the snug dry-fit.
     strip_length: LED strip length the towers are sized for (mm)
     extra_stations: clips added past the strip, one quarter turn each
     """
     spec = specs(
         float(tube_od), float(coil_diameter), float(gap), float(clip_wall),
         float(snap_opening), float(clip_width), float(rib_radial), float(rib_tangential),
-        float(clip_arm), float(strip_length), int(extra_stations),
+        float(clip_arm), float(joint_clear), float(strip_length), int(extra_stations),
     )
     common = dict(
         tube_od=float(tube_od),
@@ -51,6 +53,7 @@ def tower_assembly(
         rib_radial=float(rib_radial),
         rib_tangential=float(rib_tangential),
         clip_arm=float(clip_arm),
+        joint_clear=float(joint_clear),
         strip_length=float(strip_length),
         extra_stations=int(extra_stations),
     )
