@@ -239,33 +239,32 @@ def _slab(face, z0, height):
 def _arm_wedge(spec, y):
     """Spoke from the rib to the clip, in the print frame.
 
-    The plan is the original 4 mm rectangle. In print +Z the top falls from the
-    clip's exterior height down to the rib's top, and the underside stays on the
-    bed. The helix tilts the bore inside the clip; it does not change these two
-    exterior heights, which are the same at every station.
+    The plan is the original 4 mm rectangle. In print +Z the top is one slope
+    from the clip's exterior height down to the far face of the rib, across the
+    whole radial width. The underside stays on the bed. The helix tilts the bore
+    inside the clip; it does not change these two exterior heights.
     """
     half = spec.clip_arm / 2.0
     if half >= spec.ro - 0.4:
         reject("clip_arm is wide enough to reach through the clip wall", param="clip_arm")
-    x0 = spec.rib_radial / 2.0 - 1.5
-    x_face = spec.rib_radial / 2.0
+    # Far face of the rib, away from the clip. The slope meets the rib height here.
+    x_far = -spec.rib_radial / 2.0
     # X where the whole 4 mm of the spoke has crossed into the clip.
     x_hi = spec.tube_x - math.sqrt(spec.ro * spec.ro - half * half)
     x_end = spec.tube_x - spec.rb - 0.4
     z_lo = spec.rib_tangential
     z_hi = spec.clip_width
-    if x_face + 1.0 >= x_hi or x_hi + 0.4 >= x_end:
+    if x_far + 2.0 >= x_hi or x_hi + 0.4 >= x_end:
         reject("the spoke ramp has no room between the rib and the bore", param="clip_arm")
     # Sketch: X is radial, Y stands in for print +Z. Extrude the 4 mm thickness,
     # then Rot(90) about X lays that thickness along the tower and the sketch Y up.
     face = Polygon(
         [
-            (x0, 0.0),
+            (x_far, 0.0),
             (x_end, 0.0),
             (x_end, z_hi),
             (x_hi, z_hi),
-            (x_face, z_lo),
-            (x0, z_lo),
+            (x_far, z_lo),
         ]
     )
     return Pos(0, y + half, 0) * Rot(90, 0, 0) * extrude(face, spec.clip_arm)

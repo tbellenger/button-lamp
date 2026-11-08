@@ -25,18 +25,19 @@ If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth w
 
 The tower lies on its side. +X is radial, out toward the tube. +Y runs along the tower. +Z is print-up, and it is only 3.2 mm on the rib and 14 mm on the clip.
 
-The spoke's outline in X and Y is the original one: 4.0 mm along the tower, from 1.5 mm inside the rib's outer face to 0.4 mm short of the bore. The tube centre stays at X = 21.5. The mouth stays 11.5 mm.
+The spoke's outline along the tower is still 4.0 mm. It runs from the far face of the rib to 0.4 mm short of the bore. The tube centre stays at X = 21.5. The mouth stays 11.5 mm. Away from that 4 mm band the rib is still 6.0 by 3.2.
 
-What changed is the top surface. It is a single wedge:
+The top is one slope. It crosses the whole rib and meets the far face, the face away from the clip.
 
 | | Print +Z |
 |---|---|
-| At the rib's outer face, X = 3.0 | 3.2 mm, the rib's own top. Measured on the solid. |
+| Far face of the rib, X = −3.0 | 3.2 mm, flush with the rib top. Measured on the solid. |
+| Clip-facing face of the rib, X = +3.0 | 7.35 mm, partway up the same slope |
 | Where the whole 4 mm of the spoke has entered the clip, X = 12.62 | 14.0 mm, the clip's exterior top |
 | From there to X = 14.4 | stays at 14.0 mm, inside the clip wall and short of the bore |
-| Underside | on the bed, Z = 0, the whole way |
+| Underside | on the bed, Z = 0, the whole way, including across the rib |
 
-The drop is 10.8 mm over 9.62 mm of radial travel, 48.3° from the bed. Every station measures the same two exterior heights. The helix tilts the bore inside the clip, about ±8 mm along the clip, and that does not lower the tower-side wall: stations 0, 4, 8 and 12 all have a clip solid whose top is 14.0 mm there, and the rib top is 3.2 mm away from the spoke.
+The drop is 10.8 mm over 15.62 mm of radial travel, 34.7° from the bed. Every station measures the same two exterior heights. The helix tilts the bore inside the clip, about ±8 mm along the clip, and that does not lower the tower-side wall: stations 0, 4, 8 and 12 all have a clip solid whose top is 14.0 mm there, and the rib top is 3.2 mm.
 
 The wedge is solid down to the bed, so the slope is a top surface, not a shelf. This is not a measured strength change.
 
@@ -140,7 +141,7 @@ The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are �
 | `render/four_tower_side.png` | Through the side |
 | `render/exploded.png` | Ring, towers, cap |
 | `render/four_tower_joint.png` | Number 1's tab over its slot |
-| `render/four_tower_arm_ramp_section.png` | Print cross-section, +Z up, the slope from clip to rib |
-| `render/four_tower_arm_ramp_oblique.png` | Same spoke, oblique, so the slope is not hidden in the outline |
+| `render/four_tower_arm_ramp_far_section.png` | Print cross-section. The low end is the far face of the rib |
+| `render/four_tower_arm_ramp_far_oblique.png` | Same spoke, oblique, slope running across the rib |
 | `render/clip_closeup.png` | Lowest clip, in the print pose |
 | `render/print_orientation.png` | Bed poses, with the numbers |

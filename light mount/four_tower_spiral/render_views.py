@@ -179,15 +179,25 @@ def arm_ramp_views():
     pl.camera.position = (14, y - 80, 6)
     pl.camera.up = (0, 0, 1)
     pl.camera.parallel_scale = 14
-    pl.add_text("print cross-section, +Z up: 14 mm at the clip, 3.2 mm at the rib", position="upper_edge", font_size=11, color="black")
-    save(pl, "four_tower_arm_ramp_section.png")
+    pl.add_text("print cross-section, +Z up. Low end is the far rib face, X=-3", position="upper_edge", font_size=11, color="black")
+    pl.add_point_labels(
+        [[-3.0, y, 3.6], [12.62, y, 14.4]],
+        ["far edge  X=-3   Z=3.2", "clip  X=12.62   Z=14"],
+        font_size=14,
+        text_color="black",
+        point_color="black",
+        point_size=10,
+        always_visible=True,
+        shape_opacity=0,
+    )
+    save(pl, "four_tower_arm_ramp_far_section.png")
 
     chunk = mesh.clip_box((-6, 36, y - 12, y + 12, -1, 16), invert=False)
     pl = pv.Plotter(off_screen=True, window_size=(1100, 800))
     pl.set_background("white")
     add_solid(pl, chunk, COLORS[1])
     shot(pl, (14, y, 6), (0.35, -1.15, 0.7), 48, up=(0, 0, 1), zoom=1.2)
-    save(pl, "four_tower_arm_ramp_oblique.png")
+    save(pl, "four_tower_arm_ramp_far_oblique.png")
 
 
 def print_layout():
