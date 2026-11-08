@@ -10,13 +10,13 @@ There are three casings, all the same 250 × 210 × 120 mm wedge:
 
 | Casing | Where | Controls mount in |
 |---|---|---|
-| Hand-cut 3 mm ply, butt joints + glue strips | [plywood/README.md](plywood/README.md), plan [plywood/PLAN.pdf](plywood/PLAN.pdf) | the printed Switch Panel, screwed on the slope |
-| **Laser-cut 1/8" birch, finger joints (SendCutSend)** | [plywood/fingerjoint/README.md](plywood/fingerjoint/README.md) | **v2:** straight in the birch control slope (no printed panel). The set as ordered (S7872337) and a birch retrofit faceplate are there too |
-| **Bent sheet metal, 5052 Al .063" or mild steel .059" (SendCutSend)** | [sheetmetal/README.md](sheetmetal/README.md) | straight in the hood's sloped face |
+| Hand-cut 3 mm ply, butt joints + glue strips | [container/plywood/README.md](container/plywood/README.md), plan [container/plywood/PLAN.pdf](container/plywood/PLAN.pdf) | the printed Switch Panel, screwed on the slope |
+| **Laser-cut 1/8" birch, finger joints (SendCutSend)** | [container/plywood/fingerjoint/README.md](container/plywood/fingerjoint/README.md) | **v2:** straight in the birch control slope (no printed panel). The set as ordered (S7872337) and a birch retrofit faceplate are there too |
+| **Bent sheet metal, 5052 Al .063" or mild steel .059" (SendCutSend)** | [container/sheetmetal/README.md](container/sheetmetal/README.md) | straight in the hood's sloped face |
 
-The two laser-cut versions share one control layout (`plywood/fingerjoint/src/controls.py`, measured from the printed Switch Panel). Both have a 12.2 mm DC jack hole on the back for a 5 V 10 A supply, and keep the USB window for the Uno R4 WiFi's USB-C. The spiral holder is unchanged for now.
+The two laser-cut versions share one control layout (`container/plywood/fingerjoint/src/controls.py`, measured from the printed Switch Panel). Both have a 12.2 mm DC jack hole on the back for a 5 V 10 A supply, and keep the USB window for the Uno R4 WiFi's USB-C.
 
-A 3D-printable, support-free 16×16 WS2812B LED matrix and 162×162 mm polycarbonate diffuser attachment swaps onto the 3" 4-bolt top deck in place of the spiral holder: [enclosures/matrix_16x16_mount/](enclosures/matrix_16x16_mount/).
+Light mounts (the original one-piece cage, the stackable tube mount, and the 16×16 matrix) are in [light mount/](light%20mount/).
 
 The strip is the BTF FCOB 160/m 5 mm strip, left at **1000 mm / 160 LEDs** (it was cut a bit long for the old 900 mm / 144 LED plan), in the 13 mm JARBIH silicone tube. `LED_COUNT` is 160. The coil is sized for that metre: 1037 mm of tube, 4.75 turns.
 
@@ -180,7 +180,7 @@ The phone page can do the same upload, and can also pull the GitHub release. See
 
 #### What it plays
 
-The page is a picture of the spiral lamp's **physical** control panel, with a Presets list under it (collapsed; tap a name for the steps). The panel itself: the printed `Switch Panel` layout (184.15 × 133.35 mm, fader along the front edge), with the same centres as `plywood/fingerjoint/src/controls.py`. Birch face, red and white arcade buttons, key switch, red mushroom, toggle, vertical rocker, red flip-cover over the wave toggle, speed knob, and the brightness fader. Buttons press in, the key turns, the mushroom latches, the rocker and toggles flip, the cover opens, and the knob and fader move by drag.
+The page is a picture of the spiral lamp's **physical** control panel, with a Presets list under it (collapsed; tap a name for the steps). The panel itself: the printed `Switch Panel` layout (184.15 × 133.35 mm, fader along the front edge), with the same centres as `container/plywood/fingerjoint/src/controls.py`. Birch face, red and white arcade buttons, key switch, red mushroom, toggle, vertical rocker, red flip-cover over the wave toggle, speed knob, and the brightness fader. Buttons press in, the key turns, the mushroom latches, the rocker and toggles flip, the cover opens, and the knob and fader move by drag.
 
 The mode is whatever those switches would select on the spiral lamp. Centres and pins, from the front edge up:
 
@@ -350,7 +350,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `docs/wiring_diagram_OUTDATED.png` | Old diagram. Strip is shown powered from the Arduino. Do not follow it. |
 | `docs/draw_wiring.py` | Script that drew that diagram |
 | `original-plans/` | Purchased originals, kept for reference |
-| `plywood/` | Plywood enclosure and tube spiral ([readme](plywood/README.md), [plan](plywood/PLAN.pdf)) |
-| `plywood/fingerjoint/` | Laser-cut finger-joint birch casing: v2 control slope, as-ordered set, retrofit faceplate ([readme](plywood/fingerjoint/README.md)) |
-| `sheetmetal/` | Bent sheet-metal casing, aluminium and steel DXFs ([readme](sheetmetal/README.md)) |
-| `enclosures/matrix_16x16_mount/` | 3D-printable support-free 16×16 WS2812B matrix and 162×162 mm polycarbonate diffuser on the 3" 4-bolt top deck ([readme](enclosures/matrix_16x16_mount/README.md)) |
+| `container/plywood/` | Plywood enclosure ([readme](container/plywood/README.md), [plan](container/plywood/PLAN.pdf)) |
+| `container/plywood/fingerjoint/` | Laser-cut finger-joint birch casing ([readme](container/plywood/fingerjoint/README.md)) |
+| `container/sheetmetal/` | Bent sheet-metal casing ([readme](container/sheetmetal/README.md)) |
+| `light mount/` | Original cage, stackable tube mount, and 16×16 matrix ([readme](light%20mount/README.md)) |

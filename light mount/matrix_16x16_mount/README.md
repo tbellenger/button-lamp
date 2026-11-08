@@ -15,7 +15,7 @@ All three printed parts are designed with [`nurb`](https://pypi.org/project/nurb
 
 | Feature | Dimension | Source / Notes |
 |---|---|---|
-| **Top-deck flange outline** | `92.0 × 92.0 mm` (`R8.0` corners) | Matches `spiral_cage_tube13mm.stl` and `top_backer_plate.stl` (`plywood/src/spiral.py`) |
+| **Top-deck flange outline** | `92.0 × 92.0 mm` (`R8.0` corners) | Matches `spiral_cage_tube13mm.stl` (`light mount/original-cage/`) and `top_backer_plate.stl` (`container/plywood/src/spiral.py`) |
 | **Top-deck 4-bolt pattern** | `76.2 × 76.2 mm` (`3.000" × 3.000"`) square (`±38.1 mm`) | `4 × Ø3.4 mm` M3 clearance holes verified in `fj125_top_qty1_mm.dxf` and `sm_al063_hood_qty1_mm.dxf` |
 | **Top-deck wire pass-through** | `Ø10.0 mm` at `(+11.71, +32.24) mm` from bolt center + `(0, 0)` center | Base mount provides a `36 × 37 mm` rear wire bay (`Y = +3 .. +40 mm`) covering the SendCutSend laser-cut wire hole at `(+11.71, +32.24) mm` **plus** a `36 × 17 mm` front-center wire bay |
 | **LED Matrix PCB** | `160.0 × 160.0 mm` (`2.5 mm` pocket height) | BTF-LIGHTING WS2812B 16×16 256-LED flexible FPCB (`B01DC0IOCK`); `161.0 × 161.0 mm` (`0.5 mm`/side clearance) captive lower pocket |

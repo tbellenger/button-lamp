@@ -3,6 +3,9 @@ Change tube size / ply thickness in the CONFIG block below."""
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from paths import ROOT, PLANS_STL
 import sys, os, json, numpy as np, trimesh
+# The one-piece cage is a light mount, not part of the plywood box. The generator
+# stays in this file so the backer plate and the cage cannot drift apart.
+CAGE = os.path.join(os.path.dirname(os.path.dirname(ROOT)), "light mount", "original-cage")
 sys.path.insert(0, os.path.dirname(__file__))
 import box as B, spiral as SP, assemble as AS, outputs as O
 from shapely.geometry import LineString, Point, box as sbox
@@ -35,7 +38,7 @@ def side_marks(p, geo):
 def mm_in(v): return f'{v:.1f} mm = {O.inch(v)}'
 
 def main(do_render=True):
-    os.makedirs(f'{ROOT}/stl', exist_ok=True); os.makedirs(f'{ROOT}/templates', exist_ok=True); os.makedirs(f'{ROOT}/render', exist_ok=True)
+    os.makedirs(f'{ROOT}/stl', exist_ok=True); os.makedirs(f'{ROOT}/templates', exist_ok=True); os.makedirs(f'{ROOT}/render', exist_ok=True); os.makedirs(CAGE, exist_ok=True)
     checks = []
     # ---------------- printed parts
     for tk, od in TUBES.items():
@@ -44,7 +47,7 @@ def main(do_render=True):
         cap = SP.end_cap(sp)
         report[f'spiral_{tk}'] = {k: (float(v) if isinstance(v, (float, np.floating)) else v) for k, v in info.items()}
         for nm, m in [(f'spiral_cage_tube{tk}.stl', cage), (f'end_cap_tube{tk}.stl', cap)]:
-            m.export(f'{ROOT}/stl/{nm}'); checks.append((nm, m))
+            m.export(f'{CAGE}/{nm}'); checks.append((nm, m))
     p3 = B.params(3.0); sp13 = SP.default_params(13.0); _, info13 = SP.build(sp13)
     bk = AS.backer_mesh(sp13, info13); bk.export(f'{ROOT}/stl/top_backer_plate.stl'); checks.append(('top_backer_plate.stl', bk))
     for tk, t in PLY.items():
@@ -53,7 +56,7 @@ def main(do_render=True):
     # strip-feed test ring: short clip to test the snap fit before the big print
     for tk, od in TUBES.items():
         sp = SP.default_params(od); test = clip_test(sp); nm = f'clip_fit_test_tube{tk}.stl'
-        test.export(f'{ROOT}/stl/{nm}'); checks.append((nm, test))
+        test.export(f'{CAGE}/{nm}'); checks.append((nm, test))
     stl_report = []
     seen = set()
     for nm, m in checks:
@@ -131,7 +134,7 @@ def renders():
         tiles += [fn1, fn2]
     W = Image.new('RGB', (700 * len(tiles), 900), 'white')
     for i, f in enumerate(tiles): W.paste(Image.open(f), (i * 700, 0))
-    W.save(f'{R}/spiral_holder_13mm.png')
+    W.save(f'{CAGE}/spiral_holder_13mm.png')
     # comparison vs original
     D = PLANS_STL
     en = trimesh.load(D + 'Enclosure.stl'); spo = trimesh.load(D + 'Spiral (with base).stl')

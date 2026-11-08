@@ -15,7 +15,7 @@ Outside size stays **250 × 210 × 120 mm**. The panel window and holes, the USB
 | slope | 1 | 152.9 × 210.0 | `dxf/fj125_slope_qty1_mm.dxf` |
 | front | 1 | 210.0 × 28.0 | `dxf/fj125_front_qty1_mm.dxf` |
 | bottom (removable tray, unchanged) | 1 | 242.65 × 202.65 | `dxf/fj125_bottom_qty1_mm.dxf` |
-| printed bottom blocks (unchanged) | 6 | 20 × 20 × 18 | `../plywood/stl/bottom_block_x6.stl` |
+| printed bottom blocks (unchanged) | 6 | 20 × 20 × 18 | `../stl/bottom_block_x6.stl` |
 
 The glue strips are gone. The tabs give the alignment and the glue area.
 

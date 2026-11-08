@@ -16,7 +16,7 @@ from shapely.ops import unary_union
 from shapely import affinity
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(os.path.dirname(ROOT), 'plywood', 'fingerjoint', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(ROOT), 'plywood', 'fingerjoint', 'src'))  # container/plywood/fingerjoint/src
 import controls as C, svgout
 OUT = os.path.join(ROOT, 'dxf'); SVG = os.path.join(ROOT, 'svg')
 

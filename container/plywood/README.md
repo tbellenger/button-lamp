@@ -12,7 +12,7 @@ A hand-cut 3 mm (1/8") plywood replacement for the printed Spiral Lamp enclosure
 | `cutlist.csv` | Cut list for 3 mm and 6 mm ply (mm + inches) |
 | `templates/ply3mm/` | Full-size SVG templates. `templates_letter_tiled_ply3mm.pdf` is the one to print on Letter at 100%. It's marked for hand cutting: drill sizes and blade-entry holes. |
 | `templates/ply6mm/` | Same for 6 mm (1/4") ply |
-| `stl/` | Cage (13 mm tube), end cap, clip fit test, top backer plate, 6 bottom blocks. Watertight, fits a CR-10, no supports. |
+| `stl/` | Top backer plate and 6 bottom blocks. The one-piece cage, end cap and clip fit test are in [`../../light mount/original-cage/`](../../light%20mount/original-cage/). |
 | `render/` | Assembled, exploded, cut-away and tray renders |
 | `src/` | Python generators. `xvfb-run -a python3 src/build_all.py` rebuilds STLs, templates and renders. `python3 src/make_pdf.py` rebuilds `PLAN.pdf`. |
 
