@@ -1,93 +1,76 @@
-# Spiral tube mount
+# Stackable cross mount
 
-A support-free PLA mount that holds the button lamp's silicone LED tube in a helix. It replaces the original printed spiral (`Spiral (with base).stl`) and uses the same top-deck screws as the spiral cage and the [16×16 matrix base](../matrix_16x16_mount).
+A printed mount for the 13 mm silicone LED tube. Each level is two crosses that half-lap at the centre. A spacer on that lap carries the next level. The base bolts to the lamp's existing top-deck holes.
 
-Two parts. The base carries the first turn. Identical clips, printed eight times for a 1000 mm strip, hold the turns above it. The tube is 13 mm silicone with 10 gauge armature wire and a WS2812B strip inside, so it keeps a shape but still needs the clips.
+This replaces the loose saddle clips. Those clips printed with the layer lines running along the tube, and the arms broke. Printed on their side, the same clip felt strong, and nothing held a loose clip to the centre. A one-piece level with a pin on top cannot put all four clips in that strong orientation: the four C shapes sit in four different planes. Two crosses can. Each cross is a diameter, two clips opposite each other, and that whole C lies in the layer plane when the cross is printed flat.
 
-Modelled with [nurb](https://pypi.org/project/nurb/) (build123d), same layout as the other enclosures: `measurements.toml`, `parts/*.py`, `printer.toml`.
-
-![Base](render/base_iso.png)
-![Clip](render/clip_views.png)
-![On the helix](render/assembled_iso.png)
-![One stack](render/stack_section.png)
-![Print layout](render/parts_print_layout.png)
-
----
-
-## Dimensions
+## Size
 
 | | |
 |---|---|
-| Coil outside diameter | **80.0 mm** (`coil_diameter`) |
-| Coil centre-line | 67.0 mm diameter, radius 33.5 mm |
-| Tube | 13 mm OD, bore 13.4 mm, snap mouth 11.5 mm |
-| Pitch | **23 mm** (13 mm tube + 10 mm gap) |
-| Quarter-pitch step | **5.75 mm** |
-| Helix angle | 6.24° |
-| Base footprint | **90.6 × 90.6 mm**, 40.6 mm tall |
-| Base clip centres | 13.5, 19.3, 25.0, 30.8 mm above the deck |
-| One clip | 16.2 × 35.2 mm profile, **14 mm** along the tube |
-| Saddle | arc of a 13 mm circle, 1.2 mm deep, 7.6 mm across, 1.2 mm land each side |
-| Coil for a 1000 mm strip | 4.72 turns, 109 mm of rise, top of the tube about 129 mm above the deck |
+| Tube | 13 mm OD |
+| Centre-line radius | 43.5 mm (was 33.5). Outside of the coil is 100 mm. |
+| Pitch | 23 mm. Gap between turns is 10 mm. |
+| Clips on a level | 4, a quarter turn and 5.75 mm apart |
+| Levels for 1 m of strip | 4 (15 clip stations on the strip, 16 molded) |
+| Parts for 1 m | 1 base, 4 low crosses, 4 high crosses, 3 spacers, 1 cap |
+| Extra tube | `extra_levels` on the assembly adds one low cross, one high cross, and one spacer per level. The cap stays on top. |
 
-`coil_diameter` is the outside of the finished coil, tube included. The original printed spiral measures **91.44 mm** outside (`original-plans/3D Printable Parts (STL Files)/Spiral (with base).stl`, Y and Z extents; `plywood/PLAN.md` records the same number, a 22.35 mm tube, and a 68.6 mm centre-line). 80 mm is 12.5 percent under 91.44, the middle of the 10–15 percent Tom asked for. The centre-line only moves from 68.6 mm to 67.0 mm. Most of the change in the outside diameter is the thinner tube.
+The lowest clip is 40° of helix past the light-cable hole, so the lead-in still faces that hole. The next level starts one pitch higher. The helix does not jump at the joint.
 
-## Where the screws come from
+## Cable hole
 
-The mount uses the holes already in the lamp's top deck, the same ones the spiral cage and `matrix_16x16_base_mount` use.
+Tom asked for 5 mm more diameter on the hole the light cable passes through.
 
-| | |
-|---|---|
-| Pattern | 4 holes on a **76.2 mm** square (3.000 in), centres at (±38.1, ±38.1) |
-| Hole | **Ø3.4 mm**, M3 medium clearance (ISO 273) |
-| Wire hole in the deck | Ø10 at **(+11.71, +32.24) mm** from the bolt centre, +X to the right, +Y toward the back |
-| Screws | 4 × M3, the same screws as the cage and the matrix base, into `top_backer_plate` |
+| Part | Before | After |
+|---|---|---|
+| Plywood top, hand-cut templates, finger-joint top, sheet-metal hood | Ø10 | Ø15 |
+| Printed `top_backer_plate` | Ø10 | Ø15 |
+| This mount's base window | Ø14 | Ø19 |
 
-Sources, in the order that settled it:
+The window stays 4 mm larger on the diameter than the deck hole, which is what the old mount did (Ø14 over Ø10). The hole is still at (+11.71, +32.24) mm. The nearest M3 bolt is about 16 mm clear of the Ø19 edge.
 
-1. `plywood/src/spiral.py` — `bolt_sq=76.2`, `bolt_d=3.4`, noted as the original 3 inch pattern, now M3.
-2. `enclosures/matrix_16x16_mount/measurements.toml` — the same square and the wire-hole offsets, checked there against `fj125_top_qty1_mm.dxf` and `sm_al063_hood_qty1_mm.dxf`.
-3. `plywood/PLAN.md` — the original `Spiral (with base).stl` had **Ø6.35 mm** holes on this same 76.2 mm square, for the old plastic enclosure. The plywood and sheet-metal decks are M3. This mount follows the deck, not that STL.
+**A board or hood that is already cut at Ø10 is still Ø10.** Changing the file does not enlarge a hole that has been cut. Open it to Ø15 with a drill or a file. The original one-piece cage's internal Ø8 channel is a different hole and was not changed. USB, the DC jack, and the button cutouts were not changed. The purchased STLs in `original-plans/` were not changed.
 
-The base opens a Ø14 window over the deck's Ø10 hole. The 13 mm tube cannot pass through the deck hole. The leads do, and the window is clear so the start of the coil can be pressed down onto the deck. The first clip is 40° past that window and 2.6 mm higher.
-
-## Clips
-
-Four per clipped turn, on the same four angles as the base clips. They are **in line**, not staggered.
-
-Each clip wraps one turn and its saddles cradle the turn above and the turn below. Putting a clip on every turn would park two saddles in the same gap. Skipping a turn fixes that: the bare turn sits in the top saddle of the clip below and the bottom saddle of the clip above, and those two clips miss each other by **10.6 mm**. The turn-2 saddle also clears the base clip's mouth by 0.75 mm.
-
-For the 1000 mm strip (`plywood/src/spiral.py` `strip_len`, 160 LEDs):
-
-| Turn | What holds it |
-|---|---|
-| 1 | the four base clips |
-| 2 | 4 saddle clips |
-| 3 | bare, cradled |
-| 4 | 4 saddle clips |
-| 5 | bare, cradled by the turn-4 saddles, where the strip runs out |
-
-**4 clips per clipped turn, 8 clips total.** A longer tube adds turn 6, then 8, four more of the same clip each time. Print one clip and snap it on the tube before printing the other seven.
+Updated in this change: the v2 finger-joint top DXF and SVG, the v2 sheet layout and cut list, both sheet-metal hood DXFs and SVGs, the hand-cut top templates (3 mm and 6 mm SVG and letter PDF), and `top_backer_plate.stl`. The as-ordered SendCutSend set (`as_ordered_S7872337`) is left at Ø10. That set is the record of what was ordered. It is not a new cut file.
 
 ## Print
 
-Creality CR-10 (300 × 300 × 400), PLA, 0.4 mm nozzle, 0.20 mm layers, 3 walls, 15% gyroid, **supports off**. Tom slices in Cura. Both parts fit on one plate.
+Creality CR-10 (300 × 300 × 400), PLA, 0.4 mm nozzle. Tom slices in Cura. Nothing here was sliced: this machine has no slicer installed. `nurb export` writes geometry-only 3MF and says so.
 
-| File | Qty | Size (mm) | Triangles | On the bed |
-|---|---|---|---|---|
-| `stl/spiral_tube_base.stl` | 1 | 90.6 × 90.6 × 40.6 | 8,002 | Ring down, as exported. Mouths face up. |
-| `stl/spiral_tube_clip.stl` | 8 | 16.2 × 35.2 × 14.0 | 1,558 | Band end down, as exported. 14 mm tall. |
+| Part | On the bed | Notes |
+|---|---|---|
+| `spiral_cross_low`, `spiral_cross_high` | Flat. The C is the layer plane. | 105 × 30 × 14 mm. The bore follows the helix, and the walls of that bore tilt only a few degrees, so they do not need support. |
+| `spiral_base` | Flange down | 100 × 100 × 35.5 mm. Pin up. Ø19 window, 4 × Ø3.4 on the 76.2 mm square. |
+| `spiral_spacer` | Socket down, pin up | The socket closes with a 45° cone, so there is no bridged ceiling. 28 mm across, 27.5 mm tall. |
+| `spiral_cap` | Either way | Through hole. 28 × 9 mm. |
+| `spiral_fit_coupon` | As exported, tabs on the bed | Print this first. |
 
-The base mouths are open upward and the tower sides are 45°, so nothing bridges. Each clip is a straight extrusion stood on end, so every wall is vertical.
+The weak direction of a cross is splitting between layers through the 14 mm thickness. The half-lap tongue is 7 mm of the 14 mm hub, and the pin groove takes 3.1 mm of that, leaving about 3.9 mm. The spacer clamps the joint so the lap is not the only thing resisting wobble.
 
-## Rebuild
+## Fits — not measured
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-nurb build
-nurb check
-nurb export
-xvfb-run -a python3 render_views.py
-```
+These are design choices. Nothing has been printed or fitted. Print `spiral_fit_coupon`, snap the tabs, and try the pin in the socket and the two tongues together before printing all four levels. Then print one low cross, one high cross, and the base before the rest.
 
-`nurb` wants Python 3.13. The sliders are the keyword defaults on the two part functions: `tube_od`, `coil_diameter`, `gap`, `clip_wall`, `snap_opening`, `pad_thickness`, `clip_width`.
+| Fit | Allowance |
+|---|---|
+| Half-lap slot | 0.3 mm wider than the 14 mm thickness |
+| Pin Ø6 into the hole | 0.2 mm on the diameter (hole Ø6.2) |
+| Clocking flat | 0.15 mm past the pin flat |
+
+The flat is on the low cross only. It faces the lowest clip, so the level cannot be turned 180°. The high cross is clocked by the lap, not by the flat. A round hole in the high cross lets it drop over the flat.
+
+## Files
+
+| File | |
+|---|---|
+| `stl/`, `3mf/` | The six parts. The assembly is not a separate STL. |
+| `render/assembled_iso.png` | Stack with the tube |
+| `render/exploded.png` | Levels pulled apart |
+| `render/lap_and_pin.png` | One joint |
+| `render/print_orientation.png` | Bed poses |
+| `system.py` | Shared geometry |
+
+## What changed relative to the loose-clip mount
+
+The loose clips and the 80 mm coil are gone. Centre-line radius is 43.5 mm. The crosses and the spacers are the structure. Counts above are for this coil, not the old eight saddle clips.

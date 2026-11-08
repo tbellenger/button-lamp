@@ -34,7 +34,7 @@ The glue strips are gone. The tabs give the alignment and the glue area.
    - If a tab is tight (ply thickness varies), sand its faces lightly rather than the notches.
    - Before you glue, mark the faces:
      - **Back:** the DXF is drawn from inside. Seen from behind, the USB-B window is at the left end and the USB-C slot is at the right.
-     - **Top:** the DXF is drawn from above. The 10 mm wire hole sits near the back edge, just right of centre as seen from the front.
+     - **Top:** the DXF is drawn from above. The 15 mm light-cable hole sits near the back edge, just right of centre as seen from the front. A top that was already cut at 10 mm has to be opened to 15 mm; the file change does not enlarge a finished board.
      - **Sides:** both are the same part. Flip one over for the other side.
 2. Lay one side flat, inside face up.
 3. Brush glue into its notches and on the tabs. Stand the back, front and slope in place.

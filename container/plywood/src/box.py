@@ -77,9 +77,9 @@ def pieces(p, cage_info=None, cage_rot_deg=180.0):
     if cage_info is not None:
         a = np.radians(cage_rot_deg); hx, hy = cage_info['wire_hole_xy']
         wx = xc + hx * np.cos(a) - hy * np.sin(a); wy = yc + hx * np.sin(a) + hy * np.cos(a)
-        holes.append(Point(wx, wy).buffer(5.0, 24))
+        holes.append(Point(wx, wy).buffer(7.5, 24))  # Ø15 light-cable hole (was Ø10)
     top = top.difference(unary_union(holes))
-    out['top'] = dict(poly=top, qty=1, desc='Top, seen from above. Spiral holder bolts here (4 x M3) + 10 mm wire hole (toward the back).',
+    out['top'] = dict(poly=top, qty=1, desc='Top, seen from above. Spiral holder bolts here (4 x M3) + 15 mm light-cable hole (toward the back).',
                       marks=[(Point(xc, yc), 'spiral centre'), (box(xc - 46, yc - 46, xc + 46, yc + 46).exterior, 'holder flange outline')],
                       spiral_c=(xc, yc), wire=(wx, wy))
     # slope

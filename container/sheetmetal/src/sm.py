@@ -94,7 +94,7 @@ def hood(m):
         for sy in (-1, 1):
             feats.append(('cage_M3', Point(*at(1, 61 + sx * 38.1, 105 + sy * 38.1)).buffer(1.7, 24), 1))
     WIRE_OFF = (28.761440419908304 - 61.0, 113.71175803203249 - 102.0)
-    feats.append(('wire_hole', Point(*at(1, 61 + WIRE_OFF[0], 105 + WIRE_OFF[1])).buffer(5.0, 32), 1))
+    feats.append(('wire_hole', Point(*at(1, 61 + WIRE_OFF[0], 105 + WIRE_OFF[1])).buffer(7.5, 32), 1))  # Ø15 light cable (was Ø10)
     for n, pin, g in C.cutouts(lambda x, y: at(2, *panel_to_face2(x, y))):
         feats.append((n, g, 2))
     tabc = cheek_tab_centres(m)

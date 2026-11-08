@@ -51,7 +51,7 @@ how = "Button Lamp top-deck Ø10.0 mm wire hole rear offset from bolt center (61
 [top_deck_wire_hole_dia]
 value = 10.0
 unit = "mm"
-how = "Button Lamp top-deck wire pass-through hole diameter 10.0 mm verified in fj125_top_qty1_mm.dxf and sm.py"
+how = "As-cut deck hole, 10.0 mm, verified in the committed fj125_top and sheet-metal DXFs. The design target is now 15 mm (light_cable_hole_dia in spiral_tube_mount). This bay already clears a 15 mm hole. A board already cut at 10 mm has to be opened by hand."
 
 [m3_clearance]
 value = 3.4

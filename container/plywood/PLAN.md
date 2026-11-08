@@ -151,7 +151,7 @@ Templates: `templates/ply3mm/`
 |---|---|---|---|---|
 | **Side** | 2 | 250.0 × 120.0 profile | 9 27/32 × 4 23/32 | Wedge outline: front edge 28 mm tall, flat top 122 mm deep, slope 35.7°. **Use the template.** |
 | **Back** | 1 | 204.0 × 117.0 | 8 1/32 × 4 19/32 | **USB-C power inlet:** 10 × 4.5 slot. **Arduino USB-B window:** 20 × 18, lined up with the Uno's jack. |
-| **Top** | 1 | 122.0 × 204.0 | 4 13/16 × 8 1/32 | 4 × Ø3.4 on a 76.2 mm square, centred 61 mm from the back edge. Ø10 wire hole. |
+| **Top** | 1 | 122.0 × 204.0 | 4 13/16 × 8 1/32 | 4 × Ø3.4 on a 76.2 mm square, centred 61 mm from the back edge. Ø15 light-cable hole (was Ø10; a board already cut at Ø10 has to be opened up by hand). |
 | **Slope (control face)** | 1 | 155.6 × 204.0 | 6 1/8 × 8 1/32 | Window 125.4 × 176.2 with 13 mm square corner tabs left in. 4 × Ø3.4 at the panel's corner-hole spots. |
 | **Front** | 1 | 204.0 × 25.5 | 8 1/32 × 1 | – |
 | **Bottom (removable)** | 1 | 243.0 × 203.0 | 9 9/16 × 8 | 6 × Ø3.4 screw holes, 4 × Ø3.2 Uno holes, 12 × Ø8 drilled vent holes. Already 0.5 mm undersize all round so it lifts out. |
@@ -189,7 +189,7 @@ What else changes with 6 mm:
 All joints are **plain butt joints** with glue strips, so every cut is either straight or a single outline. The templates now show:
 
 - **Thick black line = cut line.** Saw on the **waste side** and sand to the line.
-- **Red crosshair + size = drill hole.** Ø3.4 (9/64") for M3, Ø3.2 (1/8") for the Uno, Ø10 (25/64") wire hole, Ø8 (5/16") vents. Drill all holes **before** sawing, with a scrap board underneath to stop tear-out.
+- **Red crosshair + size = drill hole.** Ø3.4 (9/64") for M3, Ø3.2 (1/8") for the Uno, Ø15 (19/32") light-cable hole, Ø8 (5/16") vents. Drill all holes **before** sawing, with a scrap board underneath to stop tear-out.
 - **Grey hatched "WASTE" = inside cutout.** Drill the **8 mm (5/16") blade-entry holes** in the red circles, thread the scroll-saw blade (or drop the jigsaw blade in), and saw out. The slope window has 4 entry holes, one in each corner, so you can turn the corners cleanly. The USB-B window has one.
 - **Slot (USB-C inlet):** drill **4.5 mm (11/64") at both marked ends**, then saw or file out the 1 mm between them.
 - Blue dashed = layout marks only (glue strip positions, the panel outline, tray zones). Don't cut them.
