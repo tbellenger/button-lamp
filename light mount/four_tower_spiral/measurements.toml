@@ -1,0 +1,49 @@
+[tube_od]
+value = 13.0
+unit = "mm"
+how = "Silicone neon tube outside diameter, the 5 mm-strip version. container/plywood/src/spiral.py default_params(tube_od=13)."
+
+[coil_diameter]
+value = 100.0
+unit = "mm"
+how = "Outside of the coil, tube included. Centre-line radius (100 - 13) / 2 = 43.5 mm. Same coil as light mount/spiral_tube_mount."
+
+[coil_gap]
+value = 10.0
+unit = "mm"
+how = "Clear gap between turns. Pitch = tube_od + coil_gap = 23 mm. A quarter turn is 5.75 mm of rise."
+
+[strip_length]
+value = 1000.0
+unit = "mm"
+how = "LED strip in the coil, 160 LEDs. container/plywood/src/spiral.py strip_len. Stations are counted along the tube centre-line."
+
+[top_deck_bolt_spacing]
+value = 76.2
+unit = "mm"
+how = "Top-deck 4-bolt square, 76.2 mm, centres at (+/-38.1, +/-38.1). container/plywood/src/spiral.py bolt_sq. Same holes as the cross mount and the matrix."
+
+[top_deck_wire_offset_x]
+value = 11.71
+unit = "mm"
+how = "Light-cable hole, +X from the bolt centre. 116.712 - 105.0 = +11.712 mm, from fj125_top_qty1_mm.dxf."
+
+[top_deck_wire_offset_y]
+value = 32.24
+unit = "mm"
+how = "Light-cable hole, +Y (toward the back) from the bolt centre. 61.0 - 28.761 = 32.239 mm, from fj125_top_qty1_mm.dxf."
+
+[light_cable_hole_dia]
+value = 15.0
+unit = "mm"
+how = "Design diameter of the deck and backer light-cable hole. The as-cut plywood was Ø10. This mount does not cover a Ø15 hole."
+
+[mount_cable_window_dia]
+value = 19.0
+unit = "mm"
+how = "Clear window this ring keeps open at the cable coordinate. The cross mount used Ø19, 4 mm larger than the Ø15 deck hole."
+
+[m3_clearance]
+value = 3.4
+unit = "mm"
+how = "M3 medium clearance, ISO 273. Matches the Ø3.4 mm holes in the deck."
