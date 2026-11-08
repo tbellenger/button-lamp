@@ -18,6 +18,9 @@ def tower_180(
     clip_wall=2.4,
     snap_opening=11.5,
     clip_width=14.0,
+    rib_radial=6.0,
+    rib_tangential=3.2,
+    clip_arm=4.0,
     strip_length=1000.0,
     extra_stations=0,
 ):
@@ -30,5 +33,5 @@ def tower_180(
     strip_length: LED strip length this tower is sized for (mm)
     extra_stations: clips added past the strip, one quarter turn each
     """
-    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, strip_length, extra_stations)
+    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, strip_length, extra_stations)
     return build_tower(spec, 2)

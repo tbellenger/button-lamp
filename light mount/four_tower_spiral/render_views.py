@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REND = os.path.join(HERE, "render")
 os.makedirs(REND, exist_ok=True)
 
-SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 1000.0, 0)
+SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 4.0, 1000.0, 0)
 
 
 class Holes:
@@ -125,6 +125,17 @@ def exploded():
     save(pl, "exploded.png")
 
 
+def through_view(name, direction):
+    """Look through the coil so the far clips stay visible past the near rib."""
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 1100))
+    pl.set_background("white")
+    for key, mesh in placed(0.0):
+        add_solid(pl, mesh, COLORS["base"] if key == "base" else COLORS["cap"] if key == "cap" else COLORS[key])
+    pl.add_mesh(tube_mesh(), color="#f4f1ea", opacity=0.55, smooth_shading=True)
+    shot(pl, (0, 0, 62), direction, 260, zoom=1.15)
+    save(pl, name)
+
+
 def clip_closeup():
     """The start tower lying as it prints, camera on the lowest clip."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
@@ -158,5 +169,7 @@ def print_layout():
 if __name__ == "__main__":
     assembled()
     exploded()
+    through_view("four_tower_front.png", (0.0, -1.0, 0.15))
+    through_view("four_tower_side.png", (1.0, 0.05, 0.12))
     clip_closeup()
     print_layout()
