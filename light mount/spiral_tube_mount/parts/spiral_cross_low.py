@@ -1,4 +1,4 @@
-"""Lower half of one level. Two clips, half-lap slot opening upward, flat that clocks the pin."""
+"""Lower half of one level. Two clips, half-lap slot opening upward, tooth that clocks the pin."""
 
 import os
 import sys

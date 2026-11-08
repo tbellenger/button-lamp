@@ -40,9 +40,9 @@ Creality CR-10 (300 × 300 × 400), PLA, 0.4 mm nozzle. Tom slices in Cura. Noth
 
 | Part | On the bed | Notes |
 |---|---|---|
-| `spiral_cross_low`, `spiral_cross_high` | Flat. The C is the layer plane. | 105 × 30 × 14 mm. The bore follows the helix, and the walls of that bore tilt only a few degrees, so they do not need support. |
+| `spiral_cross_low`, `spiral_cross_high` | Flat. The C is the layer plane. | 105 × 30 × 14 mm. The pin hole is a diamond with the point up, so the roof is 45°. The tube bore follows the helix and tilts only a few degrees. |
 | `spiral_base` | Flange down | 100 × 100 × 35.5 mm. Pin up. Ø19 window, 4 × Ø3.4 on the 76.2 mm square. |
-| `spiral_spacer` | Socket down, pin up | The socket closes with a 45° cone, so there is no bridged ceiling. 28 mm across, 27.5 mm tall. |
+| `spiral_spacer` | Socket down, pin up | The socket is the same diamond and closes with a 45° pyramid. 28 mm across, 27.5 mm tall. |
 | `spiral_cap` | Either way | Through hole. 28 × 9 mm. |
 | `spiral_fit_coupon` | As exported, tabs on the bed | Print this first. |
 
@@ -55,10 +55,12 @@ These are design choices. Nothing has been printed or fitted. Print `spiral_fit_
 | Fit | Allowance |
 |---|---|
 | Half-lap slot | 0.3 mm wider than the 14 mm thickness |
-| Pin Ø6 into the hole | 0.2 mm on the diameter (hole Ø6.2) |
-| Clocking flat | 0.15 mm past the pin flat |
+| Diamond pin into the diamond hole | 0.2 mm extra across the flats. Pin diagonals 8 × 8 mm (5.66 mm across the flats). Hole diagonals 8.28 × 8.28 mm (5.86 mm across the flats). |
+| Clocking tooth | 0.2 mm extra on the groove. A design allowance, not a measured fit. |
 
-The flat is on the low cross only. It faces the lowest clip, so the level cannot be turned 180°. The high cross is clocked by the lap, not by the flat. A round hole in the high cross lets it drop over the flat.
+The hole is a square diamond with the point toward the top of the print, so each side is 45° and the cross does not need support in the bore. A round hole, and the old D-flat, left a curved or flat ceiling when the cross lay on its side.
+
+A square diamond also fits if you turn it 90° or 180°. The tooth stops that. The low cross has a tooth at the bottom of the hub, toward its lower clip. The high cross has a tooth at the top of the hub, toward its lower clip. Each pin has a matching groove, open out the top of the pin so the groove itself has no ceiling. Turned 180°, the tooth hits solid pin and the cross will not seat. The lap still keeps the two crosses at 90° to each other. Seat the low cross first, with its lower clip 40° past the cable hole. The high cross then only seats one way.
 
 ## Files
 
@@ -69,6 +71,7 @@ The flat is on the low cross only. It faces the lowest clip, so the level cannot
 | `render/exploded.png` | Levels pulled apart |
 | `render/lap_and_pin.png` | One joint |
 | `render/print_orientation.png` | Bed poses |
+| `render/diamond_bore.png` | Diamond hole in the print pose, and the pin |
 | `system.py` | Shared geometry |
 
 ## What changed relative to the loose-clip mount
