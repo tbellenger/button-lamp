@@ -17,9 +17,24 @@ What sets it:
 - **3.2 mm tangential** is the width you see edge-on through the coil. It is eight perimeters on a 0.4 mm nozzle, solid, on the 3 mm wall floor. Thinner than 2.4 mm is a ribbon that splits when the tube is pushed into the clip.
 - **6.0 mm radial** is the depth that takes the uncoil bend. That bend is in the layer plane, because the tower prints on its side. Six millimetres is enough to read as a beam over the span from the ring to the cap, and still much smaller than the 10 mm gap between turns. It is not derived from a tube force.
 - The **foot is the same rib**, carried 4.5 mm down through the ring. There is no pad under it.
-- Each **clip stays 14 mm** along the tube, standing off one face of the rib. The spoke into the clip is 4 mm tall.
+- Each **clip stays 14 mm** along the tube. The spoke that joins it to the rib is 6 mm along the tower, the same as the rib's radial width, with a 45° gusset at the tower.
 
-If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. Raise `rib_tangential` only if the rib twists. Raise `clip_arm` if a spoke at the clip root bends. All three are sliders. The slot and the cap pocket follow the rib, plus `joint_clear`.
+If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. `clip_arm` will not go under that radial width, so raise it with the rib. Raise `rib_tangential` only if the rib twists. The slot and the cap pocket follow the rib, plus `joint_clear`.
+
+## The spoke
+
+In the tower's print frame, +X is radial (out toward the tube), +Y is up the tower, and +Z is print-up. Stood on the ring, +Z is the tangential direction.
+
+| | Was | Is |
+|---|---|---|
+| Spoke height, along the tower (+Y) | 4.0 mm | 6.0 mm, the rib's full radial width |
+| Where it meets the rib (+X) | a 1.5 mm bite into the outer face, from X = 1.5 to 3.0 | the whole rib, X = −3.0 to +3.0 |
+| Corner at the tower | square | 45° gusset, 3.0 mm leg. Material added in the two elbows |
+| Far end of the spoke | X = 14.4, 0.4 mm short of the bore | unchanged |
+| Tube centre | X = 21.5 | unchanged |
+| Clip bore and mouth | 13 mm tube, 0.2 mm bore clearance, 11.5 mm mouth | unchanged |
+
+The gusset is in the layer plane, so it is a vertical wall while the tower prints on its side. It does not need support. The rib everywhere else stays 6.0 × 3.2 mm. This is not a measured strength change.
 
 ## Why the towers print on their side
 
@@ -106,7 +121,7 @@ The clips stay reachable either way. The cap is what keeps the tops from spreadi
 
 ## Already-printed towers
 
-The previous four-tower parts (diamond pins, a foot pad, and a lug at a different radius on each tower) do not fit these slots. Reprint the ring, all four towers, and the cap. The cross mount in `spiral_tube_mount/` is a different part and is unchanged.
+The ring and the cap are the same parts as the slotted mount. Reprint the four towers and the coupon. The spoke is the only change, so an older tower will still drop into the slot, but its clip arm is the narrow one. The cross mount is a different part.
 
 ## Cable
 
@@ -121,5 +136,8 @@ The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are �
 | `render/four_tower_side.png` | Through the side |
 | `render/exploded.png` | Ring, towers, cap |
 | `render/four_tower_joint.png` | Number 1's tab over its slot |
+| `render/four_tower_arm_change.png` | Spoke before and after, same view |
+| `render/four_tower_arm_before.png` | The 4 mm spoke |
+| `render/four_tower_arm_after.png` | The 6 mm spoke and the gusset |
 | `render/clip_closeup.png` | Lowest clip, in the print pose |
 | `render/print_orientation.png` | Bed poses, with the numbers |
