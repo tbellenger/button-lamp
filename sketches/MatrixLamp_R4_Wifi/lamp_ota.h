@@ -50,8 +50,9 @@ static void otaPaint(int pct) {
   if (pct == g_otaPaint) return;
   g_otaPaint = pct;
   g_otaPct = pct;
-  int lit = (pct <= 0) ? 1 : (PANEL_N * pct) / 100;
-  if (lit < 1) lit = 1;
+  // A single pixel is invisible through the diffuser. 0% is one full row.
+  int lit = (PANEL_N * pct) / 100;
+  if (lit < PANEL_W) lit = PANEL_W;
   if (pct >= 100) lit = PANEL_N;
   g_panel.clear();
   for (int i = 0; i < lit; i++) {
@@ -282,6 +283,45 @@ static bool otaCommit() {
   return false;
 }
 
+// The file picker posts the raw .bin (XHR send(file), not multipart).
+// iOS will not send a body this large until it sees 100 Continue.
+static bool otaExpectContinue() {
+  char b[24];
+  return headerValue("Expect", b, sizeof b) && strstr(b, "100") != 0;
+}
+
+static void otaSendContinue() {
+  static const char k[] = "HTTP/1.1 100 Continue\r\n\r\n";
+  modem.timeout(400);
+  g_client.write((const uint8_t*)k, sizeof k - 1);
+  g_client.flush();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+}
+
+// Erase the staging half. Code-flash erase runs with interrupts off. Call it
+// only when no socket read is in progress (after 100 Continue has been
+// written, or before the GitHub asset connection is opened).
+static bool otaOpenStorage(uint32_t len) {
+  long cap = InternalStorage.maxSize();
+  if (len < 4096 || (long)len > cap) {
+    otaSet("error", "image too large");
+    return false;
+  }
+  g_otaLen = len;
+  g_otaGot = 0;
+  g_otaFail = 0;
+  g_otaHeadN = 0;
+  g_otaPaint = -1;
+  otaPaint(0);
+  crcBegin();
+  if (!InternalStorage.open((int)len)) {
+    otaSet("error", "flash open failed");
+    return false;
+  }
+  g_otaOpened = 1;
+  return true;
+}
+
 static void otaBeginUpload() {
   if (!otaAuthed()) return;
   long len = headerLong("Content-Length");
@@ -303,23 +343,25 @@ static void otaBeginUpload() {
     }
     g_wantCrc = 1;
   }
+  // iOS will not send a body this size until it sees 100 Continue, and it
+  // gives up after a few seconds. Answer first, then erase. The WiFi link
+  // is polled, so the body sits on the modem until the next read; the erase
+  // (60 blocks for a 122672 byte image, interrupts off) does not share the
+  // UART with that transfer. Erasing while the body was already being read
+  // is what dropped the socket: the page's XHR onerror is "closed", there
+  // is no status line, and the lamp never reboots.
+  bool cont = otaExpectContinue();
   matrixPause();
   g_otaActive = 1;
-  g_otaPaint = -1;
   otaSet("upload", "receiving");
+  g_otaPaint = -1;
   otaPaint(0);
-  g_otaLen = (uint32_t)len;
-  g_otaGot = 0;
-  g_otaFail = 0;
-  g_otaHeadN = 0;
-  crcBegin();
-  if (!InternalStorage.open((int)len)) {
+  if (cont) otaSendContinue();
+  if (!otaOpenStorage((uint32_t)len)) {
     otaResumeLamp();
-    otaSet("error", "flash open failed");
     otaReply(500, "Error", "flash open failed\n");
     return;
   }
-  g_otaOpened = 1;
   Serial.print(F("OTA receive "));
   Serial.println(g_otaLen);
   const char* hdr = strstr(g_req, "\r\n\r\n");
@@ -587,6 +629,12 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
           if (cap) {
             g_ghPath[locN] = 0;
             cap = 0;
+            // GitHub's 302 puts the signed URL here, then a ~4 KB
+            // Content-Security-Policy. The manifest body is on the next
+            // host. Stop once Location is complete so that header is never
+            // read. Waiting for the blank line stalls the modem, the loop
+            // never returns, and the phone only sees a closed socket.
+            if (h->code >= 300 && h->code < 400 && h->loc) return 1;
           }
           if (ln == 0) {
             phase = 1;
@@ -609,7 +657,10 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
           ln = 0;
         } else if (cap) {
           if (b != '\r') {
-            if (locN >= (int)sizeof g_ghPath - 1) return 0;
+            if (locN >= (int)sizeof g_ghPath - 1) {
+              otaSet("error", "url too long");
+              return 0;
+            }
             g_ghPath[locN++] = (char)b;
           }
         } else if (ln < 90) {
@@ -679,8 +730,6 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
   modem.timeout(20000);
   if (rd == 2) {
     otaSet("error", "timeout");
-    otaSolid(0, 0, 160);
-    delay(1000);
     return false;
   }
   if (rd != 1) {
@@ -809,21 +858,12 @@ static bool ghFetchManifest() {
 
 static int binHead(GhHead* h) {
   if (h->code != 200) return 1;
-  if (h->length != g_ghSize || h->length > InternalStorage.maxSize()) {
+  // Staging was erased before this socket opened. Erasing here, while the
+  // asset bytes are already on the UART, kills the modem.
+  if (!g_otaOpened || h->length != (long)g_otaLen) {
     otaSet("error", "size mismatch");
     return 0;
   }
-  g_otaLen = (uint32_t)h->length;
-  g_otaGot = 0;
-  g_otaFail = 0;
-  g_otaHeadN = 0;
-  crcBegin();
-  otaPaint(0);
-  if (!InternalStorage.open((int)h->length)) {
-    otaSet("error", "flash open failed");
-    return 0;
-  }
-  g_otaOpened = 1;
   return 1;
 }
 
@@ -839,6 +879,9 @@ static bool ghFetchBin() {
   snprintf(g_ghPath, sizeof g_ghPath,
            "/tbellenger/button-lamp/releases/download/matrixlamp-latest/%s", g_ghFile);
   g_otaMsg[0] = 0;
+  // Modem is idle: the manifest socket is already closed. Erase now, then
+  // open the asset connection and only write.
+  if (!otaOpenStorage((uint32_t)g_ghSize)) return false;
   for (int hop = 0; hop < 4; hop++) {
     char pathBuf[1400];
     memcpy(pathBuf, g_ghPath, sizeof pathBuf);
@@ -910,6 +953,8 @@ static void githubRun(uint8_t job) {
     if (strcmp(g_otaState, "checked") != 0) {
       if (!g_otaMsg[0]) otaSet("error", "github");
       else if (strcmp(g_otaState, "error") != 0) otaSet("error", g_otaMsg);
+      otaSolid(180, 0, 0);
+      delay(1200);
     }
     Serial.print(F("GitHub: "));
     Serial.println(g_otaMsg);
