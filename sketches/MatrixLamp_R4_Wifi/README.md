@@ -62,7 +62,7 @@ tools/upload_matrixlamp.sh --ota
 
 That compiles a `.bin` and POSTs it to `http://matrixlamp.local/update` (or the IP you pass). The password comes from the `OTA_PASSWORD` environment variable, then `secrets.h`, then a prompt. Success is printed only when the lamp reboots into that build. If `matrixlamp.local` does not resolve on Windows, use the IP shown on the web page and on the serial monitor.
 
-On the phone, open the lamp's page, enter the OTA password under Firmware, and either pick a `.bin` or tap Update from GitHub. Orange is the download, white means it is copying into the sketch, red is a rejected file or a failed GitHub fetch. A rejected file leaves the current sketch running. The firmware line shows the lamp's `ota` state from `/api/state`. A socket that closes before that reply is not a reboot.
+On the phone, open the lamp's page, enter the OTA password under Firmware, and either pick a `.bin` or tap Update from GitHub. The file picker sends the raw file, not multipart. The lamp answers `100 Continue` before it erases staging (122880 bytes on this core, so a 122672 byte image fits) and then fills the panel with orange as the bytes land. White means it is copying into the sketch. Red is a rejected file or a failed GitHub fetch. The firmware line shows `ota` / `otaPct` / `otaMsg` from `/api/state`. `closed before reply` means the browser never got a status line. That is not a reboot.
 
 If the panel stays white, or the board never comes back, double-tap reset until the onboard LED breathes, then `tools\upload_matrixlamp.bat` (or the `.sh`) over USB. That recovery does not need WiFi. The project README, section 5, has the size limit (122880 bytes) and the GitHub release tags.
 
@@ -70,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122712 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122720 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122672 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122680 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.

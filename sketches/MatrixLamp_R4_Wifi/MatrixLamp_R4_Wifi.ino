@@ -47,8 +47,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   122712 B flash (46% of 262144), 15204 B globals (46% of 32768),
-   17564 B left for locals. The .bin is 122720 B. OTA allows at most
+   122672 B flash (46% of 262144), 15204 B globals (46% of 32768),
+   17564 B left for locals. The .bin is 122680 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -423,20 +423,20 @@ details p{margin:.2rem .9rem .7rem;color:#e7d8c6;font-size:.92rem}
 <pre id=st>loading</pre>
 </div>
 <div class=presets>
-<p class=note>Presets. Fader halfway is brightness 20. Idle codes need every switch off.</p>
+<p class=note>Presets. Fader at 50 is brightness 20.</p>
 <details><summary>Fire</summary><p>All off. Knob is speed.</p></details>
 <details><summary>Jumbo</summary><p>Rocker on. Toggle cycles colour.</p></details>
-<details><summary>Classic</summary><p>Rocker on. Code: white red white white red white red red.</p></details>
-<details><summary>Rainbow</summary><p>Key on. Diagonal bands drift. Toggle reverses.</p></details>
+<details><summary>Classic</summary><p>Rocker on. white red white white red white red red.</p></details>
+<details><summary>Rainbow</summary><p>Key on. Diagonal bands. Toggle reverses.</p></details>
 <details><summary>Wave</summary><p>Open the red cover.</p></details>
 <details><summary>Wave modifier</summary><p>Toggle and wave.</p></details>
 <details><summary>Wave rainbow</summary><p>Key and wave.</p></details>
-<details><summary>Wave epic</summary><p>Key, toggle, and wave. Rocker off.</p></details>
+<details><summary>Wave epic</summary><p>Key, toggle, and wave.</p></details>
 <details><summary>Secret</summary><p>Rocker, toggle, key, and wave.</p></details>
-<details><summary>Lava</summary><p>Mushroom. White cycles the top, red the bottom.</p></details>
+<details><summary>Lava</summary><p>Mushroom. White is the top, red the bottom.</p></details>
 <details><summary>Music</summary><p>Toggle only.</p></details>
-<details><summary>Metaballs</summary><p>white white red red white white red red. Red adds, white removes.</p></details>
-<details><summary>Plasma</summary><p>red red white white red red white white. Red zooms in.</p></details>
+<details><summary>Metaballs</summary><p>wwrrwwrr. Red adds, white removes.</p></details>
+<details><summary>Plasma</summary><p>rrwwrrww. Red zooms in.</p></details>
 <details><summary>Sun</summary><p>white white white red red white white white. Red grows.</p></details>
 </div>
 </div>
