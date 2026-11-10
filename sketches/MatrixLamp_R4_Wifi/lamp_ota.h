@@ -587,6 +587,12 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
           if (cap) {
             g_ghPath[locN] = 0;
             cap = 0;
+            // GitHub's 302 puts the signed URL here, then a ~4 KB
+            // Content-Security-Policy. The manifest body is on the next
+            // host. Stop once Location is complete so that header is never
+            // read. Waiting for the blank line stalls the modem, the loop
+            // never returns, and the phone only sees a closed socket.
+            if (h->code >= 300 && h->code < 400 && h->loc) return 1;
           }
           if (ln == 0) {
             phase = 1;
@@ -609,7 +615,10 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
           ln = 0;
         } else if (cap) {
           if (b != '\r') {
-            if (locN >= (int)sizeof g_ghPath - 1) return 0;
+            if (locN >= (int)sizeof g_ghPath - 1) {
+              otaSet("error", "url too long");
+              return 0;
+            }
             g_ghPath[locN++] = (char)b;
           }
         } else if (ln < 90) {
@@ -679,8 +688,6 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
   modem.timeout(20000);
   if (rd == 2) {
     otaSet("error", "timeout");
-    otaSolid(0, 0, 160);
-    delay(1000);
     return false;
   }
   if (rd != 1) {
@@ -910,6 +917,8 @@ static void githubRun(uint8_t job) {
     if (strcmp(g_otaState, "checked") != 0) {
       if (!g_otaMsg[0]) otaSet("error", "github");
       else if (strcmp(g_otaState, "error") != 0) otaSet("error", g_otaMsg);
+      otaSolid(180, 0, 0);
+      delay(1200);
     }
     Serial.print(F("GitHub: "));
     Serial.println(g_otaMsg);

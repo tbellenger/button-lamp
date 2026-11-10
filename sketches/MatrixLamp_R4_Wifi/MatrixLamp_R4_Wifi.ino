@@ -47,8 +47,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   122648 B flash (46% of 262144), 15204 B globals (46% of 32768),
-   17564 B left for locals. The .bin is 122656 B. OTA allows at most
+   122712 B flash (46% of 262144), 15204 B globals (46% of 32768),
+   17564 B left for locals. The .bin is 122720 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -269,6 +269,9 @@ static uint8_t g_otaFail = 0;
 static uint8_t g_otaApply = 0;
 static uint8_t g_rebootAfter = 0;
 static uint8_t g_ghJob = 0;
+// GitHub fetch runs from loop, after the POST response has been flushed.
+// httpStop clears g_ghJob, so the pending job lives here.
+static uint8_t g_ghPend = 0;
 static uint8_t g_wantCrc = 0;
 static uint32_t g_crcExpect = 0;
 static uint32_t g_crcState = 0xffffffffu;
@@ -482,6 +485,7 @@ function show(s){
     (s.mode==='plasma'?('zoom '+s.zoom+'\n'):'')+
     (s.mode==='sun'?('sun '+s.sun+'\n'):'')+
     s.wifi+' '+s.ip+'  rssi '+s.rssi;
+  if(s.ota&&s.ota!='idle')otaSay(s.ota+' '+(s.otaPct||0)+'% '+(s.otaMsg||''));
 }
 function flip(name){
   S[name]=S[name]?0:1;
@@ -547,7 +551,7 @@ function otaWatch(done,nax){
   var n=0,stamp=document.getElementById('fw').textContent,t=setInterval(function(){
     fetch('/api/state').then(function(r){return r.json();}).then(function(s){
       show(s); if(done(s,stamp))clearInterval(t);
-    }).catch(function(){otaSay('rebooting');});
+    }).catch(function(){});
     if(++n>(nax||40))clearInterval(t);
   },1000);
 }
@@ -557,7 +561,7 @@ document.getElementById('up').onclick=function(){
   x.setRequestHeader('X-OTA-Password',otap.value);
   x.upload.onprogress=function(e){if(e.lengthComputable)otaSay('send '+Math.round(100*e.loaded/e.total)+'%');};
   x.onload=function(){otaSay(x.status+' '+(x.responseText||'')); if(x.status==200)setTimeout(function(){location.reload();},5000);};
-  x.onerror=function(){otaSay('closed — orange bar means reboot'); setTimeout(function(){location.reload();},8000);};
+  x.onerror=function(){otaSay('closed before reply');};
   x.send(f);
 };
 document.getElementById('chk').onclick=function(){
@@ -565,7 +569,7 @@ document.getElementById('chk').onclick=function(){
   otaWatch(function(s){if(s.ota=='checked'||s.ota=='error'){otaSay((s.otaMsg||s.ota)+' '+(s.ghVersion||'')+' '+(s.ghSize||''));return 1;}},30);
 };
 document.getElementById('gh').onclick=function(){
-  otaSay('downloading — watch the panel'); otaPost('/api/ota/apply');
+  otaSay('fetching'); otaPost('/api/ota/apply');
   otaWatch(function(s,stamp){
     if(s.ota=='error'){otaSay(s.otaMsg||'failed');return 1;}
     if(s.fw&&document.getElementById('fw').textContent!=stamp){otaSay('updated '+s.fw);setTimeout(function(){location.reload();},600);return 1;}
@@ -1356,7 +1360,9 @@ static void httpWrite() {
   g_ghJob = 0;
   g_otaApply = 0;
   g_rebootAfter = 0;
-  if (apply || reboot) {
+  if (job || apply || reboot) {
+    // The WiFi stack buffers the reply. Closing before flush makes the
+    // phone see a dead socket and the page used to call that a reboot.
     modem.timeout(400);
     g_client.flush();
     delay(200);
@@ -1373,7 +1379,7 @@ static void httpWrite() {
     return;
   }
   if (reboot) NVIC_SystemReset();
-  if (job) githubRun(job);
+  if (job) g_ghPend = job;
 }
 
 static void wifiBegin() {
@@ -1622,6 +1628,11 @@ void loop() {
   uint32_t now = millis();
   if (!g_otaActive) pollArcade(now);
   webPoll(now);
+  if (g_ghPend && g_http == PH_IDLE && !g_otaActive) {
+    uint8_t job = g_ghPend;
+    g_ghPend = 0;
+    githubRun(job);
+  }
   if (!g_otaActive) {
     tickScroll(now);
     tickPanel(now);
