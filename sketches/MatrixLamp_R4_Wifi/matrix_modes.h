@@ -6,7 +6,7 @@
 //   fire     switches at rest. The matrix fire in the sketch, not this file.
 //   jumbo    rocker on. Bottom-up wipe of the jumbo colour. Toggle cycles it.
 //   classic  rocker on after the arcade sequence rlrrlrll. Solid, knob colour.
-//   rainbow  key. Hue runs along the path. Toggle reverses it.
+//   rainbow  key. A diagonal hue on the grid, drifting. Toggle reverses it.
 //   wave     covered toggle. A band ripples up the rows.
 //   wave-mod wave + toggle. The band crossfades a colour pair.
 //   wave-rainbow  wave + key. Each row a hue, band still travels.
@@ -545,15 +545,13 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now, uint8_t* r,
     return;
   }
   if (in->mode == M_RAINBOW) {
-    int path = effectPath(x, y);
-    int t = (int)((g_rainPhase + (uint32_t)path * 8) & 255);
-    int seg = t * 6 / 256;
-    int u = (t * 6 - seg * 256);
-    static const uint8_t R[7] = {255, 255, 0, 0, 0, 170, 255};
-    static const uint8_t G[7] = {0, 80, 255, 255, 0, 0, 0};
-    static const uint8_t B[7] = {0, 0, 0, 40, 255, 255, 0};
-    if (seg > 5) seg = 5;
-    mixTo(r, g, b, R[seg], G[seg], B[seg], R[seg + 1], G[seg + 1], B[seg + 1], u);
+    // One hue cycle on the diagonal from bottom-left to top-right.
+    // Neighbouring pixels differ by a fixed step in x and in y, so the
+    // bands stay straight. The old path index kinked them on every
+    // serpentine row. g_rainPhase drifts; the toggle reverses that drift.
+    int along = x + ((PANEL_H - 1) - y);
+    int t = (int)((g_rainPhase + (uint32_t)along * 8u) & 255u);
+    hsvToRgb((uint8_t)t, 255, 255, r, g, b);
     return;
   }
   if (in->mode == M_WAVE || in->mode == M_WAVE_MOD ||
