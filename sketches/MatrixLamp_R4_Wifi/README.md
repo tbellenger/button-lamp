@@ -35,8 +35,10 @@ Edit only these, at the top of `MatrixLamp_R4_Wifi.ino`:
 |---|---|
 | `PANEL_SERPENTINE` | `true` when rows alternate direction (these panels usually do). |
 | `PANEL_SERPENTINE_ODD` | `true`: row 0 left to right, row 1 right to left. |
-| `PANEL_FLIP_X`, `PANEL_FLIP_Y` | Mirror. |
-| `PANEL_ROTATE` | Clockwise quarter-turns, 0–3. |
+| `PANEL_FLIP_X`, `PANEL_FLIP_Y` | Mirror. Both are `false`. |
+| `PANEL_ROTATE` | Clockwise quarter-turns, 0–3. This sketch uses **1**. |
+
+In the desk stand, housing +Y is up. The panel's first serpentine row sits on the left edge and the last row on the right, so `PANEL_ROTATE` 0 lays every picture on its side (the fire enters from the right). `1` turns the logical picture clockwise before the serpentine index, which puts the ember row on the bottom. The pocket only allows the four in-plane rotations, so this turn does not mirror the picture.
 
 ## Upload
 
@@ -68,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122680 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122688 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122648 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122656 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.

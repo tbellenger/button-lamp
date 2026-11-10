@@ -203,7 +203,7 @@ How each spiral mode sits on the grid (`y = 0` is the top of the picture):
 | Fire | all off | The matrix fire: deep red, orange, yellow, white only in the hottest cores. Not a spiral-lamp mode. This is what the strip lamp leaves dark. |
 | Jumbo | rocker, toggle optional | A wipe from the bottom row upward in the jumbo colour (white, then red, purple, blue, green, yellow, orange). The toggle steps that colour. |
 | Classic | rocker, after `rlrrlrll` on the arcade buttons | The whole panel one colour from the knob. Turning the toggle on leaves Classic. |
-| Rainbow | key | A hue runs along a serpentine path that starts at the bottom. The toggle reverses it. |
+| Rainbow | key | A smooth diagonal rainbow on the grid, one hue cycle from the bottom-left corner to the top-right. It drifts. The knob is the drift speed and the toggle reverses it. The bands do not follow the serpentine wire. |
 | Wave | wave | A bright band ripples up the rows. |
 | Wave modifier | wave + toggle | That band crossfades a colour pair. |
 | Wave rainbow | wave + key | Each row is a hue; the band still travels. |
@@ -224,9 +224,9 @@ If the picture is mirrored or turned, edit the `PANEL_*` settings at the top of 
 | `PANEL_SERPENTINE` | `true` if rows alternate direction (how these panels are built). `false` if every row is left to right. |
 | `PANEL_SERPENTINE_ODD` | `true`: row 0 is left to right and row 1 is right to left. `false`: the other way around. |
 | `PANEL_FLIP_X` / `PANEL_FLIP_Y` | Mirror left-right or top-bottom. |
-| `PANEL_ROTATE` | Clockwise quarter-turns: 0, 1, 2, or 3. |
+| `PANEL_ROTATE` | Clockwise quarter-turns: 0, 1, 2, or 3. This sketch uses 1. |
 
-Rotation, then flip, then the serpentine index. `y = 0` is the top of the picture, `x = 0` is the left.
+Rotation, then flip, then the serpentine index. `y = 0` is the top of the picture, `x = 0` is the left. In the desk stand the housing's +Y is up, and the panel is seated so its first data row is the left edge. `PANEL_ROTATE` 1 turns the logical picture clockwise to match that seating. The ember row is then the bottom edge, and `x = 0` stays on the left.
 
 #### Power
 
@@ -300,13 +300,13 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122680 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The exported `.bin` is 122688 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122648 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The exported `.bin` is 122656 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up.
 
 #### WiFi firmware update
 
 The upload path is an HTTP POST on the lamp's existing web server, not the Arduino IDE network port. ArduinoOTA 1.1.1 does support this board: its Renesas storage writes the new image into the top half of code flash and, only when asked, copies it over the running sketch and resets. The sketch defines `NO_OTA_NETWORK` so the library does not open a second TCP port or a second mDNS responder. The lamp already answers `matrixlamp.local`. Curl and the phone both speak HTTP, so one endpoint covers the Windows script and the iPhone. The IDE recipe (`platform.local.txt` copied into the core) is not used.
 
-Checked against `arduino:renesas_uno` 1.6.0. Code flash is 256 KB with a 16 KB bootloader, so the sketch region is 240 KB. `InternalStorage` allows half of that, aligned down to the 2 KB block: **122880 bytes**. This build's `.bin` is 122688 bytes, 192 bytes under that cap. The on-page preset lines were shortened again to stay under it. A larger image is refused and not applied. The 8 KB data flash holds the WiFi name and the OTA password. It is not big enough for a second sketch, and a code-flash update does not erase it.
+Checked against `arduino:renesas_uno` 1.6.0. Code flash is 256 KB with a 16 KB bootloader, so the sketch region is 240 KB. `InternalStorage` allows half of that, aligned down to the 2 KB block: **122880 bytes**. This build's `.bin` is 122656 bytes, 224 bytes under that cap. The on-page preset lines were shortened again to stay under it. A larger image is refused and not applied. The 8 KB data flash holds the WiFi name and the OTA password. It is not big enough for a second sketch, and a code-flash update does not erase it.
 
 `POST /update` requires the header `X-OTA-Password`. An empty stored password refuses every upload. Optional header `X-OTA-Crc32` is 8 hex digits; a mismatch is not applied. The image also has to start like a Cortex-M sketch (stack pointer in RAM, reset vector inside the image, Thumb bit set). A short body, a dropped connection, or a failed flash write calls `close` and does not call `apply`. During the transfer the 24 kHz matrix scan is stopped, and the 16×16 fills with orange as the bytes land. `apply` reboots into the new firmware. ArduinoOTA 1.1.1's Renesas `apply()` erases one 2 KB block too many, and that block is the start of the staged image, so the board resets into an empty vector table and sits on the last orange frame. This sketch copies the staged image itself, with the block count that matches the file, then calls `NVIC_SystemReset()`. The download no longer waits for the TLS socket to close: GitHub's asset host sends `Content-Length` and `Connection: close`, but `WiFiSSLClient::connected()` stays true and `available()` can block in the modem. Once that many bytes are in, the lamp checks the image. Orange is the download. White is the copy. Red is a bad image or CRC. Blue is a stall (about 8 s with no bytes). Red or blue returns to the running picture. A failed check does not erase the sketch that is running.
 

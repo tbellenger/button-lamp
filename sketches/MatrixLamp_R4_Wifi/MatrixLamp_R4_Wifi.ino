@@ -47,8 +47,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   122680 B flash (46% of 262144), 15204 B globals (46% of 32768),
-   17564 B left for locals. The .bin is 122688 B. OTA allows at most
+   122648 B flash (46% of 262144), 15204 B globals (46% of 32768),
+   17564 B left for locals. The .bin is 122656 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -110,9 +110,18 @@ static const bool PANEL_SERPENTINE_ODD = true;
 // Mirror after rotation, before the serpentine index.
 static const bool PANEL_FLIP_X = false;
 static const bool PANEL_FLIP_Y = false;
-// Clockwise quarter-turns of the logical picture. 0, 1, 2, or 3.
-// The panel is square, so a 90 degree turn still maps every LED.
-static const uint8_t PANEL_ROTATE = 0;
+// Clockwise quarter-turns of the logical picture, applied before the flips
+// and the serpentine index. 0, 1, 2, or 3. The panel is square, so a 90
+// degree turn still maps every LED.
+//
+// The housing stands with +Y up (see matrix_16x16_arduino_back/system.py).
+// These panels are serpentine, first data row left to right. Seated in the
+// square pocket that row is the left edge and the last row is the right
+// edge, so rotate 0 lays the picture on its side: the fire's ember row
+// (y = 15) is the right-hand column. One clockwise turn puts that row on
+// the desk. The PCB cannot go in LEDs-down, so the four seatings are
+// rotations only. This one is not a mirror: x = 0 stays on the left.
+static const uint8_t PANEL_ROTATE = 1;
 
 // ---- Power. 20 of 255 is plenty on this panel. Do not ship it at 255. ----
 // One WS2812B is about 60 mA at full white and brightness 255.
@@ -415,7 +424,7 @@ details p{margin:.2rem .9rem .7rem;color:#e7d8c6;font-size:.92rem}
 <details><summary>Fire</summary><p>All off. Knob is speed.</p></details>
 <details><summary>Jumbo</summary><p>Rocker on. Toggle cycles colour.</p></details>
 <details><summary>Classic</summary><p>Rocker on. Code: white red white white red white red red.</p></details>
-<details><summary>Rainbow</summary><p>Key on. Toggle reverses.</p></details>
+<details><summary>Rainbow</summary><p>Key on. Diagonal bands drift. Toggle reverses.</p></details>
 <details><summary>Wave</summary><p>Open the red cover.</p></details>
 <details><summary>Wave modifier</summary><p>Toggle and wave.</p></details>
 <details><summary>Wave rainbow</summary><p>Key and wave.</p></details>
