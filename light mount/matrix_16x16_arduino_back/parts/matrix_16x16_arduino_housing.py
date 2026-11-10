@@ -100,7 +100,7 @@ def matrix_16x16_arduino_housing(
     head_recess_z = z0 - 2.2
     screw_points = [(-3.0 * pitch, -6.0 * pitch), (-3.0 * pitch, -3.0 * pitch),
                     (3.0 * pitch, -6.0 * pitch), (3.0 * pitch, -3.0 * pitch)]
-    screw_points += list(L["mount_screws"])
+    screw_points += list(L["housing_mount_screws"])
     for mx, my in screw_points:
         body -= Pos(mx, my, -0.5) * extrude(Circle(m3_hole / 2.0), amount=z0 + 1.0)
         body -= Pos(mx, my, head_recess_z) * extrude(Circle(m3_head_d / 2.0), amount=2.5)

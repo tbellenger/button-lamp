@@ -30,16 +30,11 @@ def trans(dx, dy, dz):
     return M
 
 
-def mirror_y():
-    M = np.eye(4)
-    M[1, 1] = -1.0
-    return M
-
-
 # Print-frame point (x, y, z) -> world. Housing +Z (toward the LEDs) is world -Y.
 HOUSING = trans(0.0, -10.0, 96.0) @ rot_x(90.0)
-# Shell mating face on the housing back; cavity opens toward world +Y.
-SHELL = HOUSING @ rot_x(180.0) @ mirror_y()
+# Turn the shell over about the bay centre. (x, y, z) -> (x, 2*cy - y, -z).
+_cy = layout()["bay_cy"]
+SHELL = HOUSING @ trans(0.0, 2.0 * _cy, 0.0) @ rot_x(180.0)
 # Cover plate just outside the shell rim, lip pointing back into the bay.
 _L = layout()
 COVER = HOUSING @ trans(0.0, 0.0, -(_L["shell_h"] + 3.0))

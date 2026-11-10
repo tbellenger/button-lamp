@@ -165,6 +165,11 @@ def layout():
         oy1=oy1,
         holes=holes,
         mount_screws=mount_screws,
+        # The shell is turned over about the bay's horizontal centre to put its
+        # mating face on this backplate. That sends (x, y) to (x, 2*bay_cy - y).
+        # These are where the shell's screws land, so the backplate is drilled there.
+        bay_cy=(oy0 + oy1) / 2.0,
+        housing_mount_screws=tuple((sx, (oy0 + oy1) - sy) for sx, sy in mount_screws),
         cover_screws=cover_screws,
         cable_slot=cable_slot,
         matrix_bridge=matrix_bridge,

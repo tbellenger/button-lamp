@@ -78,16 +78,23 @@ def matrix_16x16_arduino_cover(
             y0, y1 = iy1 - reach, oy1 + 1.0
         return lip_notch(x, (y0 + y1) / 2.0, opening + 2.0 * fit_clearance, y1 - y0)
 
-    body -= edge_notch(L["power_notch_y"], 8.0, False)
-    body -= edge_notch_y(L["button_notch_x"], L["button_notch_w"], True)
+    # The shell is turned over about its horizontal centre before the cover
+    # goes on, so a cover point has to be drawn at (x, 2*bay_cy - y) to meet
+    # the shell feature that was drawn at (x, y).
+    def seated(y):
+        return 2.0 * L["bay_cy"] - y
+
+    body -= edge_notch(seated(L["power_notch_y"]), 8.0, False)
+    # The shell's bottom-wall notch becomes the top edge once the shell is turned over.
+    body -= edge_notch_y(L["button_notch_x"], L["button_notch_w"], False)
 
     for sx, sy in L["cover_screws"]:
-        body -= Pos(sx, sy, -0.5) * extrude(Circle(m3_hole / 2.0), amount=plate_thickness + 1.5)
+        body -= Pos(sx, seated(sy), -0.5) * extrude(Circle(m3_hole / 2.0), amount=plate_thickness + 1.5)
 
     # The shield covers the R4's 12x8 matrix, so there is no window over those LEDs.
-    # Vents stay clear of the cover screws.
+    # Vents stay clear of the cover screws, in the same tumble as the shell vents.
     for vx, vy in ((-28.0, 40.0), (28.0, 18.0), (28.0, 58.0)):
-        body -= Pos(vx, vy, -0.5) * extrude(RectangleRounded(3.0, 14.0, 1.2), amount=plate_thickness + 1.0)
+        body -= Pos(vx, seated(vy), -0.5) * extrude(RectangleRounded(3.0, 14.0, 1.2), amount=plate_thickness + 1.0)
 
     if draft:
         return body

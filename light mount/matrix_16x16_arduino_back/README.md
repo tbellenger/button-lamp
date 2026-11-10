@@ -121,7 +121,7 @@ Do not power the 256 LEDs from the Arduino's barrel-jack regulator. The barrel c
 
 1. Melt the eight heat-set inserts in: four down into the standoffs, four down into the cover bosses. Stop flush. The holes are blind.
 2. Drop four M3 nuts into the hex pockets in the shell floor.
-3. Bolt the shell to the housing with four M3×8 screws. The heads sit in the recesses on the LED side of the backplate, at (±30, 30), (−30, 50) and (30, 60) mm. The shell's floor slot lines up with the upper-right window in the backplate.
+3. Turn the shell over about its horizontal centre, so the top edge of the print becomes the bottom edge on the housing, and bolt it on with four M3×8 screws. The heads sit in the recesses on the LED side of the backplate, at (−30, 43.5), (−30, 23.5), (30, 43.5) and (30, 13.5) mm. USB-C stays on the left. The floor slot still opens through the upper-right backplate window. The button-wire notch, which is the bottom edge of the print, is the top edge once the shell is turned over.
 4. Seat the UNO R4 WiFi on the standoffs, USB-C toward the crowned wall.
 5. Press the terminal shield onto the Uno until the stacking headers are seated. The four holes should line up. If they do not, stop and measure the shield holes before tightening anything.
 6. Fasten both boards with four M3×18 screws into the standoff inserts.
@@ -134,7 +134,7 @@ Do not power the 256 LEDs from the Arduino's barrel-jack regulator. The barrel c
    - Zip the matrix leads to the bar on the floor slot, then drop them through the slot.
    - Bring the button leads out the bottom-wall notch and zip them to the eye.
 8. Bring the 5 V cable in through the notch on the right wall and zip-tie it to that eye.
-9. Fit the cover. The lip drops into the shell. The notches in the lip leave the 5 V and button openings clear. Four M3×8 screws, at (−34, 4.4), (10, 4.4), (−14, 69.2) and (40, 69.2).
+9. Fit the cover, plate outward, lip into the shell. The notches in the lip leave the 5 V and button openings clear. Four M3×8 screws, at (−34, 69.1), (10, 69.1), (−14, 4.3) and (40, 4.3). Those are the shell bosses after the shell is turned over.
 10. Slide the baffle down the top mouth of the housing, then the 162 mm diffuser, same as the original mount.
 11. Mount it:
     - **On the lamp:** use the original `matrix_16x16_base_mount` and four M3×16 screws into `top_backer_plate`. The four holes and the cradle height are unchanged.
