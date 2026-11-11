@@ -7,8 +7,8 @@
 //   metaballs  blobs, 1 to 8. The page adds and removes them.
 //   plasma     rotating field. Red zooms in, white zooms out.
 //   sun        pulsing sun. Red grows it, white shrinks it.
-//   spiral     one arm, thin near the centre, wide rounded tip.
-//              Fixed spin, the other way from the first version. Speed shifts hue.
+//   spiral     one logarithmic arm, r = a e^(b theta), about 1.75 turns.
+//              Width scales with r. Fixed spin, one turn every 9 s. Speed shifts hue.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
 //
@@ -334,35 +334,39 @@ static void modesStep(const ModeIn* in, uint32_t now) {
   if (in->mode == M_FLUID) fluidStep(in->speed);
 }
 
-// Centreline samples for the current spin. Rebuilt once per frame.
-static const uint8_t SP_N = 24;
+// Logarithmic centreline, r = SP_A * exp(SP_B * theta), about 1.75 turns.
+// Rebuilt once per frame. Angle still advances as -spin, one turn per 9 s.
+static const uint8_t SP_N = 48;
+static const float SP_A = 1.50f;
+static const float SP_B = 0.166f;
+static const float SP_TURNS = 1.75f;
 static float g_spX[SP_N];
 static float g_spY[SP_N];
+static float g_spR[SP_N];
 static uint32_t g_spNow = 0xffffffffu;
 
 static void spiralPrep(uint32_t now) {
   if (g_spNow == now) return;
   g_spNow = now;
-  const float pitch = 0.70f;
-  const float smin = 1.60f;
-  const float smax = 9.20f;
+  float theta = SP_TURNS * 6.2831853f;
   float spin = (float)(now % 9000u) * (6.2831853f / 9000.0f);
-  float ds = (smax - smin) / (float)(SP_N - 1);
-  float da = pitch * ds;
-  // Old arm was ang = +spin + pitch*r (clockwise on the panel).
-  float a = -spin + pitch * smin;
-  float ca = cosf(a);
-  float sa = sinf(a);
-  float cd = cosf(da);
-  float sd = sinf(da);
+  float dth = theta / (float)(SP_N - 1);
+  float grow = expf(SP_B * dth);
+  float ang = -spin;
+  float ca = cosf(ang);
+  float sa = sinf(ang);
+  float cd = cosf(dth);
+  float sd = sinf(dth);
+  float rad = SP_A;
   for (uint8_t i = 0; i < SP_N; i++) {
-    float s = smin + ds * (float)i;
-    g_spX[i] = s * ca;
-    g_spY[i] = s * sa;
+    g_spX[i] = rad * ca;
+    g_spY[i] = rad * sa;
+    g_spR[i] = rad;
     float nca = ca * cd - sa * sd;
     float nsa = sa * cd + ca * sd;
     ca = nca;
     sa = nsa;
+    rad *= grow;
   }
 }
 
@@ -374,20 +378,21 @@ static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
   float dy = (float)y - 7.5f;
   float rad = sqrtf(dx * dx + dy * dy);
   float best = 1.0e9f;
-  float bestU = 0.0f;
+  float bestR = SP_A;
   for (uint8_t i = 0; i < SP_N; i++) {
     float ddx = dx - g_spX[i];
     float ddy = dy - g_spY[i];
     float d2 = ddx * ddx + ddy * ddy;
     if (d2 < best) {
       best = d2;
-      bestU = (float)i / (float)(SP_N - 1);
+      bestR = g_spR[i];
     }
   }
   float dist = sqrtf(best);
-  // Cubic so the arm stays thin until it opens into the tip.
-  float u3 = bestU * bestU * bestU;
-  float half = 0.55f + 1.75f * u3;
+  // Proportional to radius. The floor keeps the inner arm one pixel wide
+  // instead of breaking into dots. The outer end is a round disk of this radius.
+  float half = 0.28f * bestR;
+  if (half < 0.50f) half = 0.50f;
   bool core = rad < 1.40f;
   if (dist > half && !core) return;
   // Body of the stroke is full. Only a thin rim softens, so the tip
