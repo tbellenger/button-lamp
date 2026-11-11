@@ -8,8 +8,9 @@
 
    The picture is the 16x16 panel. The phone page has brightness, speed,
    and preset buttons. While Meatballs is showing, + Ball and - Ball
-   change the count from 1 to 8. Matrix is green rain. Speed is how
-   fast those drops fall.
+   change the count from 1 to 8. Matrix is green rain: a light-green
+   head, a short pure-green tail, and a field that fades to black.
+   Speed is how fast those drops fall.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
@@ -51,8 +52,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   116448 B flash (44% of 262144), 17040 B globals (52% of 32768),
-   15728 B left for locals. The .bin is 116456 B. OTA allows at most
+   116480 B flash (44% of 262144), 17808 B globals (54% of 32768),
+   14960 B left for locals. The .bin is 116488 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
