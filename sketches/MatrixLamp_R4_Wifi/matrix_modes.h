@@ -394,28 +394,27 @@ static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
   float half = 0.28f * bestR;
   if (half < 0.50f) half = 0.50f;
   bool core = rad < 1.40f;
-  if (dist > half && !core) return;
-  // Body of the stroke is full. Only a thin rim softens, so the tip
-  // stays a round disk instead of fading to one dim pixel.
+  bool onArm = core || dist <= half;
+  // Same hue as Rainbow: full saturation, Speed only slides it.
+  int hue = 168 + ((int)speed - 50);
+  if (hue < 0) hue += 256;
+  if (hue > 255) hue -= 256;
+  if (!onArm) {
+    // Dark field, about 15% of a full arm, still the same saturated hue.
+    hsvToRgb((uint8_t)hue, 255, 38, r, g, b);
+    return;
+  }
+  // Body of the stroke is full colour. Only a thin rim softens, so the
+  // tip stays a round disk. The core is a step brighter and stays saturated.
   float cover = 1.0f;
   if (!core && dist > half * 0.78f) {
     cover = (half - dist) / (half * 0.22f);
     if (cover < 0.0f) cover = 0.0f;
     cover = 0.82f + 0.18f * cover;
   }
-  float center = 0.55f + 0.45f * (1.0f - rad / 12.0f);
-  if (center < 0.55f) center = 0.55f;
-  if (core) center = 1.0f;
-  float lit = cover * (0.72f + 0.28f * center);
-  if (lit > 1.0f) lit = 1.0f;
-  int hue = 168 + ((int)speed - 50);
-  if (hue < 0) hue += 256;
-  if (hue > 255) hue -= 256;
-  int sat = 255 - (int)(center * 160.0f);
-  if (sat < 40) sat = 40;
-  int val = (int)(lit * 255.0f);
+  int val = core ? 255 : (int)(cover * 230.0f);
   if (val > 255) val = 255;
-  hsvToRgb((uint8_t)hue, (uint8_t)sat, (uint8_t)val, r, g, b);
+  hsvToRgb((uint8_t)hue, 255, (uint8_t)val, r, g, b);
 }
 
 static void paintFluid(int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
