@@ -174,7 +174,29 @@ static void fluidInject(int cx, int cy, uint8_t hue, uint8_t amt) {
   }
 }
 
+// Radius (1/16 px) and angle (0..255 = one turn) for each LED, in logical
+// picture space. panelIndex applies PANEL_ROTATE when the pixel is sent.
+static uint8_t g_polDist[256];
+static uint8_t g_polAng[256];
+
+static void geomBoot() {
+  for (int y = 0; y < 16; y++) {
+    for (int x = 0; x < 16; x++) {
+      float dx = (float)x - 7.5f;
+      float dy = (float)y - 7.5f;
+      float dist = sqrtf(dx * dx + dy * dy);
+      float ang = atan2f(dy, dx);
+      int di = (int)(dist * 16.0f);
+      if (di > 255) di = 255;
+      int ai = (int)((ang + 3.14159265f) * (256.0f / 6.2831853f));
+      g_polDist[y * 16 + x] = (uint8_t)di;
+      g_polAng[y * 16 + x] = (uint8_t)(ai & 255);
+    }
+  }
+}
+
 static void modesBoot() {
+  geomBoot();
   g_metaRng ^= 0xA5A5u;
   g_metaN = 3;
   for (uint8_t i = 0; i < g_metaN; i++) metaPlace(i);
@@ -214,12 +236,42 @@ static void sunWarm(float heat, uint8_t* r, uint8_t* g, uint8_t* b) {
   }
 }
 
+// Quarter-degree sine. 0..255 is one turn, value is sin * 127.
+// libm sinf is hundreds of cycles; this is one load.
+static const int8_t kSinQ[256] = {
+     0,   3,   6,   9,  12,  16,  19,  22,  25,  28,  31,  34,  37,  40,  43,  46,
+    49,  51,  54,  57,  60,  63,  65,  68,  71,  73,  76,  78,  81,  83,  85,  88,
+    90,  92,  94,  96,  98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116,
+   117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127,
+   127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118,
+   117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100,  98,  96,  94,  92,
+    90,  88,  85,  83,  81,  78,  76,  73,  71,  68,  65,  63,  60,  57,  54,  51,
+    49,  46,  43,  40,  37,  34,  31,  28,  25,  22,  19,  16,  12,   9,   6,   3,
+     0,  -3,  -6,  -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46,
+   -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88,
+   -90, -92, -94, -96, -98,-100,-102,-104,-106,-107,-109,-111,-112,-113,-115,-116,
+  -117,-118,-120,-121,-122,-122,-123,-124,-125,-125,-126,-126,-126,-127,-127,-127,
+  -127,-127,-127,-127,-126,-126,-126,-125,-125,-124,-123,-122,-122,-121,-120,-118,
+  -117,-116,-115,-113,-112,-111,-109,-107,-106,-104,-102,-100, -98, -96, -94, -92,
+   -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
+   -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12,  -9,  -6,  -3
+};
+
+static float sinQ(float rad) {
+  int i = (int)(rad * 40.7436654f);
+  return (float)kSinQ[i & 255] * (1.0f / 127.0f);
+}
+
+static float cosQ(float rad) {
+  return sinQ(rad + 1.5707963f);
+}
+
 static void fluidVel(float x, float y, float t, float* vx, float* vy) {
   float fx = (x - 7.5f) * 0.42f;
   float fy = (y - 7.5f) * 0.42f;
-  float wob = sinf(t * 0.6f);
-  *vx = -fy * (0.85f + 0.25f * wob) + sinf(fx * 1.4f + t) * 0.55f;
-  *vy = fx * (0.85f + 0.25f * wob) + cosf(fy * 1.2f - t * 0.8f) * 0.50f;
+  float wob = sinQ(t * 0.6f);
+  *vx = -fy * (0.85f + 0.25f * wob) + sinQ(fx * 1.4f + t) * 0.55f;
+  *vy = fx * (0.85f + 0.25f * wob) + cosQ(fy * 1.2f - t * 0.8f) * 0.50f;
 }
 
 static void fluidSample(float x, float y, int* ink, int* hue) {
@@ -250,8 +302,8 @@ static void fluidSample(float x, float y, int* ink, int* hue) {
   *hue = bh;
 }
 
-static void fluidStep(uint8_t speed) {
-  float scale = 0.35f + (float)speed * 0.013f;
+static void fluidStep(uint8_t speed, float timeScale) {
+  float scale = (0.35f + (float)speed * 0.013f) * timeScale;
   g_fluidT += 0.06f * scale;
   uint8_t nd[256];
   uint8_t nh[256];
@@ -284,17 +336,19 @@ static float heartField(float x, float y) {
   return a * a * a - x * x * y * y * y;
 }
 
+static float g_beat = 0.82f;
+
 static float beatScale(uint32_t now, uint8_t speed) {
   uint32_t period = 2100u - (uint32_t)speed * 14u;
   if (period < 650u) period = 650u;
   float p = (float)(now % period) / (float)period;
   if (p < 0.10f) {
-    float u = sinf((p / 0.10f) * 3.14159265f);
+    float u = sinQ((p / 0.10f) * 3.14159265f);
     return 0.84f + 0.24f * u;
   }
   if (p < 0.16f) return 0.84f;
   if (p < 0.30f) {
-    float u = sinf(((p - 0.16f) / 0.14f) * 3.14159265f);
+    float u = sinQ(((p - 0.16f) / 0.14f) * 3.14159265f);
     return 0.84f + 0.13f * u;
   }
   return 0.82f;
@@ -302,18 +356,21 @@ static float beatScale(uint32_t now, uint8_t speed) {
 
 static uint8_t g_modeWas = 255;
 
-static void modesStep(const ModeIn* in, uint32_t now) {
-  (void)now;
+static void modesStep(const ModeIn* in, uint32_t now, uint32_t dt, uint32_t period) {
   int sp = modeSpeed256(in->speed);
+  float timeScale = 1.0f;
+  if (period > 0) timeScale = (float)dt / (float)period;
+  if (timeScale < 0.25f) timeScale = 0.25f;
+  if (timeScale > 3.0f) timeScale = 3.0f;
   if (in->mode != g_modeWas) g_modeWas = in->mode;
   if (in->mode == M_RAINBOW) {
     int add = (6 * sp) / 256;
     if (add < 1) add = 1;
-    g_rainPhase += (uint32_t)add;
+    g_rainPhase += (uint32_t)((float)add * timeScale);
   }
   if (in->mode == M_METABALLS) {
     float scale = (float)sp / 256.0f;
-    float step = 0.28f * scale;
+    float step = 0.28f * scale * timeScale;
     for (uint8_t i = 0; i < g_metaN; i++) {
       g_metaB[i].x += g_metaB[i].vx * step;
       g_metaB[i].y += g_metaB[i].vy * step;
@@ -325,14 +382,15 @@ static void modesStep(const ModeIn* in, uint32_t now) {
   }
   if (in->mode == M_PLASMA) {
     float scale = (float)sp / 256.0f;
-    g_plasmaAngle += 0.045f * scale;
+    g_plasmaAngle += 0.045f * scale * timeScale;
     if (g_plasmaAngle > 6.2831853f) g_plasmaAngle -= 6.2831853f;
-    g_plasmaTime += 0.06f * scale;
+    g_plasmaTime += 0.06f * scale * timeScale;
   }
   if (in->mode == M_SUN) {
-    g_sunTime += 0.08f * ((float)sp / 256.0f);
+    g_sunTime += 0.08f * ((float)sp / 256.0f) * timeScale;
   }
-  if (in->mode == M_FLUID) fluidStep(in->speed);
+  if (in->mode == M_FLUID) fluidStep(in->speed, timeScale);
+  if (in->mode == M_HEART) g_beat = beatScale(now, in->speed);
 }
 
 // Two Archimedean arms, the second rotated 180 degrees.
@@ -344,11 +402,18 @@ static const uint8_t SP_N = 96;
 static const float SP_TURNS = 1.00f;
 static const float SP_R0 = 0.35f;
 static const float SP_R1 = 9.50f;
-static const float SP_SIGMA = 1.22f;
-static float g_spX[SP_N];
-static float g_spY[SP_N];
-static float g_spU[SP_N];
+// Gaussian table below is exp(-d^2 / (2 * 1.22^2)).
+// Centreline in 1/16 px. The Gaussian of d^2 is a 64-step table.
+static int16_t g_spX[SP_N];
+static int16_t g_spY[SP_N];
+static uint8_t g_spU[SP_N];
 static uint32_t g_spNow = 0xffffffffu;
+static const uint8_t kGauss[64] = {
+  255,239,230,220,211,202,194,186,178,171,164,157,151,145,139,133,
+  128,122,117,112,108,103, 99, 95, 91, 87, 84, 80, 77, 74, 71, 68,
+   65, 62, 60, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 38, 36, 35,
+   33, 32, 31, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 18
+};
 
 static void spiralPrep(uint32_t now) {
   if (g_spNow == now) return;
@@ -365,9 +430,9 @@ static void spiralPrep(uint32_t now) {
   float sd = sinf(dth);
   float rad = SP_R0;
   for (uint8_t i = 0; i < SP_N; i++) {
-    g_spX[i] = rad * ca;
-    g_spY[i] = rad * sa;
-    g_spU[i] = (float)i / (float)(SP_N - 1);
+    g_spX[i] = (int16_t)(rad * ca * 16.0f);
+    g_spY[i] = (int16_t)(rad * sa * 16.0f);
+    g_spU[i] = (uint8_t)((i * 255) / (SP_N - 1));
     float nca = ca * cd - sa * sd;
     float nsa = sa * cd + ca * sd;
     ca = nca;
@@ -379,39 +444,42 @@ static void spiralPrep(uint32_t now) {
 static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
                         uint8_t* r, uint8_t* g, uint8_t* b) {
   spiralPrep(now);
-  float dx = (float)x - 7.5f;
-  float dy = (float)y - 7.5f;
-  float best = 1.0e9f;
-  float u = 0.0f;
+  int ox = x * 16 - 120;
+  int oy = y * 16 - 120;
+  int best = 2000000000;
+  int u = 0;
   for (uint8_t i = 0; i < SP_N; i++) {
-    float px = g_spX[i];
-    float py = g_spY[i];
-    float ddx = dx - px;
-    float ddy = dy - py;
-    float d2 = ddx * ddx + ddy * ddy;
+    int px = g_spX[i];
+    int py = g_spY[i];
+    int ddx = ox - px;
+    int ddy = oy - py;
+    int d2 = ddx * ddx + ddy * ddy;
     // The other arm is this one turned 180 degrees.
-    float ddx2 = dx + px;
-    float ddy2 = dy + py;
-    float d2b = ddx2 * ddx2 + ddy2 * ddy2;
+    int ddx2 = ox + px;
+    int ddy2 = oy + py;
+    int d2b = ddx2 * ddx2 + ddy2 * ddy2;
     if (d2b < d2) d2 = d2b;
     if (d2 < best) {
       best = d2;
       u = g_spU[i];
     }
   }
-  // Gaussian of distance to the centreline. Sigma 1.22 px.
-  float gauss = expf(-best / (2.0f * SP_SIGMA * SP_SIGMA));
+  // d^2 is in (1/16 px)^2. Index 0 is the centreline, 63 is ~8 px out.
+  // Sigma stays 1.22 px. The table replaces expf.
+  int gi = best >> 5;
+  if (gi > 63) gi = 63;
+  int gauss = kGauss[gi];
   // 188 violet at the inner end, 130 cyan at the outer end.
   // Speed slides the whole range and keeps the spread.
-  int hue = (int)(188.0f + u * (130.0f - 188.0f)) + ((int)speed - 50);
+  int hue = 188 + ((130 - 188) * u) / 255 + ((int)speed - 50);
   if (hue < 0) hue += 256;
   if (hue > 255) hue -= 256;
-  float satArm = 155.0f + u * (255.0f - 155.0f);
-  float peak = 255.0f + u * (225.0f - 255.0f);
-  float val = 40.0f + (peak - 40.0f) * gauss;
-  float w = gauss / 0.42f;
-  if (w > 1.0f) w = 1.0f;
-  float sat = 200.0f + (satArm - 200.0f) * w;
+  int satArm = 155 + (100 * u) / 255;
+  int peak = 255 - (30 * u) / 255;
+  int val = 40 + ((peak - 40) * gauss) / 255;
+  int w = gauss * 100 / 107;
+  if (w > 100) w = 100;
+  int sat = 200 + ((satArm - 200) * w) / 100;
   if (val > 255.0f) val = 255.0f;
   if (sat < 0.0f) sat = 0.0f;
   if (sat > 255.0f) sat = 255.0f;
@@ -440,7 +508,9 @@ static int heartOn(int x, int y) {
 
 static void paintHeart(int x, int y, uint32_t now, uint8_t speed,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
-  float sc = beatScale(now, speed);
+  (void)now;
+  (void)speed;
+  float sc = g_beat;
   int on = heartOn(x, y);
   int halo = 0;
   if (!on) {
@@ -494,17 +564,17 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
     return;
   }
   if (in->mode == M_PLASMA) {
-    float breathe = 0.82f + 0.38f * sinf(g_plasmaTime * 0.37f);
+    float breathe = 0.82f + 0.38f * sinQ(g_plasmaTime * 0.37f);
     float zoom = breathe * (0.50f + (float)g_plasmaZoom * 0.32f);
-    float ca = cosf(g_plasmaAngle);
-    float sa = sinf(g_plasmaAngle);
+    float ca = cosQ(g_plasmaAngle);
+    float sa = sinQ(g_plasmaAngle);
     float dx = ((float)x - 7.5f) * zoom;
     float dy = ((float)y - 7.5f) * zoom;
     float rx = dx * ca - dy * sa;
     float ry = dx * sa + dy * ca;
-    float v = sinf(rx * 0.90f + g_plasmaTime)
-            + sinf(ry * 0.70f - g_plasmaTime * 0.85f)
-            + sinf((rx + ry) * 0.48f + g_plasmaTime * 0.40f);
+    float v = sinQ(rx * 0.90f + g_plasmaTime)
+            + sinQ(ry * 0.70f - g_plasmaTime * 0.85f)
+            + sinQ((rx + ry) * 0.48f + g_plasmaTime * 0.40f);
     float n = (v + 3.0f) * (1.0f / 6.0f);
     if (n < 0.0f) n = 0.0f;
     if (n > 1.0f) n = 1.0f;
@@ -514,16 +584,14 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
     return;
   }
   if (in->mode == M_SUN) {
-    float dx = (float)x - 7.5f;
-    float dy = (float)y - 7.5f;
-    float dist = sqrtf(dx * dx + dy * dy);
-    float ang = atan2f(dy, dx);
-    float pulse = 0.86f + 0.14f * sinf(g_sunTime * 1.7f);
+    float dist = (float)g_polDist[y * 16 + x] * (1.0f / 16.0f);
+    float ang = ((float)g_polAng[y * 16 + x] * (6.2831853f / 256.0f)) - 3.14159265f;
+    float pulse = 0.86f + 0.14f * sinQ(g_sunTime * 1.7f);
     float coreR = (1.45f + (float)g_sunSize * 0.62f) * pulse;
     float core = coreR / (dist + 0.42f);
-    float ray = sinf(ang * (5.0f + (float)g_sunSize) + g_sunTime * 1.8f);
+    float ray = sinQ(ang * (5.0f + (float)g_sunSize) + g_sunTime * 1.8f);
     ray = 0.55f + 0.45f * ray;
-    float grit = 0.62f + 0.38f * sinf(ang * 13.0f - g_sunTime * 2.6f + dist * 0.9f);
+    float grit = 0.62f + 0.38f * sinQ(ang * 13.0f - g_sunTime * 2.6f + dist * 0.9f);
     if (grit < 0.0f) grit = 0.0f;
     float fall = 1.0f / (1.0f + dist * 0.20f);
     float rayGain = 0.42f + (float)g_sunSize * 0.14f;

@@ -48,8 +48,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   114856 B flash (43% of 262144), 17032 B globals (51% of 32768),
-   15736 B left for locals. The .bin is 114864 B. OTA allows at most
+   115076 B flash (43% of 262144), 16964 B globals (51% of 32768),
+   15804 B left for locals. The .bin is 115084 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -142,7 +142,7 @@ static const uint32_t SCROLL_MS = 80;
 static const float MATRIX_TICK_HZ = 24000.0f;
 
 static const uint32_t WIFI_ACCEPT_MS = 30;
-static const uint32_t WIFI_STATUS_ONLINE_MS = 1000;
+static const uint32_t WIFI_STATUS_ONLINE_MS = 1500;
 static const uint32_t WIFI_STATUS_JOIN_MS = 250;
 static const uint32_t WIFI_RETRY_MS = 22000;
 static const uint32_t WIFI_IP_POLL_MS = 3000;
@@ -259,6 +259,12 @@ static uint32_t g_joinSince = 0;
 static uint8_t g_serverUp = 0;
 static uint8_t g_serverMiss = 0;
 static uint8_t g_joinTries = 0;
+static uint8_t g_wifiPhase = 0;
+static uint16_t g_fps = 0;
+static uint16_t g_frameUs = 0;
+static uint16_t g_fpsN = 0;
+static uint32_t g_fpsT = 0;
+static char g_stats[72];
 
 static bool g_scrollTrack = false;
 static int g_scrollX = -MATRIX_W;
@@ -639,22 +645,42 @@ static uint32_t stepPeriodMs() {
 static void tickPanel(uint32_t now) {
   uint8_t mode = derivedMode();
   uint32_t period = stepPeriodMs();
-  if (!g_dirty && (uint32_t)(now - g_lastFrame) < period) return;
+  // show() is about 7.7 ms for 256 LEDs. Stay at or above 16 ms so a
+  // frame leaves time for one WiFi slice.
+  if (period < 16u) period = 16u;
+  uint32_t elapsed = (g_lastFrame == 0) ? period : (uint32_t)(now - g_lastFrame);
+  if (!g_dirty && elapsed < period) return;
+  if (elapsed > period * 3u) elapsed = period * 3u;
   g_lastFrame = now;
+  uint32_t t0 = micros();
   applyBrightness();
   if (mode == M_FIRE) {
     matrixFireSetIntensity(50);
-    matrixFireStep(g_heat);
+    uint32_t steps = elapsed / period;
+    if (steps < 1u) steps = 1u;
+    if (steps > 3u) steps = 3u;
+    for (uint32_t s = 0; s < steps; s++) matrixFireStep(g_heat);
     paintFire();
   } else {
     ModeIn in;
     in.mode = mode;
     in.speed = g_speed;
     in.fader = g_fader;
-    modesStep(&in, now);
+    modesStep(&in, now, elapsed, period);
     fillMode(&in, now);
   }
+  // NeoPixel show() holds interrupts off for the bit bang. The onboard
+  // matrix timer is paused so it cannot preempt those bits. Modem
+  // commands are finished before this, so the UART is idle during it.
   panelShow();
+  uint32_t us = micros() - t0;
+  g_frameUs = (us > 65535u) ? 65535u : (uint16_t)us;
+  g_fpsN++;
+  if (g_fpsT == 0 || (uint32_t)(now - g_fpsT) >= 1000u) {
+    g_fps = g_fpsN;
+    g_fpsN = 0;
+    g_fpsT = now;
+  }
   g_dirty = 0;
 }
 
@@ -916,6 +942,14 @@ static void httpHandle() {
     httpJson(true, 0);
     return;
   }
+  if (!strcmp(path, "/stats")) {
+    int n = snprintf(g_stats, sizeof g_stats, "fps=%u\nframeUs=%u\nmode=%s\n",
+                     (unsigned)g_fps, (unsigned)g_frameUs, modesName(g_mode));
+    if (n < 0) n = 0;
+    if (n > (int)sizeof g_stats) n = (int)sizeof g_stats;
+    httpBegin(200, "OK", "text/plain; charset=utf-8", g_stats, (uint16_t)n);
+    return;
+  }
   if (!strcmp(path, "/api/set")) {
     const char* err = 0;
     applyQuery(query, &err);
@@ -1039,17 +1073,26 @@ static bool wifiModemAnswers() {
   return strcmp(v, "99.99.99") != 0;
 }
 
+// The ESP32 needs a real pause between resets. Once the matrix timer is
+// running, keep painting during that pause instead of freezing the frame.
+static void waitAnim(uint32_t ms) {
+  uint32_t t = millis();
+  while ((uint32_t)(millis() - t) < ms) {
+    if (g_matrixOn && !g_otaActive) tickPanel(millis());
+  }
+}
+
 static void wifiResetModem() {
   Serial.println(F("WiFi modem reset"));
   for (uint8_t n = 0; n < 3; n++) {
     modem.beginned = false;
     modem.timeout(1000);
     modem.begin(115200, 1);
-    delay(150);
+    waitAnim(150);
     WiFi.end();
-    delay(200);
+    waitAnim(200);
     WiFi.end();
-    delay(400);
+    waitAnim(400);
     modem.timeout(1500);
     if (wifiModemAnswers()) {
       Serial.println(F("WiFi modem ready"));
@@ -1057,7 +1100,7 @@ static void wifiResetModem() {
       return;
     }
     Serial.println(F("WiFi modem retry"));
-    delay(200);
+    waitAnim(200);
   }
   modem.timeout(MODEM_CMD_BUDGET_MS);
   Serial.println(F("WiFi modem silent"));
@@ -1137,22 +1180,26 @@ static void wifiDrop(uint32_t now) {
 }
 
 static void wifiPollStatus(uint32_t now) {
-  uint8_t st = WiFi.status();
-  if (st == WL_CONNECTED) {
-    bool refresh = (g_wifi != WIFI_ONLINE) || g_ip[0] == 0 ||
-                   (uint32_t)(now - g_lastIpPoll) >= WIFI_IP_POLL_MS;
-    if (refresh) {
-      g_lastIpPoll = now;
+  // One modem command per visit once we are online. status(), localIP()
+  // and RSSI() are each a UART round trip; stacking them drops a frame.
+  if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
+    uint8_t phase = g_wifiPhase++;
+    if (phase == 0) {
+      if (WiFi.status() != WL_CONNECTED) {
+        wifiDrop(now);
+        return;
+      }
+    } else if (phase == 1) {
       IPAddress ip = WiFi.localIP();
-      // Ignore a 0.0.0.0 read once we already have an address: localIP()
-      // returns that on a modem timeout as well as before DHCP.
       if (ipReady(ip)) adoptIp(ip);
-    }
-    if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
+    } else {
+      g_wifiPhase = 0;
       if ((uint32_t)(now - g_lastRssi) >= 5000) {
         g_rssi = (int16_t)WiFi.RSSI();
         g_lastRssi = now;
       }
+    }
+    if (g_wifi == WIFI_ONLINE && g_ip[0] != 0) {
       ensureServer();
       // Port 80 still held by a socket from before the reset: begin()
       // keeps failing. Reset the modem and join again.
@@ -1163,7 +1210,16 @@ static void wifiPollStatus(uint32_t now) {
       }
       return;
     }
-  } else if (g_wifi == WIFI_ONLINE) {
+  }
+  uint8_t st = WiFi.status();
+  if (st == WL_CONNECTED) {
+    IPAddress ip = WiFi.localIP();
+    // Ignore a 0.0.0.0 read once we already have an address: localIP()
+    // returns that on a modem timeout as well as before DHCP.
+    if (ipReady(ip)) adoptIp(ip);
+    return;
+  }
+  if (g_wifi == WIFI_ONLINE) {
     wifiDrop(now);
     return;
   }

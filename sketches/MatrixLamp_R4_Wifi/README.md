@@ -70,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 114856 B flash (43% of 262144), 17032 B globals (51% of 32768), 15736 B left for locals. The `.bin` is 114864 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 115076 B flash (43% of 262144), 16964 B globals (51% of 32768), 15804 B left for locals. The `.bin` is 115084 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
