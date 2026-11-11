@@ -8,7 +8,8 @@
 
    The picture is the 16x16 panel. The phone page has brightness, speed,
    and preset buttons. While Meatballs is showing, + Ball and - Ball
-   change the count from 1 to 8.
+   change the count from 1 to 8. Matrix is green rain. Speed is how
+   fast those drops fall.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
@@ -48,8 +49,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   115076 B flash (43% of 262144), 16964 B globals (51% of 32768),
-   15804 B left for locals. The .bin is 115084 B. OTA allows at most
+   115736 B flash (44% of 262144), 17032 B globals (51% of 32768),
+   15736 B left for locals. The .bin is 115744 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -313,7 +314,7 @@ button:disabled{opacity:.35}
 <button type=button id=badd>+ Ball</button>
 </div>
 <details><summary>Update</summary>
-<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. Everywhere else, Speed is how fast the preset moves.</p>
+<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. Everywhere else, Speed is how fast the preset moves.</p>
 <input id=otap type=password placeholder="OTA password" autocomplete=current-password>
 <input id=bin type=file accept=.bin>
 <div class=row>
@@ -325,8 +326,8 @@ button:disabled{opacity:.35}
 </details>
 <pre id=st></pre>
 <script>
-var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart'];
-var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart'};
+var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix'];
+var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix'};
 var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');
@@ -334,7 +335,7 @@ var grid=document.getElementById('grid');
 var note=document.getElementById('spdnote');
 function say(t){otast.textContent=t;}
 function noteFor(m){
-  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : 'Speed is how fast this preset moves.';
+  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : 'Speed is how fast this preset moves.';
 }
 function paintBtns(){
   var bs=grid.querySelectorAll('button');
