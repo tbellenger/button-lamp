@@ -563,6 +563,7 @@ static void setupSave() {
   }
   Serial.println(F("Setup saved"));
   g_rebootAfter = 1;
+  g_rebootAt = millis() + 1500u;
   otaReply(200, "OK", "Saved. Restarting.\n");
 }
 
