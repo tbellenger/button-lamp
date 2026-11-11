@@ -53,8 +53,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   116916 B flash (44% of 262144), 18568 B globals (56% of 32768),
-   14200 B left for locals. The .bin is 116924 B. OTA allows at most
+   117452 B flash (44% of 262144), 18576 B globals (56% of 32768),
+   14192 B left for locals. The .bin is 117460 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -307,7 +307,7 @@ button:disabled{opacity:.35}
 <button type=button id=badd>+ Ball</button>
 </div>
 <details><summary>Update</summary>
-<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. Everywhere else, Speed is how fast the preset moves.</p>
+<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. On Plaid, Speed is how fast the tunnel rushes. Everywhere else, Speed is how fast the preset moves.</p>
 <input id=otap type=password placeholder="OTA password" autocomplete=current-password>
 <input id=bin type=file accept=.bin>
 <div class=row>
@@ -319,8 +319,8 @@ button:disabled{opacity:.35}
 </details>
 <pre id=st></pre>
 <script>
-var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix'];
-var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix'};
+var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','plaid'];
+var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',plaid:'Plaid'};
 var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');
@@ -328,7 +328,7 @@ var grid=document.getElementById('grid');
 var note=document.getElementById('spdnote');
 function say(t){otast.textContent=t;}
 function noteFor(m){
-  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : 'Speed is how fast this preset moves.';
+  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : m=='plaid' ? 'Speed is how fast the tunnel rushes.' : 'Speed is how fast this preset moves.';
 }
 function paintBtns(){
   var bs=grid.querySelectorAll('button');

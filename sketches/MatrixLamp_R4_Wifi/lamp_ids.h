@@ -12,7 +12,8 @@ static const uint8_t M_SPIRAL = 5;
 static const uint8_t M_FLUID = 6;
 static const uint8_t M_HEART = 7;
 static const uint8_t M_MATRIX = 8;
-static const uint8_t M_COUNT = 9;
+static const uint8_t M_PLAID = 9;
+static const uint8_t M_COUNT = 10;
 
 static const uint8_t META_MIN = 1;
 static const uint8_t META_MAX = 8;

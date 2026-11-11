@@ -12,8 +12,10 @@
 //              Fixed spin, one turn every 9 s.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
-//   matrix     green rain. Light-green head, pure-green tail.
+//   matrix     green rain. Saturated green head, pure-green tail.
 //              The whole field fades each step. Speed is the fall.
+//   plaid      ludicrous-speed tunnel. Plaid walls rush out of a
+//              white-yellow core. Speed is how fast it flows.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music. Nothing here plays a stored frame list.
@@ -33,7 +35,7 @@ struct ModeIn {
 
 static const char* const kModeName[M_COUNT] = {
   "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart",
-  "matrix"
+  "matrix", "plaid"
 };
 
 static const char* modesName(uint8_t mode) {
@@ -441,6 +443,78 @@ static float beatScale(uint32_t now, uint8_t speed) {
   return 0.82f;
 }
 
+// Square plaid tunnel, flying out of a hot core. Chebyshev radius is
+// the depth. A short log table packs the cross-rings toward the center
+// and stretches them at the rim. Lengthwise seams stay on a ray.
+// The two patterns add, so a crossing is brighter. Flow runs outward.
+static uint32_t g_plaidQ = 0;
+static const uint8_t kTunnel[16] = {
+  0, 0, 16, 25, 32, 37, 41, 45, 48, 51, 53, 55, 57, 59, 61, 62
+};
+
+static void tartan(int pos, uint8_t* r, uint8_t* g, uint8_t* b) {
+  switch (pos & 7) {
+    case 0: *r = 70; *g = 12; *b = 0; break;
+    case 1: *r = 190; *g = 48; *b = 0; break;
+    case 2: *r = 230; *g = 130; *b = 16; break;
+    case 3: *r = 255; *g = 214; *b = 120; break;
+    case 4: *r = 150; *g = 10; *b = 0; break;
+    case 5: *r = 36; *g = 6; *b = 0; break;
+    case 6: *r = 210; *g = 72; *b = 8; break;
+    default: *r = 110; *g = 24; *b = 0; break;
+  }
+}
+
+static void plaidStep(int sp, uint32_t dt, uint32_t period) {
+  uint32_t scale = 256u;
+  if (period > 0) scale = (dt << 8) / period;
+  if (scale < 64u) scale = 64u;
+  if (scale > 768u) scale = 768u;
+  // Depth units, 1/16. At speed 50 an on-time frame moves 7/16,
+  // about one ring spacing a second.
+  uint32_t add = (uint32_t)sp * scale * 7u;
+  g_plaidQ += add >> 16;
+}
+
+static void paintPlaid(int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
+  int dx = x * 2 - 15;
+  int dy = y * 2 - 15;
+  int ax = dx < 0 ? -dx : dx;
+  int ay = dy < 0 ? -dy : dy;
+  int rad = ax > ay ? ax : ay;
+  if (rad < 1) rad = 1;
+  if (rad > 15) rad = 15;
+  if (rad <= 1) {
+    *r = 255;
+    *g = 255;
+    *b = 255;
+    return;
+  }
+  if (rad <= 3) {
+    *r = 255;
+    *g = 230;
+    *b = 140;
+    return;
+  }
+  int cross = (ax >= ay) ? dy : dx;
+  int spoke = (cross * 8) / rad;
+  int ring = (int)kTunnel[rad] - (int)(g_plaidQ >> 4);
+  uint8_t r1, g1, b1, r2, g2, b2;
+  tartan(spoke, &r1, &g1, &b1);
+  tartan(ring, &r2, &g2, &b2);
+  int rr = (int)r1 + (int)r2;
+  int gg = (int)g1 + (int)g2;
+  int bb = (int)b1 + (int)b2;
+  if (rr > 255) rr = 255;
+  if (gg > 255) gg = 255;
+  if (bb > 255) bb = 255;
+  // Dim near the core, full at the rim.
+  int gain = rad + 1;
+  *r = (uint8_t)((rr * gain) >> 4);
+  *g = (uint8_t)((gg * gain) >> 4);
+  *b = (uint8_t)((bb * gain) >> 4);
+}
+
 static uint8_t g_modeWas = 255;
 
 static void modesStep(const ModeIn* in, uint32_t now, uint32_t dt, uint32_t period) {
@@ -479,6 +553,7 @@ static void modesStep(const ModeIn* in, uint32_t now, uint32_t dt, uint32_t peri
   if (in->mode == M_FLUID) fluidStep(in->speed, timeScale);
   if (in->mode == M_HEART) g_beat = beatScale(now, in->speed);
   if (in->mode == M_MATRIX) rainStep(in->speed, dt, period);
+  if (in->mode == M_PLAID) plaidStep(sp, dt, period);
 }
 
 // Two Archimedean arms, the second rotated 180 degrees.
@@ -706,6 +781,10 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
   }
   if (in->mode == M_MATRIX) {
     paintMatrix(x, y, r, g, b);
+    return;
+  }
+  if (in->mode == M_PLAID) {
+    paintPlaid(x, y, r, g, b);
     return;
   }
   if (in->mode == M_HEART) paintHeart(x, y, now, in->speed, r, g, b);
