@@ -7,8 +7,9 @@
 //   metaballs  blobs, 1 to 8. The page adds and removes them.
 //   plasma     rotating field. Red zooms in, white zooms out.
 //   sun        pulsing sun. Red grows it, white shrinks it.
-//   spiral     one logarithmic arm, r = a e^(b theta), about 1.75 turns.
-//              Width scales with r. Fixed spin, one turn every 9 s. Speed shifts hue.
+//   spiral     one Archimedean arm, about 1.52 turns, Gaussian width.
+//              Hue runs violet to cyan along the arm. Speed shifts that range.
+//              Fixed spin, one turn every 9 s.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
 //
@@ -334,15 +335,18 @@ static void modesStep(const ModeIn* in, uint32_t now) {
   if (in->mode == M_FLUID) fluidStep(in->speed);
 }
 
-// Logarithmic centreline, r = SP_A * exp(SP_B * theta), about 1.75 turns.
-// Rebuilt once per frame. Angle still advances as -spin, one turn per 9 s.
-static const uint8_t SP_N = 48;
-static const float SP_A = 1.50f;
-static const float SP_B = 0.166f;
-static const float SP_TURNS = 1.75f;
+// Archimedean centreline, r = 0.40 + 9.05 * (theta / thetaMax),
+// thetaMax = 1.52 turns. The radial pitch is about 6 px, so a 3-4 px
+// arm leaves a 1-2 px dark gap. Rebuilt once per frame.
+// Angle is -spin, one turn every 9 s, the same direction as before.
+static const uint8_t SP_N = 96;
+static const float SP_TURNS = 1.52f;
+static const float SP_R0 = 0.40f;
+static const float SP_R1 = 9.45f;
+static const float SP_SIGMA = 1.22f;
 static float g_spX[SP_N];
 static float g_spY[SP_N];
-static float g_spR[SP_N];
+static float g_spU[SP_N];
 static uint32_t g_spNow = 0xffffffffu;
 
 static void spiralPrep(uint32_t now) {
@@ -351,70 +355,59 @@ static void spiralPrep(uint32_t now) {
   float theta = SP_TURNS * 6.2831853f;
   float spin = (float)(now % 9000u) * (6.2831853f / 9000.0f);
   float dth = theta / (float)(SP_N - 1);
-  float grow = expf(SP_B * dth);
-  float ang = -spin;
+  float dr = (SP_R1 - SP_R0) / (float)(SP_N - 1);
+  // At t = 0 the outer tip points down-left, matching Tom's photo.
+  float ang = -spin + (2.35f - theta);
   float ca = cosf(ang);
   float sa = sinf(ang);
   float cd = cosf(dth);
   float sd = sinf(dth);
-  float rad = SP_A;
+  float rad = SP_R0;
   for (uint8_t i = 0; i < SP_N; i++) {
     g_spX[i] = rad * ca;
     g_spY[i] = rad * sa;
-    g_spR[i] = rad;
+    g_spU[i] = (float)i / (float)(SP_N - 1);
     float nca = ca * cd - sa * sd;
     float nsa = sa * cd + ca * sd;
     ca = nca;
     sa = nsa;
-    rad *= grow;
+    rad += dr;
   }
 }
 
 static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
                         uint8_t* r, uint8_t* g, uint8_t* b) {
-  *r = *g = *b = 0;
   spiralPrep(now);
   float dx = (float)x - 7.5f;
   float dy = (float)y - 7.5f;
-  float rad = sqrtf(dx * dx + dy * dy);
   float best = 1.0e9f;
-  float bestR = SP_A;
+  float u = 0.0f;
   for (uint8_t i = 0; i < SP_N; i++) {
     float ddx = dx - g_spX[i];
     float ddy = dy - g_spY[i];
     float d2 = ddx * ddx + ddy * ddy;
     if (d2 < best) {
       best = d2;
-      bestR = g_spR[i];
+      u = g_spU[i];
     }
   }
-  float dist = sqrtf(best);
-  // Proportional to radius. The floor keeps the inner arm one pixel wide
-  // instead of breaking into dots. The outer end is a round disk of this radius.
-  float half = 0.28f * bestR;
-  if (half < 0.50f) half = 0.50f;
-  bool core = rad < 1.40f;
-  bool onArm = core || dist <= half;
-  // Same hue as Rainbow: full saturation, Speed only slides it.
-  int hue = 168 + ((int)speed - 50);
+  // Gaussian of distance to the centreline. Sigma 1.22 px.
+  float gauss = expf(-best / (2.0f * SP_SIGMA * SP_SIGMA));
+  // 188 violet at the inner end, 130 cyan at the outer end.
+  // Speed slides the whole range and keeps the spread.
+  int hue = (int)(188.0f + u * (130.0f - 188.0f)) + ((int)speed - 50);
   if (hue < 0) hue += 256;
   if (hue > 255) hue -= 256;
-  if (!onArm) {
-    // Dark field, about 15% of a full arm, still the same saturated hue.
-    hsvToRgb((uint8_t)hue, 255, 38, r, g, b);
-    return;
-  }
-  // Body of the stroke is full colour. Only a thin rim softens, so the
-  // tip stays a round disk. The core is a step brighter and stays saturated.
-  float cover = 1.0f;
-  if (!core && dist > half * 0.78f) {
-    cover = (half - dist) / (half * 0.22f);
-    if (cover < 0.0f) cover = 0.0f;
-    cover = 0.82f + 0.18f * cover;
-  }
-  int val = core ? 255 : (int)(cover * 230.0f);
-  if (val > 255) val = 255;
-  hsvToRgb((uint8_t)hue, 255, (uint8_t)val, r, g, b);
+  float satArm = 155.0f + u * (255.0f - 155.0f);
+  float peak = 255.0f + u * (225.0f - 255.0f);
+  float val = 40.0f + (peak - 40.0f) * gauss;
+  float w = gauss / 0.42f;
+  if (w > 1.0f) w = 1.0f;
+  float sat = 200.0f + (satArm - 200.0f) * w;
+  if (val > 255.0f) val = 255.0f;
+  if (sat < 0.0f) sat = 0.0f;
+  if (sat > 255.0f) sat = 255.0f;
+  hsvToRgb((uint8_t)hue, (uint8_t)sat, (uint8_t)val, r, g, b);
 }
 
 static void paintFluid(int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
