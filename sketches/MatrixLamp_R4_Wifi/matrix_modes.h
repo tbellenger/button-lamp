@@ -7,7 +7,8 @@
 //   metaballs  blobs, 1 to 8. The page adds and removes them.
 //   plasma     rotating field. Red zooms in, white zooms out.
 //   sun        pulsing sun. Red grows it, white shrinks it.
-//   spiral     one Archimedean arm, fixed spin. Speed shifts the hue.
+//   spiral     one arm, thin near the centre, wide rounded tip.
+//              Fixed spin, the other way from the first version. Speed shifts hue.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
 //
@@ -333,28 +334,75 @@ static void modesStep(const ModeIn* in, uint32_t now) {
   if (in->mode == M_FLUID) fluidStep(in->speed);
 }
 
+// Centreline samples for the current spin. Rebuilt once per frame.
+static const uint8_t SP_N = 24;
+static float g_spX[SP_N];
+static float g_spY[SP_N];
+static uint32_t g_spNow = 0xffffffffu;
+
+static void spiralPrep(uint32_t now) {
+  if (g_spNow == now) return;
+  g_spNow = now;
+  const float pitch = 0.70f;
+  const float smin = 1.60f;
+  const float smax = 9.20f;
+  float spin = (float)(now % 9000u) * (6.2831853f / 9000.0f);
+  float ds = (smax - smin) / (float)(SP_N - 1);
+  float da = pitch * ds;
+  // Old arm was ang = +spin + pitch*r (clockwise on the panel).
+  float a = -spin + pitch * smin;
+  float ca = cosf(a);
+  float sa = sinf(a);
+  float cd = cosf(da);
+  float sd = sinf(da);
+  for (uint8_t i = 0; i < SP_N; i++) {
+    float s = smin + ds * (float)i;
+    g_spX[i] = s * ca;
+    g_spY[i] = s * sa;
+    float nca = ca * cd - sa * sd;
+    float nsa = sa * cd + ca * sd;
+    ca = nca;
+    sa = nsa;
+  }
+}
+
 static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
                         uint8_t* r, uint8_t* g, uint8_t* b) {
+  *r = *g = *b = 0;
+  spiralPrep(now);
   float dx = (float)x - 7.5f;
   float dy = (float)y - 7.5f;
   float rad = sqrtf(dx * dx + dy * dy);
-  *r = *g = *b = 0;
-  if (rad > 11.3f) return;
-  float ang = atan2f(dy, dx);
-  // One turn every 9 s. Speed does not change this.
-  float spin = (float)(now % 9000u) * (6.2831853f / 9000.0f);
-  float arm = ang - spin - rad * 0.70f;
-  arm = fmodf(arm + 18.8495559f, 6.2831853f);
-  if (arm > 3.14159265f) arm -= 6.2831853f;
-  float ad = arm < 0.0f ? -arm : arm;
-  float band = 0.30f + 0.28f * (1.0f - rad / 12.0f);
-  if (ad > band) return;
-  float edge = 1.0f - ad / band;
-  if (edge < 0.0f) edge = 0.0f;
+  float best = 1.0e9f;
+  float bestU = 0.0f;
+  for (uint8_t i = 0; i < SP_N; i++) {
+    float ddx = dx - g_spX[i];
+    float ddy = dy - g_spY[i];
+    float d2 = ddx * ddx + ddy * ddy;
+    if (d2 < best) {
+      best = d2;
+      bestU = (float)i / (float)(SP_N - 1);
+    }
+  }
+  float dist = sqrtf(best);
+  // Cubic so the arm stays thin until it opens into the tip.
+  float u3 = bestU * bestU * bestU;
+  float half = 0.55f + 1.75f * u3;
+  bool core = rad < 1.40f;
+  if (dist > half && !core) return;
+  // Body of the stroke is full. Only a thin rim softens, so the tip
+  // stays a round disk instead of fading to one dim pixel.
+  float cover = 1.0f;
+  if (!core && dist > half * 0.78f) {
+    cover = (half - dist) / (half * 0.22f);
+    if (cover < 0.0f) cover = 0.0f;
+    cover = 0.82f + 0.18f * cover;
+  }
   float center = 0.55f + 0.45f * (1.0f - rad / 12.0f);
-  float lit = edge * center;
-  if (lit < 0.35f) lit = 0.35f;
-  if (rad < 1.4f) lit = 1.0f;
+  if (center < 0.55f) center = 0.55f;
+  if (core) center = 1.0f;
+  float lit = cover * (0.72f + 0.28f * center);
+  if (lit > 1.0f) lit = 1.0f;
   int hue = 168 + ((int)speed - 50);
   if (hue < 0) hue += 256;
   if (hue > 255) hue -= 256;
