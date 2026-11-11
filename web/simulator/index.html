@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Matrix Lamp preview</title>
+<style>
+  body{margin:0;background:#16110d;color:#f4efe6;font:16px/1.35 system-ui,sans-serif}
+  main{max-width:32rem;margin:0 auto;padding:1rem 1rem 2rem}
+  h1{font-size:1.25rem;margin:0}
+  .sub{color:#cbbba6;font-size:.85rem;margin:.2rem 0 1rem}
+  label{display:block;margin:.85rem 0 .25rem;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#cbbba6}
+  input[type=range]{width:100%;accent-color:#e07040}
+  .stage{background:#070604;border-radius:1rem;padding:1rem;display:flex;justify-content:center}
+  canvas{width:min(100%,22rem);height:auto;image-rendering:pixelated}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin:1rem 0}
+  button{font:inherit;color:inherit;background:#2a2118;border:1px solid #5c4630;border-radius:.65rem;padding:.7rem .35rem}
+  button.on{background:#c4552a;border-color:#f0c2a4}
+  .row{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
+  .row button{flex:1}
+  #balls{align-items:center;margin:.2rem 0 0}
+  #balls[hidden]{display:none}
+  #bcnt{flex:0 0 4.6rem;text-align:center}
+  button:disabled{opacity:.35}
+  #err{color:#ffb4a2}
+</style>
+</head>
+<body>
+<main>
+  <h1>Matrix Lamp preview</h1>
+  <p class="sub">The firmware effect core, in the browser. Orientation matches the desk panel.</p>
+  <div class="stage"><canvas id="panel" width="512" height="512"></canvas></div>
+  <p class="sub" id="spdnote"></p>
+  <label for="bri">Brightness</label>
+  <input id="bri" type="range" min="0" max="100" value="50">
+  <label for="spd">Speed</label>
+  <input id="spd" type="range" min="0" max="100" value="50">
+  <div class="grid" id="grid"></div>
+  <div class="row" id="balls" hidden>
+    <button type="button" id="bmin">- Ball</button>
+    <span id="bcnt">3 of 8</span>
+    <button type="button" id="badd">+ Ball</button>
+  </div>
+  <p class="sub" id="err"></p>
+</main>
+<script src="main.js" type="module"></script>
+</body>
+</html>

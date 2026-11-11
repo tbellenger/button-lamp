@@ -29,16 +29,18 @@ The lamp is online only when `WiFi.status()` is `WL_CONNECTED` and `WiFi.localIP
 
 ## If the picture is backwards
 
-Edit only these, at the top of `MatrixLamp_R4_Wifi.ino`:
+The rotation and the serpentine map live in `lamp_core.cpp` (`FX_ROTATE`, `FX_SERPENTINE`, `FX_SERPENTINE_ODD`, `FX_FLIP_X`, `FX_FLIP_Y`). The sketch and the browser preview both call that map.
 
 | Setting | Meaning |
 |---|---|
-| `PANEL_SERPENTINE` | `true` when rows alternate direction (these panels usually do). |
-| `PANEL_SERPENTINE_ODD` | `true`: row 0 left to right, row 1 right to left. |
-| `PANEL_FLIP_X`, `PANEL_FLIP_Y` | Mirror. Both are `false`. |
-| `PANEL_ROTATE` | Clockwise quarter-turns, 0–3. This sketch uses **3**. |
+| `FX_SERPENTINE` | `true` when rows alternate direction (these panels usually do). |
+| `FX_SERPENTINE_ODD` | `true`: row 0 left to right, row 1 right to left. |
+| `FX_FLIP_X`, `FX_FLIP_Y` | Mirror. Both are `false`. |
+| `FX_ROTATE` | Clockwise quarter-turns, 0–3. This sketch uses **3**. |
 
-In the desk stand, housing +Y is up. `PANEL_ROTATE` 1 left the fire upside down (flames from the top). `3` is that turn plus 180 degrees, so the ember row is the bottom edge. Every preset uses the same map.
+In the desk stand, housing +Y is up. Rotate 1 left the fire upside down (flames from the top). `3` is that turn plus 180 degrees, so the ember row is the bottom edge. Every preset uses the same map.
+
+A browser preview of these presets is in `web/simulator`. See that folder's README.
 
 ## Upload
 
@@ -70,4 +72,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 116480 B flash (44% of 262144), 17808 B globals (54% of 32768), 14960 B left for locals. The `.bin` is 116488 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 116916 B flash (44% of 262144), 18568 B globals (56% of 32768), 14200 B left for locals. The `.bin` is 116924 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.

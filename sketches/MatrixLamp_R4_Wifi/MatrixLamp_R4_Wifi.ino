@@ -52,8 +52,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   116480 B flash (44% of 262144), 17808 B globals (54% of 32768),
-   14960 B left for locals. The .bin is 116488 B. OTA allows at most
+   116916 B flash (44% of 262144), 18568 B globals (56% of 32768),
+   14200 B left for locals. The .bin is 116924 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -66,7 +66,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "Arduino_LED_Matrix.h"
-#include "matrix_fire.h"
 #include "mdns_responder.h"
 
 #if __has_include("fw_version.h")
@@ -105,24 +104,15 @@ static const int PANEL_W = 16;
 static const int PANEL_H = 16;
 static const int PANEL_N = PANEL_W * PANEL_H;
 
-// Rows alternate direction, which is how these 16x16 panels are built.
-// false: every row is left to right.
-static const bool PANEL_SERPENTINE = true;
-// Which rows run backwards when PANEL_SERPENTINE is true.
-// true:  row 0 is left to right, row 1 is right to left (the usual one).
-// false: row 0 is right to left, row 1 is left to right.
-static const bool PANEL_SERPENTINE_ODD = true;
-// Mirror after rotation, before the serpentine index.
-static const bool PANEL_FLIP_X = false;
-static const bool PANEL_FLIP_Y = false;
-// Clockwise quarter-turns of the logical picture, applied before the flips
-// and the serpentine index. 0, 1, 2, or 3. The panel is square, so a 90
-// degree turn still maps every LED.
+// Rows alternate direction (serpentine, odd rows reversed). Flips are off.
+// Clockwise quarter-turns of the logical picture happen before that.
+// 0, 1, 2, or 3. The panel is square, so a 90 degree turn still maps every LED.
 //
 // The housing stands with +Y up. Rotate 1 put the ember row on the top
 // edge of Tom's stand (flames fell from the ceiling). Another half turn,
-// PANEL_ROTATE 3, puts that row on the desk. The same map is used for
-// every effect, so the rainbow diagonal stays bottom-left to top-right.
+// rotate 3, puts that row on the desk. The live map is in lamp_core.cpp
+// (FX_ROTATE 3, serpentine odd rows reversed). The preview uses that
+// same function, so the browser and the panel stay aligned.
 static const uint8_t PANEL_ROTATE = 3;
 
 // ---- Power. 20 of 255 is plenty on this panel. Do not ship it at 255. ----
@@ -163,12 +153,13 @@ static const uint8_t PH_READ = 1;
 static const uint8_t PH_WRITE = 2;
 static const uint8_t PH_OTA = 3;
 
-static_assert(PANEL_W == MATRIX_FIRE_W, "panel width must match the fire sim");
-static_assert(PANEL_H == MATRIX_FIRE_H, "panel height must match the fire sim");
-static_assert(PANEL_W == PANEL_H, "PANEL_ROTATE assumes a square panel");
-static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
+#include "lamp_core.h"
 
-#include "matrix_modes.h"
+static_assert(PANEL_W == LAMP_FX_W, "panel width must match the effect core");
+static_assert(PANEL_H == LAMP_FX_H, "panel height must match the effect core");
+static_assert(PANEL_W == PANEL_H, "rotation assumes a square panel");
+static_assert(PANEL_ROTATE == 3, "lamp_core.cpp FX_ROTATE is 3");
+static_assert(BRIGHTNESS_DEFAULT <= BRIGHTNESS_CAP, "default brightness is above the cap");
 
 // The matrix lamp has no knobs, faders, or buttons. The web page is the
 // only control. Last preset, brightness and speed are kept in the data
@@ -198,13 +189,10 @@ static volatile uint8_t g_lit = 255;
 static uint8_t g_matrixOn = 0;
 static FspTimer g_matrixTimer;
 
-static uint8_t g_heat[MATRIX_FIRE_N];
 static uint8_t g_mode = M_FIRE;
 static uint8_t g_fader = 50;
 static uint8_t g_speed = 50;
 static uint8_t g_prefsDirty = 0;
-static uint8_t g_dirty = 1;
-static uint32_t g_lastFrame = 0;
 
 static uint8_t g_wifi = WIFI_OFF;
 static WiFiServer g_server(80);
@@ -420,43 +408,11 @@ setInterval(poll,1000); poll();
 )PAGE";
 
 static uint8_t brightnessLimit() {
-  uint32_t denom = (uint32_t)PANEL_N * (uint32_t)LED_MA_FULL;
-  uint32_t fromBudget = 255;
-  if (denom > 0) {
-    fromBudget = ((uint32_t)POWER_BUDGET_MA * 255ul) / denom;
-    if (fromBudget < 1) fromBudget = 1;
-  }
-  uint32_t cap = BRIGHTNESS_CAP;
-  if (fromBudget < cap) cap = fromBudget;
-  if (cap > 255) cap = 255;
-  return (uint8_t)cap;
+  return lamp_fx_brightness_cap();
 }
 
 static uint16_t panelIndex(int x, int y) {
-  uint8_t rot = (uint8_t)(PANEL_ROTATE & 3);
-  if (rot == 1) {
-    int nx = (PANEL_W - 1) - y;
-    y = x;
-    x = nx;
-  } else if (rot == 2) {
-    x = (PANEL_W - 1) - x;
-    y = (PANEL_H - 1) - y;
-  } else if (rot == 3) {
-    int ny = (PANEL_H - 1) - x;
-    x = y;
-    y = ny;
-  }
-  if (PANEL_FLIP_X) x = (PANEL_W - 1) - x;
-  if (PANEL_FLIP_Y) y = (PANEL_H - 1) - y;
-  if (x < 0) x = 0;
-  if (y < 0) y = 0;
-  if (x >= PANEL_W) x = PANEL_W - 1;
-  if (y >= PANEL_H) y = PANEL_H - 1;
-  if (PANEL_SERPENTINE) {
-    bool odd = (y & 1) != 0;
-    if (odd == PANEL_SERPENTINE_ODD) x = (PANEL_W - 1) - x;
-  }
-  return (uint16_t)(y * PANEL_W + x);
+  return lamp_fx_led_from_logical(x, y);
 }
 
 static void matrixIsr(timer_callback_args_t*) {
@@ -612,68 +568,33 @@ static void setMode(uint8_t m) {
   if (m >= M_COUNT) m = M_FIRE;
   if (g_mode != m) g_prefsDirty = 1;
   g_mode = m;
-  g_dirty = 1;
+  lamp_fx_mark_dirty();
 }
 
 static uint8_t appliedBrightness() {
-  uint8_t cap = brightnessLimit();
-  return (uint8_t)((uint16_t)g_fader * cap / 100u);
+  return lamp_fx_applied(g_fader);
 }
 
 static void applyBrightness() {
   g_panel.setBrightness(appliedBrightness());
 }
 
-static void fillMode(const ModeIn* in, uint32_t now) {
+static void showFrame() {
+  const uint8_t* fb = lamp_fx_frame();
   for (int y = 0; y < PANEL_H; y++) {
     for (int x = 0; x < PANEL_W; x++) {
-      uint8_t r, g, b;
-      modesColor(in, x, y, now, &r, &g, &b);
-      g_panel.setPixelColor(panelIndex(x, y), r, g, b);
+      const uint8_t* p = fb + ((y * PANEL_W + x) * 3);
+      g_panel.setPixelColor(lamp_fx_led_index(x, y), p[0], p[1], p[2]);
     }
   }
-}
-
-static void paintFire() {
-  for (int y = 0; y < PANEL_H; y++) {
-    for (int x = 0; x < PANEL_W; x++) {
-      FireRgb c = firePalette(g_heat[y * PANEL_W + x]);
-      g_panel.setPixelColor(panelIndex(x, y), c.r, c.g, c.b);
-    }
-  }
-}
-
-static uint32_t stepPeriodMs() {
-  return 20u + (uint32_t)(100 - g_speed) * 130u / 100u;
 }
 
 static void tickPanel(uint32_t now) {
-  uint8_t mode = derivedMode();
-  uint32_t period = stepPeriodMs();
-  // show() is about 7.7 ms for 256 LEDs. Stay at or above 16 ms so a
-  // frame leaves time for one WiFi slice.
-  if (period < 16u) period = 16u;
-  uint32_t elapsed = (g_lastFrame == 0) ? period : (uint32_t)(now - g_lastFrame);
-  if (!g_dirty && elapsed < period) return;
-  if (elapsed > period * 3u) elapsed = period * 3u;
-  g_lastFrame = now;
+  lamp_fx_configure(derivedMode(), g_speed, g_fader);
   uint32_t t0 = micros();
+  if (!lamp_fx_render(now)) return;
   applyBrightness();
-  if (mode == M_FIRE) {
-    matrixFireSetIntensity(50);
-    uint32_t steps = elapsed / period;
-    if (steps < 1u) steps = 1u;
-    if (steps > 3u) steps = 3u;
-    for (uint32_t s = 0; s < steps; s++) matrixFireStep(g_heat);
-    paintFire();
-  } else {
-    ModeIn in;
-    in.mode = mode;
-    in.speed = g_speed;
-    in.fader = g_fader;
-    modesStep(&in, now, elapsed, period);
-    fillMode(&in, now);
-  }
+  showFrame();
   // NeoPixel show() holds interrupts off for the bit bang. The onboard
   // matrix timer is paused so it cannot preempt those bits. Modem
   // commands are finished before this, so the UART is idle during it.
@@ -686,7 +607,6 @@ static void tickPanel(uint32_t now) {
     g_fpsN = 0;
     g_fpsT = now;
   }
-  g_dirty = 0;
 }
 
 static bool parseU100(const char* v, int* out) {
@@ -736,7 +656,7 @@ static void setFaderFromLevel(int level) {
   if (pct > 100) pct = 100;
   if (g_fader != (uint8_t)pct) g_prefsDirty = 1;
   g_fader = (uint8_t)pct;
-  g_dirty = 1;
+  lamp_fx_mark_dirty();
 }
 
 static bool applyOne(const char* key, const char* val, const char** err) {
@@ -745,7 +665,7 @@ static bool applyOne(const char* key, const char* val, const char** err) {
     if (!parseU100(val, &n)) { *err = "fader"; return false; }
     if (g_fader != (uint8_t)n) g_prefsDirty = 1;
     g_fader = (uint8_t)n;
-    g_dirty = 1;
+    lamp_fx_mark_dirty();
     return true;
   }
   if (!strcmp(key, "brightness")) {
@@ -759,29 +679,29 @@ static bool applyOne(const char* key, const char* val, const char** err) {
     if (!parseU100(val, &n)) { *err = "speed"; return false; }
     if (g_speed != (uint8_t)n) g_prefsDirty = 1;
     g_speed = (uint8_t)n;
-    g_dirty = 1;
+    lamp_fx_mark_dirty();
     return true;
   }
   if (!strcmp(key, "mode") || !strcmp(key, "preset")) {
-    int m = modesFromName(val);
+    int m = lamp_fx_mode_from_name(val);
     if (m < 0) { *err = "mode"; return false; }
     setMode((uint8_t)m);
     return true;
   }
   if (!strcmp(key, "balls")) {
-    uint8_t before = modesMetaCount();
-    if (!strcmp(val, "add") || !strcmp(val, "+")) modesMetaAdd();
-    else if (!strcmp(val, "remove") || !strcmp(val, "-")) modesMetaRemove();
+    uint8_t before = lamp_fx_balls();
+    if (!strcmp(val, "add") || !strcmp(val, "+")) lamp_fx_balls_add();
+    else if (!strcmp(val, "remove") || !strcmp(val, "-")) lamp_fx_balls_remove();
     else {
       int n;
       if (!parseU100(val, &n) || n < (int)META_MIN || n > (int)META_MAX) {
         *err = "balls";
         return false;
       }
-      modesMetaSet((uint8_t)n);
+      lamp_fx_balls_set((uint8_t)n);
     }
-    if (modesMetaCount() != before) g_prefsDirty = 1;
-    g_dirty = 1;
+    if (lamp_fx_balls() != before) g_prefsDirty = 1;
+    lamp_fx_mark_dirty();
     return true;
   }
   *err = "key";
@@ -803,21 +723,21 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"otaMsg\":\"%s\",\"ghVersion\":\"%s\",\"ghSha\":\"%s\",\"ghSize\":%ld}",
     ok ? "true" : "false",
     err ? err : "",
-    modesName(g_mode),
+    lamp_fx_mode_name(g_mode),
     (unsigned)g_fader,
     (unsigned)level,
     (unsigned)cap,
     (unsigned)g_speed,
-    (unsigned)modesMetaCount(),
-    (unsigned)modesPlasmaZoomLevel(),
-    (unsigned)modesSunSizeLevel(),
+    (unsigned)lamp_fx_balls(),
+    (unsigned)lamp_fx_plasma_zoom(),
+    (unsigned)lamp_fx_sun_size(),
     wifi,
     (unsigned)g_ip[0], (unsigned)g_ip[1], (unsigned)g_ip[2], (unsigned)g_ip[3],
     (int)g_rssi,
     (unsigned)PANEL_N,
     (unsigned)PANEL_W,
     (unsigned)PANEL_H,
-    (unsigned)(PANEL_ROTATE & 3),
+    (unsigned)lamp_fx_rotate(),
     FW_VERSION, FW_BUILT, g_otaState, g_otaPct,
     g_otaMsg, g_ghVer, g_ghSha, g_ghSize);
 }
@@ -962,7 +882,7 @@ static void httpHandle() {
   }
   if (!strcmp(path, "/stats")) {
     int n = snprintf(g_stats, sizeof g_stats, "fps=%u\nframeUs=%u\nmode=%s\n",
-                     (unsigned)g_fps, (unsigned)g_frameUs, modesName(g_mode));
+                     (unsigned)g_fps, (unsigned)g_frameUs, lamp_fx_mode_name(g_mode));
     if (n < 0) n = 0;
     if (n > (int)sizeof g_stats) n = (int)sizeof g_stats;
     httpBegin(200, "OK", "text/plain; charset=utf-8", g_stats, (uint16_t)n);
@@ -1411,15 +1331,15 @@ static void loadPrefs() {
   if (mode < M_COUNT) g_mode = mode;
   if (fader <= 100) g_fader = fader;
   if (speed <= 100) g_speed = speed;
-  if (balls >= META_MIN && balls <= META_MAX) modesMetaSet(balls);
+  if (balls >= META_MIN && balls <= META_MAX) lamp_fx_balls_set(balls);
   Serial.print(F("Prefs "));
-  Serial.print(modesName(g_mode));
+  Serial.print(lamp_fx_mode_name(g_mode));
   Serial.print(F(" bri "));
   Serial.print(g_fader);
   Serial.print(F(" speed "));
   Serial.print(g_speed);
   Serial.print(F(" balls "));
-  Serial.println(modesMetaCount());
+  Serial.println(lamp_fx_balls());
 }
 
 void setup() {
@@ -1439,12 +1359,8 @@ void setup() {
   Serial.print(F(" cap "));
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros());
-  modesBoot();
+  lamp_fx_init();
   loadPrefs();
-  matrixFireReset();
-  matrixFireSetIntensity(50);
-  memset(g_heat, 0, sizeof g_heat);
-  for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
   webSetup();
   g_panel.begin();
   applyBrightness();
@@ -1452,8 +1368,7 @@ void setup() {
   g_panel.show();
   matrixBegin();
   g_scrollTrack = false;
-  g_lastFrame = 0;
-  g_dirty = 1;
+  lamp_fx_mark_dirty();
 }
 
 void loop() {
@@ -1462,7 +1377,7 @@ void loop() {
   webPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;
-    if (!prefsSave(g_mode, g_fader, g_speed, modesMetaCount())) {
+    if (!prefsSave(g_mode, g_fader, g_speed, lamp_fx_balls())) {
       Serial.println(F("Prefs save failed"));
     }
   }
