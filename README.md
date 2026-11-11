@@ -330,7 +330,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Phone page only: brightness, speed, and presets (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart, matrix). Matrix is green digital rain with a light-green head and a fading field; Speed is how fast it falls. Meatballs shows + Ball and − Ball (1 to 8). No knobs or buttons on the lamp. mDNS `matrixlamp.local` and `matrix-lamp.local`. WiFi firmware update after one USB flash. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Phone page only: brightness, speed, and presets (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart, matrix). Matrix is green digital rain with a saturated green head (80, 255, 80) and a fading field; Speed is how fast it falls. Meatballs shows + Ball and − Ball (1 to 8). No knobs or buttons on the lamp. mDNS `matrixlamp.local` and `matrix-lamp.local`. WiFi firmware update after one USB flash. |
 
 ## Layout
 
