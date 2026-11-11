@@ -191,7 +191,7 @@ static void geomBoot() {
 // picture and y grows toward the desk. panelIndex applies PANEL_ROTATE
 // when the pixel is sent, so the head falls downward on the mounted panel.
 //
-// The head is light green (180, 255, 180). Pixel j behind it is pure
+// The head is saturated green (80, 255, 80). Pixel j behind it is pure
 // green, 255 - j*35. Every 50 ms step the whole field is scaled by
 // 185/256 (fade by 70), so old drops leave a decaying trail. The Speed
 // slider scales that clock. At 50 it matches a 50 ms frame.
@@ -231,9 +231,9 @@ static void rainPaintDrop(uint8_t x) {
     if (cy < 0 || cy > 15) continue;
     uint8_t* p = g_rainRgb + ((cy * 16 + x) * 3);
     if (j == 0) {
-      p[0] = 180;
+      p[0] = 80;
       p[1] = 255;
-      p[2] = 180;
+      p[2] = 80;
     } else {
       int g = 255 - (int)j * 35;
       if (g < 0) g = 0;

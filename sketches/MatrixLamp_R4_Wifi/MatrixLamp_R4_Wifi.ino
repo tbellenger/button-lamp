@@ -8,8 +8,9 @@
 
    The picture is the 16x16 panel. The phone page has brightness, speed,
    and preset buttons. While Meatballs is showing, + Ball and - Ball
-   change the count from 1 to 8. Matrix is green rain: a light-green
-   head, a short pure-green tail, and a field that fades to black.
+   change the count from 1 to 8. Matrix is green rain: a saturated
+   green head (80, 255, 80), a short pure-green tail, and a field that
+   fades to black.
    Speed is how fast those drops fall.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
