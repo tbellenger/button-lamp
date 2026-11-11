@@ -226,8 +226,10 @@ static void otaFail(const char* msg) {
 
 // ArduinoOTA 1.1.1 apply() erases (pageAlignedLength / pageSize) + 1 blocks.
 // pageAlignedLength is already a whole number of 2 KB blocks, so the extra
-// block is the first block of the staged image (the vector table). The copy
-// then resets into 0xFF and the panel stays on the last frame. Do not call it.
+// block is the first block of the staged image. Do not call apply().
+// r_flash_lp_cf_erase and r_flash_lp_cf_write are the copies ArduinoOTA
+// builds into .code_in_ram. The core's own copies are not, because code
+// flash programming is compiled out of libfsp.a.
 extern "C" fsp_err_t r_flash_lp_cf_erase(flash_lp_instance_ctrl_t* p_ctrl,
                                         uint32_t block_address,
                                         uint32_t num_blocks,
@@ -237,15 +239,97 @@ extern "C" fsp_err_t r_flash_lp_cf_write(flash_lp_instance_ctrl_t* p_ctrl,
                                         uint32_t dest,
                                         uint32_t num_bytes);
 
+// The whole copy has to run from RAM. Erasing the sketch deletes the
+// caller, and a return from r_flash_lp_cf_erase fetches 0xFF and hangs
+// (the panel stays white, the colour painted just before the erase).
+// No libc: memcpy and division live in the sketch and may already be gone.
+// The vector table is block 0 and is written last. If the body copy fails,
+// block 0 is erased so the bootloader sees a blank stack pointer and waits
+// for USB instead of jumping into a half-written image.
+#define OTA_IN_RAM __attribute__((noinline, used, section(".code_in_ram"))) \
+  __attribute__((optimize("no-tree-loop-distribute-patterns")))
+
+extern "C" {
+// NVIC_SystemReset() lives in the sketch, inside block 0. Calling it after
+// that block is erased jumps to 0xFF. Write AIRCR from this RAM function.
+OTA_IN_RAM
+static void otaAirCrReset(void) __attribute__((noreturn));
+OTA_IN_RAM
+static void otaAirCrReset(void) {
+  __asm volatile("dsb sy" ::: "memory");
+  volatile uint32_t* aircr = (volatile uint32_t*)0xE000ED0Cu;
+  uint32_t v = *aircr;
+  *aircr = (0x05FAu << 16) | (v & 0x700u) | 4u;
+  __asm volatile("dsb sy" ::: "memory");
+  while (1) {
+    __asm volatile("nop");
+  }
+}
+
+OTA_IN_RAM
+static void otaCopyAndReset(flash_lp_instance_ctrl_t* ctrl,
+                            uint32_t dest, uint32_t src, uint32_t pages) {
+  const uint32_t block = 2048u;
+  const uint32_t chunk = 128u;
+  fsp_err_t rv = FSP_SUCCESS;
+  if (pages > 1u) {
+    rv = r_flash_lp_cf_erase(ctrl, dest + block, pages - 1u, block);
+    uint32_t off = block;
+    uint32_t end = pages << 11;
+    while (rv == FSP_SUCCESS && off < end) {
+      uint8_t buf[128];
+      volatile uint8_t* d = buf;
+      const volatile uint8_t* s = (const volatile uint8_t*)(src + off);
+      uint32_t i = 0;
+      while (i < chunk) {
+        d[i] = s[i];
+        i++;
+      }
+      rv = r_flash_lp_cf_write(ctrl, (uint32_t)buf, dest + off, chunk);
+      off += chunk;
+    }
+  }
+  if (rv != FSP_SUCCESS) {
+    r_flash_lp_cf_erase(ctrl, dest, 1u, block);
+    otaAirCrReset();
+  }
+  rv = r_flash_lp_cf_erase(ctrl, dest, 1u, block);
+  uint32_t off = 0;
+  while (rv == FSP_SUCCESS && off < block) {
+    uint8_t buf[128];
+    volatile uint8_t* d = buf;
+    const volatile uint8_t* s = (const volatile uint8_t*)(src + off);
+    uint32_t i = 0;
+    while (i < chunk) {
+      d[i] = s[i];
+      i++;
+    }
+    rv = r_flash_lp_cf_write(ctrl, (uint32_t)buf, dest + off, chunk);
+    off += chunk;
+  }
+  otaAirCrReset();
+}
+}
+
 static bool otaCommit() {
   uint32_t start = (uint32_t)&__ROM_Start;
   uint32_t maxSketch = (262144u - start) / 2u;
-  maxSketch = (maxSketch / 2048u) * 2048u;
+  maxSketch &= ~2047u;
   uint32_t storage = start + maxSketch;
-  uint32_t pages = (g_otaLen / 2048u) + 1u;
-  uint32_t bytes = pages * 2048u;
-  if (pages == 0 || storage + bytes > 262144u) {
+  // Ceil to a 2 KB block. (len / 2048) + 1 erases one block past an
+  // exact multiple, and at 122880 bytes that block is the staged vector table.
+  uint32_t pages = (g_otaLen + 2047u) >> 11;
+  uint32_t bytes = pages << 11;
+  if ((start & 2047u) != 0 || g_otaLen < 4096 || pages < 2 || bytes > maxSketch) {
     Serial.println(F("OTA size"));
+    return false;
+  }
+  crcBegin();
+  crcAdd((const uint8_t*)storage, g_otaLen);
+  uint32_t staged = crcEnd();
+  if (staged != g_crcGot) {
+    Serial.print(F("OTA staged crc "));
+    Serial.println(staged, HEX);
     return false;
   }
   Serial.print(F("OTA apply "));
@@ -265,21 +349,7 @@ static bool otaCommit() {
     return false;
   }
   __disable_irq();
-  fsp_err_t rv = r_flash_lp_cf_erase(&ctrl, start, pages, 2048u);
-  uint32_t off = 0;
-  while (rv == FSP_SUCCESS && off < bytes) {
-    uint8_t buf[128];
-    const uint8_t* s = (const uint8_t*)(storage + off);
-    for (int i = 0; i < 128; i++) buf[i] = s[i];
-    rv = r_flash_lp_cf_write(&ctrl, (uint32_t)buf, start + off, 128u);
-    off += 128u;
-  }
-  if (rv != FSP_SUCCESS || off != bytes) {
-    __enable_irq();
-    Serial.println(F("OTA copy failed"));
-    __disable_irq();
-  }
-  NVIC_SystemReset();
+  otaCopyAndReset(&ctrl, start, storage, pages);
   return false;
 }
 
@@ -382,6 +452,7 @@ static void otaBeginUpload() {
 
 static void otaFinishUpload() {
   uint32_t sum = crcEnd();
+  g_crcGot = sum;
   otaCloseStorage();
   if (!imageOk()) {
     otaFail("bad image\n");
@@ -894,6 +965,7 @@ static bool ghFetchBin() {
         return false;
       }
       uint32_t sum = crcEnd();
+      g_crcGot = sum;
       otaCloseStorage();
       if (!imageOk()) {
         otaSet("error", "bad image");
