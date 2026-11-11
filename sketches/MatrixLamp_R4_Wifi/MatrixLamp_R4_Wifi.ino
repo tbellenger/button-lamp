@@ -21,9 +21,13 @@
    keep a full-white frame inside a small supply. The page cannot raise
    brightness past that cap.
 
-   WiFi is WiFiS3 plus secrets.h. The first WiFi.begin() in setup uses
-   the library defaults and runs before the matrix timer starts. After
-   that, WiFi.setTimeout(0) and modem.timeout(800) keep the loop bounded.
+   WiFi is WiFiS3 plus secrets.h. Boot soft-resets the ESP32-S3 before
+   the first WiFi.begin(). An AIRCR reboot does not reset that chip, and
+   a leftover OK from the GitHub download makes the library's first
+   SOFTRESETWIFI look done while the old port-80 socket stays open.
+   The first begin() uses the library's 10 s timeout and runs before the
+   matrix timer starts. After that, WiFi.setTimeout(0) and
+   modem.timeout(800) keep the loop bounded.
    status() can report WL_CONNECTED as soon as the radio associates,
    while localIP() is still 0.0.0.0, so the lamp stays offline until the
    address is non-zero. A new begin() is not sent for 22 s.
@@ -44,8 +48,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   114288 B flash (43% of 262144), 17012 B globals (51% of 32768),
-   15756 B left for locals. The .bin is 114296 B. OTA allows at most
+   114824 B flash (43% of 262144), 17032 B globals (51% of 32768),
+   15736 B left for locals. The .bin is 114832 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -253,6 +257,8 @@ static uint32_t g_lastRssi = 0;
 static uint32_t g_lastIpPoll = 0;
 static uint32_t g_joinSince = 0;
 static uint8_t g_serverUp = 0;
+static uint8_t g_serverMiss = 0;
+static uint8_t g_joinTries = 0;
 
 static bool g_scrollTrack = false;
 static int g_scrollX = -MATRIX_W;
@@ -1021,6 +1027,50 @@ static void wifiBegin() {
   g_joinSince = millis();
 }
 
+// The ESP32-S3 stays up across an AIRCR reset of the RA4M1. modem.begin()
+// sends one SOFTRESETWIFI and treats the first OK as success. After a
+// GitHub download that OK is often still sitting in the UART, so the
+// reset never happens and the old listen socket keeps port 80.
+// Two further resets, then a firmware-version round trip, make the
+// first OK be a real answer.
+static bool wifiModemAnswers() {
+  const char* v = WiFi.firmwareVersion();
+  if (!v || v[0] == 0) return false;
+  return strcmp(v, "99.99.99") != 0;
+}
+
+static void wifiResetModem() {
+  Serial.println(F("WiFi modem reset"));
+  for (uint8_t n = 0; n < 3; n++) {
+    modem.beginned = false;
+    modem.timeout(1000);
+    modem.begin(115200, 1);
+    delay(150);
+    WiFi.end();
+    delay(200);
+    WiFi.end();
+    delay(400);
+    modem.timeout(1500);
+    if (wifiModemAnswers()) {
+      Serial.println(F("WiFi modem ready"));
+      modem.timeout(MODEM_CMD_BUDGET_MS);
+      return;
+    }
+    Serial.println(F("WiFi modem retry"));
+    delay(200);
+  }
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  Serial.println(F("WiFi modem silent"));
+}
+
+static void ensureServer() {
+  if (g_serverUp) return;
+  g_server.begin();
+  g_serverUp = g_server ? 1 : 0;
+  if (g_serverUp) g_serverMiss = 0;
+  else if (g_serverMiss < 250) g_serverMiss++;
+}
+
 // Core 1.6.0: status() is WL_CONNECTED once the radio associates. localIP()
 // stays 0.0.0.0 until DHCP finishes, and a failed modem read looks the same.
 static bool ipReady(const IPAddress& ip) {
@@ -1060,6 +1110,7 @@ static void adoptIp(const IPAddress& ip) {
   if (changed) rememberIp(ip);
   if (g_wifi != WIFI_ONLINE) {
     g_wifi = WIFI_ONLINE;
+    g_joinTries = 0;
     noteConnected();
     mdnsServiceArm(millis());
   } else if (changed) {
@@ -1070,10 +1121,7 @@ static void adoptIp(const IPAddress& ip) {
     Serial.println(g_ip[3]);
     mdnsServiceArm(millis());
   }
-  if (!g_serverUp) {
-    g_server.begin();
-    g_serverUp = g_server ? 1 : 0;
-  }
+  ensureServer();
 }
 
 static void wifiDrop(uint32_t now) {
@@ -1105,9 +1153,13 @@ static void wifiPollStatus(uint32_t now) {
         g_rssi = (int16_t)WiFi.RSSI();
         g_lastRssi = now;
       }
-      if (!g_serverUp) {
-        g_server.begin();
-        g_serverUp = g_server ? 1 : 0;
+      ensureServer();
+      // Port 80 still held by a socket from before the reset: begin()
+      // keeps failing. Reset the modem and join again.
+      if (!g_serverUp && g_serverMiss >= 3) {
+        g_serverMiss = 0;
+        wifiResetModem();
+        wifiDrop(now);
       }
       return;
     }
@@ -1117,31 +1169,36 @@ static void wifiPollStatus(uint32_t now) {
   }
   // Still joining, or associated with no address yet. Do not call begin()
   // again until WIFI_RETRY_MS, or the DHCP handshake is aborted.
-  if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) wifiBegin();
+  // Every second miss also resets the modem, in case the UART is wedged.
+  if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) {
+    g_joinTries++;
+    if ((g_joinTries & 1u) == 0) wifiResetModem();
+    wifiBegin();
+  }
 }
 
 static void webSetup() {
   size_t n = strlen(PAGE);
   g_pageLen = (n > 65535u) ? 65535u : (uint16_t)n;
   credsBoot();
+  if (g_creds.ssid[0] == 0 && !g_setupAp) {
+    g_wifi = WIFI_OFF;
+    Serial.println(F("WiFi skipped (no credentials in EEPROM or secrets.h)"));
+    return;
+  }
+  // Before the matrix timer, so the modem round trips can block.
+  wifiResetModem();
   if (g_setupAp) {
     startSetupAp();
     WiFi.setTimeout(0);
     modem.timeout(MODEM_CMD_BUDGET_MS);
     return;
   }
-  if (g_creds.ssid[0] == 0) {
-    g_wifi = WIFI_OFF;
-    Serial.println(F("WiFi skipped (no credentials in EEPROM or secrets.h)"));
-    return;
-  }
   g_wifi = WIFI_JOINING;
   Serial.println(F("WiFi joining"));
-  // WiFi.begin() waits while _timeout is the default 10 s, and only for
-  // WL_CONNECTED — not for an address. modem.begin() restores a 10 s command
-  // timeout; leave that in place for this first attempt. The matrix timer
-  // is not running yet, so the wait does not fight the LED ISR.
-  WiFi.status();
+  // WiFi.begin() waits while _timeout is the library default 10 s, and
+  // only for WL_CONNECTED — not for an address. The matrix timer is not
+  // running yet, so the wait does not fight the LED ISR.
   WiFi.setHostname("matrixlamp");
   wifiBegin();
   if (WiFi.status() == WL_CONNECTED) {
