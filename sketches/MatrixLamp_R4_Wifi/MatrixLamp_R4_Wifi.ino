@@ -22,10 +22,12 @@
    keep a full-white frame inside a small supply. The page cannot raise
    brightness past that cap.
 
-   WiFi is WiFiS3 plus secrets.h. Boot soft-resets the ESP32-S3 before
-   the first WiFi.begin(). An AIRCR reboot does not reset that chip, and
-   a leftover OK from the GitHub download makes the library's first
-   SOFTRESETWIFI look done while the old port-80 socket stays open.
+   WiFi is WiFiS3 plus secrets.h. An AIRCR reboot resets only the RA4M1.
+   The ESP32-S3 keeps its old station, sockets, and SoftAP. SOFTRESETWIFI
+   does not reboot that chip: it disconnects and calls softAPdisconnect(),
+   which leaves the default access point at 192.168.4.1. Boot therefore
+   sends AT+RESET (ESP.restart()) and waits until the bridge answers
+   again, then joins. 192.168.4.1 is ignored unless the setup AP is up.
    The first begin() uses the library's 10 s timeout and runs before the
    matrix timer starts. After that, WiFi.setTimeout(0) and
    modem.timeout(800) keep the loop bounded.
@@ -49,8 +51,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   115736 B flash (44% of 262144), 17032 B globals (51% of 32768),
-   15736 B left for locals. The .bin is 115744 B. OTA allows at most
+   116448 B flash (44% of 262144), 17040 B globals (52% of 32768),
+   15728 B left for locals. The .bin is 116456 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -224,6 +226,7 @@ static uint8_t g_otaOpened = 0;
 static uint8_t g_otaFail = 0;
 static uint8_t g_otaApply = 0;
 static uint8_t g_rebootAfter = 0;
+static uint32_t g_rebootAt = 0;
 static uint8_t g_ghJob = 0;
 // GitHub fetch runs from loop, after the POST response has been flushed.
 // httpStop clears g_ghJob, so the pending job lives here.
@@ -894,12 +897,25 @@ static void rememberIp(const IPAddress& ip);
 
 #include "lamp_ota.h"
 
+// AT+RESET is ESP.restart() and does not send OK. The RA4M1 then resets
+// itself. SOFTRESETWIFI is not used here: it leaves the default SoftAP up.
+static void rebootNow() {
+  g_rebootAfter = 0;
+  Serial2.begin(115200);
+  while (Serial2.available() > 0) Serial2.read();
+  Serial2.print(F("AT+RESET\r\n"));
+  delay(30);
+  NVIC_SystemReset();
+  while (1) {}
+}
+
 static void httpStop() {
   g_client.stop();
   g_http = PH_IDLE;
   g_ghJob = 0;
   g_otaApply = 0;
-  g_rebootAfter = 0;
+  // A saved setup must still reboot if this socket dies after the phone
+  // has already shown "Saved. Restarting."
 }
 
 static void httpHandle() {
@@ -1009,7 +1025,10 @@ static void httpWrite() {
     if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
     size_t w = g_client.write((const uint8_t*)g_hdr + g_hdrOff, n);
     if (w == 0) {
-      if (++g_fail > 8) httpStop();
+      if (++g_fail > 8) {
+        if (g_rebootAfter) rebootNow();
+        httpStop();
+      }
       return;
     }
     g_fail = 0;
@@ -1021,7 +1040,10 @@ static void httpWrite() {
     if (n > HTTP_WRITE_MAX) n = HTTP_WRITE_MAX;
     size_t w = g_client.write((const uint8_t*)g_body + g_bodyOff, n);
     if (w == 0) {
-      if (++g_fail > 8) httpStop();
+      if (++g_fail > 8) {
+        if (g_rebootAfter) rebootNow();
+        httpStop();
+      }
       return;
     }
     g_fail = 0;
@@ -1033,7 +1055,6 @@ static void httpWrite() {
   uint8_t reboot = g_rebootAfter;
   g_ghJob = 0;
   g_otaApply = 0;
-  g_rebootAfter = 0;
   if (job || apply || reboot) {
     // The WiFi stack buffers the reply. Closing before flush makes the
     // phone see a dead socket and the page used to call that a reboot.
@@ -1052,7 +1073,7 @@ static void httpWrite() {
     }
     return;
   }
-  if (reboot) NVIC_SystemReset();
+  if (reboot) rebootNow();
   if (job) g_ghPend = job;
 }
 
@@ -1060,18 +1081,6 @@ static void wifiBegin() {
   if (g_creds.pass[0] == 0) WiFi.begin(g_creds.ssid);
   else WiFi.begin(g_creds.ssid, g_creds.pass);
   g_joinSince = millis();
-}
-
-// The ESP32-S3 stays up across an AIRCR reset of the RA4M1. modem.begin()
-// sends one SOFTRESETWIFI and treats the first OK as success. After a
-// GitHub download that OK is often still sitting in the UART, so the
-// reset never happens and the old listen socket keeps port 80.
-// Two further resets, then a firmware-version round trip, make the
-// first OK be a real answer.
-static bool wifiModemAnswers() {
-  const char* v = WiFi.firmwareVersion();
-  if (!v || v[0] == 0) return false;
-  return strcmp(v, "99.99.99") != 0;
 }
 
 // The ESP32 needs a real pause between resets. Once the matrix timer is
@@ -1083,28 +1092,83 @@ static void waitAnim(uint32_t ms) {
   }
 }
 
-static void wifiResetModem() {
-  Serial.println(F("WiFi modem reset"));
-  for (uint8_t n = 0; n < 3; n++) {
-    modem.beginned = false;
-    modem.timeout(1000);
-    modem.begin(115200, 1);
-    waitAnim(150);
-    WiFi.end();
-    waitAnim(200);
-    WiFi.end();
-    waitAnim(400);
-    modem.timeout(1500);
-    if (wifiModemAnswers()) {
-      Serial.println(F("WiFi modem ready"));
-      modem.timeout(MODEM_CMD_BUDGET_MS);
-      return;
+static void serial2Drain() {
+  while (Serial2.available() > 0) Serial2.read();
+}
+
+// True when needle shows up on the AT UART. Painting is allowed only
+// while the port is idle, so a short reply is not dropped during show().
+static bool serial2Find(const char* needle, uint32_t waitMs) {
+  char buf[40];
+  uint8_t n = 0;
+  uint32_t t = millis();
+  while ((uint32_t)(millis() - t) < waitMs) {
+    if (Serial2.available() <= 0) {
+      if (g_matrixOn && !g_otaActive) tickPanel(millis());
+      continue;
     }
-    Serial.println(F("WiFi modem retry"));
+    char c = (char)Serial2.read();
+    if (n + 1 >= sizeof buf) {
+      memmove(buf, buf + 1, sizeof buf - 2);
+      n = (uint8_t)(sizeof buf - 2);
+    }
+    buf[n++] = c;
+    buf[n] = 0;
+    if (strstr(buf, needle)) return true;
+  }
+  return false;
+}
+
+// SOFTRESETWIFI only closes sockets and calls WiFi.disconnect() plus
+// softAPdisconnect(). On a chip that was already associated, that leaves
+// the ESP32-S3 in its default SoftAP at 192.168.4.1 and GETSTATUS can
+// still read as connected. AT+RESET is ESP.restart(), the same state a
+// power cycle gives the modem. The bridge does not answer OK, because
+// restart does not return. modem.begin() must not run afterwards: it
+// would send SOFTRESETWIFI and bring the SoftAP back.
+static bool wifiEspRestart() {
+  Serial2.begin(115200);
+  serial2Drain();
+  Serial2.print(F("AT+RESET\r\n"));
+  waitAnim(700);
+  serial2Drain();
+  for (uint8_t i = 0; i < 10; i++) {
+    serial2Drain();
+    Serial2.print(F("AT+FWVERSION?\r\n"));
+    if (serial2Find("+FWVERSION:", 350)) {
+      serial2Find("OK", 300);
+      serial2Drain();
+      modem.beginned = true;
+      modem.timeout(MODEM_CMD_BUDGET_MS);
+      return true;
+    }
     waitAnim(200);
   }
+  return false;
+}
+
+static bool wifiModemAnswers() {
+  const char* v = WiFi.firmwareVersion();
+  if (!v || v[0] == 0) return false;
+  return strcmp(v, "99.99.99") != 0;
+}
+
+static void wifiResetModem() {
+  Serial.println(F("WiFi modem restart"));
+  if (wifiEspRestart()) {
+    Serial.println(F("WiFi modem ready"));
+    return;
+  }
+  // The bridge did not come back from AT+RESET. One SOFTRESETWIFI is
+  // the fallback, not three: repeating it is what raises the SoftAP.
+  Serial.println(F("WiFi modem restart failed"));
+  modem.beginned = false;
+  modem.timeout(1000);
+  modem.begin(115200, 1);
+  waitAnim(400);
   modem.timeout(MODEM_CMD_BUDGET_MS);
-  Serial.println(F("WiFi modem silent"));
+  if (wifiModemAnswers()) Serial.println(F("WiFi modem ready"));
+  else Serial.println(F("WiFi modem silent"));
 }
 
 static void ensureServer() {
@@ -1121,6 +1185,22 @@ static bool ipReady(const IPAddress& ip) {
   if (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0) return false;
   if (ip[0] == 0) return false;
   return true;
+}
+
+// 1 = station, 2 = SoftAP, 3 = both. -1 if the modem did not answer.
+static int wifiLinkMode() {
+  std::string res;
+  if (!modem.write(std::string("+WIFIMODE:"), res, "AT+WIFIMODE?\r\n")) return -1;
+  return atoi(res.c_str());
+}
+
+// 192.168.4.1 is the ESP32 default SoftAP address. A real station lease
+// of that exact address is accepted only when the modem reports station mode.
+static bool stationReady(const IPAddress& ip) {
+  if (!ipReady(ip)) return false;
+  if (g_setupAp) return true;
+  if (ip[0] != 192 || ip[1] != 168 || ip[2] != 4 || ip[3] != 1) return true;
+  return wifiLinkMode() == 1;
 }
 
 static void rememberIp(const IPAddress& ip) {
@@ -1149,7 +1229,8 @@ static void noteConnected() {
   Serial.println(F("DHCP name matrixlamp (http://matrixlamp/ if the router publishes it)."));
 }
 
-static void adoptIp(const IPAddress& ip) {
+static bool adoptIp(const IPAddress& ip) {
+  if (!stationReady(ip)) return false;
   bool changed = ip[0] != g_ip[0] || ip[1] != g_ip[1] || ip[2] != g_ip[2] || ip[3] != g_ip[3];
   if (changed) rememberIp(ip);
   if (g_wifi != WIFI_ONLINE) {
@@ -1166,6 +1247,7 @@ static void adoptIp(const IPAddress& ip) {
     mdnsServiceArm(millis());
   }
   ensureServer();
+  return true;
 }
 
 static void wifiDrop(uint32_t now) {
@@ -1217,7 +1299,17 @@ static void wifiPollStatus(uint32_t now) {
     IPAddress ip = WiFi.localIP();
     // Ignore a 0.0.0.0 read once we already have an address: localIP()
     // returns that on a modem timeout as well as before DHCP.
-    if (ipReady(ip)) adoptIp(ip);
+    if (!ipReady(ip)) return;
+    if (adoptIp(ip)) return;
+    // Non-zero, but it is the SoftAP. Do not stay "online" there, or the
+    // matrix scrolls 192.168.4.1 and the station join is never retried.
+    if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) {
+      Serial.println(F("WiFi SoftAP address, rejoining"));
+      g_joinTries++;
+      wifiDrop(now);
+      wifiResetModem();
+      wifiBegin();
+    }
     return;
   }
   if (g_wifi == WIFI_ONLINE) {
@@ -1252,7 +1344,8 @@ static void webSetup() {
     return;
   }
   g_wifi = WIFI_JOINING;
-  Serial.println(F("WiFi joining"));
+  Serial.print(F("WiFi joining "));
+  Serial.println(g_creds.ssid);
   // WiFi.begin() waits while _timeout is the library default 10 s, and
   // only for WL_CONNECTED — not for an address. The matrix timer is not
   // running yet, so the wait does not fight the LED ISR.
@@ -1364,6 +1457,7 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
+  if (g_rebootAfter && (int32_t)(now - g_rebootAt) >= 0) rebootNow();
   webPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;

@@ -1,7 +1,8 @@
 // WiFi and OTA password in the RA4M1 data flash (8 KB at 0x40100000).
-// Code-flash OTA does not erase this. A USB build that compiled in secrets.h
-// copies those values when they differ. A CI build has no secrets.h and keeps
-// whatever is already stored.
+// The credential block is the first 1 KB, at 0x40100000. Preferences are
+// the next block, at 0x40100400. Code-flash OTA does not erase either.
+// A USB build that compiled in secrets.h copies those values when they
+// differ. A CI build has no secrets.h and keeps whatever is already stored.
 //
 // This does not use the EEPROM library. That library links the whole
 // BlockDevice filesystem and blows the OTA size limit.
@@ -60,9 +61,17 @@ static bool credsValid(const LampCreds* c) {
   return c->ssid[0] != 0;
 }
 
+// Data flash is read a byte at a time. A wide load can return a stale
+// value from the flash buffer right after a program.
+static void dfRead(uint32_t addr, void* dst, size_t n) {
+  const volatile uint8_t* s = (const volatile uint8_t*)addr;
+  uint8_t* d = (uint8_t*)dst;
+  for (size_t i = 0; i < n; i++) d[i] = s[i];
+}
+
 static bool credsLoad() {
   LampCreds c;
-  memcpy(&c, (const void*)LAMP_DF_ADDR, sizeof c);
+  dfRead(LAMP_DF_ADDR, &c, sizeof c);
   if (!credsValid(&c)) return false;
   g_creds = c;
   return true;
@@ -92,17 +101,28 @@ static bool credsSave(const LampCreds& in) {
   cfg.err_ipl = BSP_IRQ_DISABLED;
   cfg.err_irq = FSP_INVALID_VECTOR;
 
-  if (R_FLASH_LP_Open(&ctrl, &cfg) != FSP_SUCCESS) return false;
-  __disable_irq();
-  fsp_err_t er = R_FLASH_LP_Erase(&ctrl, LAMP_DF_ADDR, 1);
-  fsp_err_t wr = FSP_ERR_WRITE_FAILED;
-  if (er == FSP_SUCCESS) wr = R_FLASH_LP_Write(&ctrl, (uint32_t)buf, LAMP_DF_ADDR, n);
-  __enable_irq();
-  R_FLASH_LP_Close(&ctrl);
-  if (wr != FSP_SUCCESS) return false;
-  g_creds = c;
-  (void)LAMP_DF_BLOCK;
-  return true;
+  // Program twice if the first image does not read back. A success code
+  // from the flash controller is not enough: the portal used to say
+  // "Saved" when the next boot still found a blank block and opened the AP.
+  for (uint8_t attempt = 0; attempt < 2; attempt++) {
+    if (R_FLASH_LP_Open(&ctrl, &cfg) != FSP_SUCCESS) return false;
+    __disable_irq();
+    fsp_err_t er = R_FLASH_LP_Erase(&ctrl, LAMP_DF_ADDR, 1);
+    fsp_err_t wr = FSP_ERR_WRITE_FAILED;
+    if (er == FSP_SUCCESS) wr = R_FLASH_LP_Write(&ctrl, (uint32_t)buf, LAMP_DF_ADDR, n);
+    __enable_irq();
+    R_FLASH_LP_Close(&ctrl);
+    if (wr != FSP_SUCCESS) continue;
+    delay(2);
+    LampCreds back;
+    dfRead(LAMP_DF_ADDR, &back, sizeof back);
+    if (memcmp(&back, &c, sizeof c) == 0 && credsValid(&back)) {
+      g_creds = c;
+      (void)LAMP_DF_BLOCK;
+      return true;
+    }
+  }
+  return false;
 }
 
 #ifndef LAMP_COMPILED_SECRETS
@@ -129,6 +149,12 @@ static void credsBoot() {
         Serial.println(F("Could not store WiFi"));
       }
     }
+  }
+  if (ok) {
+    Serial.print(F("WiFi creds "));
+    Serial.println(g_creds.ssid);
+  } else {
+    Serial.println(F("WiFi creds missing"));
   }
   if (g_forceSetup || !ok) g_setupAp = 1;
 }
