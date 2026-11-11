@@ -1,0 +1,9 @@
+{
+  "name": "matrix-lamp-sim",
+  "private": true,
+  "description": "Local browser preview of the Matrix Lamp presets. The picture is the firmware's C++ core compiled to WebAssembly.",
+  "scripts": {
+    "build": "bash build.sh",
+    "start": "node server.js"
+  }
+}

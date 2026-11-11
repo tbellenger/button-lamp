@@ -142,7 +142,7 @@ static void otaResumeLamp() {
   g_otaActive = 0;
   g_otaPaint = -1;
   matrixResume();
-  g_dirty = 1;
+  lamp_fx_mark_dirty();
 }
 
 static bool otaAuthed() {
