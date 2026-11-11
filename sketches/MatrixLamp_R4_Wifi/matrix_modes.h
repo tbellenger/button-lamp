@@ -7,8 +7,8 @@
 //   metaballs  blobs, 1 to 8. The page adds and removes them.
 //   plasma     rotating field. Red zooms in, white zooms out.
 //   sun        pulsing sun. Red grows it, white shrinks it.
-//   spiral     one Archimedean arm, about 1.52 turns, Gaussian width.
-//              Hue runs violet to cyan along the arm. Speed shifts that range.
+//   spiral     two Archimedean arms, 180 degrees apart, one turn each.
+//              Hue runs violet to cyan along each arm. Speed shifts that range.
 //              Fixed spin, one turn every 9 s.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
@@ -335,14 +335,15 @@ static void modesStep(const ModeIn* in, uint32_t now) {
   if (in->mode == M_FLUID) fluidStep(in->speed);
 }
 
-// Archimedean centreline, r = 0.40 + 9.05 * (theta / thetaMax),
-// thetaMax = 1.52 turns. The radial pitch is about 6 px, so a 3-4 px
-// arm leaves a 1-2 px dark gap. Rebuilt once per frame.
+// Two Archimedean arms, the second rotated 180 degrees.
+// r = 0.35 + 9.15 * (theta / thetaMax), thetaMax = 1.00 turn.
+// Per-arm pitch is about 9.2 px (was 6 px for one arm) so the
+// arm-to-arm gap stays about 1-2 px. Rebuilt once per frame.
 // Angle is -spin, one turn every 9 s, the same direction as before.
 static const uint8_t SP_N = 96;
-static const float SP_TURNS = 1.52f;
-static const float SP_R0 = 0.40f;
-static const float SP_R1 = 9.45f;
+static const float SP_TURNS = 1.00f;
+static const float SP_R0 = 0.35f;
+static const float SP_R1 = 9.50f;
 static const float SP_SIGMA = 1.22f;
 static float g_spX[SP_N];
 static float g_spY[SP_N];
@@ -383,9 +384,16 @@ static void paintSpiral(int x, int y, uint32_t now, uint8_t speed,
   float best = 1.0e9f;
   float u = 0.0f;
   for (uint8_t i = 0; i < SP_N; i++) {
-    float ddx = dx - g_spX[i];
-    float ddy = dy - g_spY[i];
+    float px = g_spX[i];
+    float py = g_spY[i];
+    float ddx = dx - px;
+    float ddy = dy - py;
     float d2 = ddx * ddx + ddy * ddy;
+    // The other arm is this one turned 180 degrees.
+    float ddx2 = dx + px;
+    float ddy2 = dy + py;
+    float d2b = ddx2 * ddx2 + ddy2 * ddy2;
+    if (d2b < d2) d2 = d2b;
     if (d2 < best) {
       best = d2;
       u = g_spU[i];
