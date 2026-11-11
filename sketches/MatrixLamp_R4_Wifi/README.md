@@ -25,7 +25,7 @@ Brightness starts at **20** of 255 (`BRIGHTNESS_DEFAULT`). The page cannot raise
 
 Copy `secrets.example.h` to `secrets.h` in this folder. `secrets.h` is gitignored. Do not commit it. Put the network in `WIFI_SSID` / `WIFI_PASS` and set `OTA_PASSWORD`. A USB build stores those in data flash when they differ. A GitHub build has no `secrets.h` and does not overwrite them. With no stored network, the board opens WiFi `MatrixLamp-Setup` so a phone can enter them.
 
-The lamp is online only when `WiFi.status()` is `WL_CONNECTED` and `WiFi.localIP()` is not `0.0.0.0`. mDNS: `matrixlamp.local` and `matrix-lamp.local`. DHCP name: `matrixlamp`.
+The lamp is online only when `WiFi.status()` is `WL_CONNECTED` and `WiFi.localIP()` is not `0.0.0.0`. Boot soft-resets the ESP32-S3 twice before joining, because an OTA reboot resets only the RA4M1 and a stale OK leaves the old port-80 socket in place. If the listen socket still will not open, or joining fails twice, the modem is reset again. mDNS: `matrixlamp.local` and `matrix-lamp.local`. DHCP name: `matrixlamp`.
 
 ## If the picture is backwards
 
@@ -70,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 114288 B flash (43% of 262144), 17012 B globals (51% of 32768), 15756 B left for locals. The `.bin` is 114296 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 114824 B flash (43% of 262144), 17032 B globals (51% of 32768), 15736 B left for locals. The `.bin` is 114832 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
