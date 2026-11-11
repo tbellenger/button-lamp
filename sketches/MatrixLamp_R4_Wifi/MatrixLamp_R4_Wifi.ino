@@ -6,11 +6,9 @@
    panel must share ground. A 1000 µF capacitor across the panel 5 V and
    GND, at the panel, takes the switch-on surge.
 
-   The picture is the 16x16 panel. The page is the spiral lamp's physical
-   panel (rocker, toggles, arcade buttons, key, mushroom, fader, knob).
-   Switches at rest play the matrix fire. The other positions play the
-   spiral modes, plus Metaballs (rrllrrll), Plasma (llrrllrr), and Sun
-   (rrrllrrr) while idle.
+   The picture is the 16x16 panel. The phone page has brightness, speed,
+   and preset buttons. While Meatballs is showing, + Ball and - Ball
+   change the count from 1 to 8.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
@@ -32,9 +30,8 @@
    mDNS answers matrixlamp.local and matrix-lamp.local (UDP 5353).
    DHCP hostname is matrixlamp.
 
-   The page is the same shape as the spiral lamp's
-   (sketches/SpiralLamp_R4_FireTrail_WiFi_MIDI/): mode, brightness,
-   speed, intensity, colour buttons. GET /api/state and GET /api/set.
+   GET /api/state and GET /api/set. balls=add and balls=remove change
+   the Meatballs count. A number from 1 to 8 sets it.
 
    Host check for the fire:
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
@@ -47,8 +44,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   112412 B flash (42% of 262144), 15660 B globals (47% of 32768),
-   17108 B left for locals. The .bin is 112420 B. OTA allows at most
+   113548 B flash (43% of 262144), 15660 B globals (47% of 32768),
+   17108 B left for locals. The .bin is 113556 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -284,6 +281,10 @@ pre{white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;margin:.6rem 0 0}
 input[type=password],input[type=file]{display:block;width:100%;margin:.4rem 0;box-sizing:border-box}
 .row{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
 .row button{flex:1}
+#balls{align-items:center;margin:.2rem 0 0}
+#balls[hidden]{display:none}
+#bcnt{flex:0 0 4.6rem;text-align:center}
+button:disabled{opacity:.35}
 </style></head><body><main>
 <h1>Matrix Lamp</h1>
 <p class=sub id=ver>version</p>
@@ -293,6 +294,11 @@ input[type=password],input[type=file]{display:block;width:100%;margin:.4rem 0;bo
 <input id=spd type=range min=0 max=100 value=50>
 <p class=sub id=spdnote></p>
 <div class=grid id=grid></div>
+<div class=row id=balls hidden>
+<button type=button id=bmin>- Ball</button>
+<span id=bcnt>3 of 8</span>
+<button type=button id=badd>+ Ball</button>
+</div>
 <details><summary>Update</summary>
 <p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. Everywhere else, Speed is how fast the preset moves.</p>
 <input id=otap type=password placeholder="OTA password" autocomplete=current-password>
@@ -308,7 +314,7 @@ input[type=password],input[type=file]{display:block;width:100%;margin:.4rem 0;bo
 <script>
 var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart'];
 var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart'};
-var S={mode:'fire',fader:50,speed:50};
+var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');
 var grid=document.getElementById('grid');
@@ -321,12 +327,22 @@ function paintBtns(){
   var bs=grid.querySelectorAll('button');
   for(var i=0;i<bs.length;i++) bs[i].className = bs[i].dataset.m==S.mode ? 'on' : '';
 }
+function ballRow(){
+  var box=document.getElementById('balls');
+  if(S.mode=='metaballs') box.removeAttribute('hidden');
+  else box.setAttribute('hidden','');
+  document.getElementById('bcnt').textContent=S.balls+' of 8';
+  document.getElementById('badd').disabled=S.balls>=8;
+  document.getElementById('bmin').disabled=S.balls<=1;
+}
 NAMES.forEach(function(n){
   var b=document.createElement('button');
   b.type='button'; b.textContent=LABELS[n]; b.dataset.m=n;
-  b.onclick=function(){S.mode=n; paintBtns(); noteFor(n); send('mode='+n);};
+  b.onclick=function(){S.mode=n; paintBtns(); noteFor(n); ballRow(); send('mode='+n);};
   grid.appendChild(b);
 });
+document.getElementById('badd').onclick=function(){send('balls=add');};
+document.getElementById('bmin').onclick=function(){send('balls=remove');};
 function send(q){
   fetch('/api/set?'+q).then(function(r){return r.json();}).then(show).catch(function(){});
 }
@@ -334,9 +350,10 @@ function show(s){
   if(!s||!s.mode)return;
   if(!drag){
     S.mode=s.mode; S.fader=s.fader; S.speed=s.speed;
+    if(s.balls) S.balls=s.balls;
     document.getElementById('bri').value=S.fader;
     document.getElementById('spd').value=S.speed;
-    paintBtns(); noteFor(S.mode);
+    paintBtns(); noteFor(S.mode); ballRow();
   }
   ver.textContent='firmware '+s.fw+(s.built?('  '+s.built):'')+(s.ghVersion?('   release '+s.ghVersion+(s.ghSha?(' '+s.ghSha.slice(0,7)):'')):'');
   st.textContent=s.mode+'  bri '+s.brightness+'/'+s.brightnessCap+'  speed '+s.speed+'\n'+s.wifi+' '+s.ip;
@@ -711,6 +728,22 @@ static bool applyOne(const char* key, const char* val, const char** err) {
     int m = modesFromName(val);
     if (m < 0) { *err = "mode"; return false; }
     setMode((uint8_t)m);
+    return true;
+  }
+  if (!strcmp(key, "balls")) {
+    uint8_t before = modesMetaCount();
+    if (!strcmp(val, "add") || !strcmp(val, "+")) modesMetaAdd();
+    else if (!strcmp(val, "remove") || !strcmp(val, "-")) modesMetaRemove();
+    else {
+      int n;
+      if (!parseU100(val, &n) || n < (int)META_MIN || n > (int)META_MAX) {
+        *err = "balls";
+        return false;
+      }
+      modesMetaSet((uint8_t)n);
+    }
+    if (modesMetaCount() != before) g_prefsDirty = 1;
+    g_dirty = 1;
     return true;
   }
   *err = "key";
@@ -1164,17 +1197,20 @@ static void webPoll(uint32_t now) {
 }
 
 static void loadPrefs() {
-  uint8_t mode = M_FIRE, fader = 50, speed = 50;
-  if (!prefsLoad(&mode, &fader, &speed)) return;
+  uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0;
+  if (!prefsLoad(&mode, &fader, &speed, &balls)) return;
   if (mode < M_COUNT) g_mode = mode;
   if (fader <= 100) g_fader = fader;
   if (speed <= 100) g_speed = speed;
+  if (balls >= META_MIN && balls <= META_MAX) modesMetaSet(balls);
   Serial.print(F("Prefs "));
   Serial.print(modesName(g_mode));
   Serial.print(F(" bri "));
   Serial.print(g_fader);
   Serial.print(F(" speed "));
-  Serial.println(g_speed);
+  Serial.print(g_speed);
+  Serial.print(F(" balls "));
+  Serial.println(modesMetaCount());
 }
 
 void setup() {
@@ -1216,7 +1252,7 @@ void loop() {
   webPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;
-    if (!prefsSave(g_mode, g_fader, g_speed)) {
+    if (!prefsSave(g_mode, g_fader, g_speed, modesMetaCount())) {
       Serial.println(F("Prefs save failed"));
     }
   }

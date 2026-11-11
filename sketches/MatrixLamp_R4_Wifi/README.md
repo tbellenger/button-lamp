@@ -1,6 +1,6 @@
 # MatrixLamp_R4_Wifi
 
-Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The lamp is the panel and the Uno only: there is no knob, fader, or button. The phone page has a brightness slider, a speed slider, and preset buttons (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart). On Spiral, Speed shifts the colour and the arm keeps a fixed spin. The last preset, brightness, and speed are stored in the data-flash block after the WiFi credentials. The board's 12×8 red matrix scrolls the WiFi IP. After one USB flash, firmware updates go over WiFi.
+Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The lamp is the panel and the Uno only: there is no knob, fader, or button. The phone page has a brightness slider, a speed slider, and preset buttons (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart). While Meatballs is showing, + Ball and − Ball change the count from 1 to 8. A new ball gets a random position and velocity. On Spiral, Speed shifts the colour and the arm keeps a fixed spin. The last preset, brightness, speed, and ball count are stored in the data-flash block after the WiFi credentials. The board's 12×8 red matrix scrolls the WiFi IP. After one USB flash, firmware updates go over WiFi.
 
 The project README, section 5, is the full note (page, `GET /api/state`, `GET /api/set`). This file is the wiring and the upload.
 
@@ -70,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 112412 B flash (42% of 262144), 15660 B globals (47% of 32768), 17108 B left for locals. The `.bin` is 112420 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 113548 B flash (43% of 262144), 15660 B globals (47% of 32768), 17108 B left for locals. The `.bin` is 113556 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.

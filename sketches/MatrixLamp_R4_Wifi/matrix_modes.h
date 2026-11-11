@@ -4,7 +4,7 @@
 //
 //   fire       the matrix fire (not drawn here)
 //   rainbow    diagonal hue, drifting. Speed is the drift.
-//   metaballs  blobs. Red adds, white removes, while this is showing.
+//   metaballs  blobs, 1 to 8. The page adds and removes them.
 //   plasma     rotating field. Red zooms in, white zooms out.
 //   sun        pulsing sun. Red grows it, white shrinks it.
 //   spiral     one Archimedean arm, fixed spin. Speed shifts the hue.
@@ -138,6 +138,15 @@ static void modesMetaAdd() {
 static void modesMetaRemove() {
   if (g_metaN <= META_MIN) return;
   g_metaN--;
+}
+static void modesMetaSet(uint8_t n) {
+  if (n < META_MIN) n = META_MIN;
+  if (n > META_MAX) n = META_MAX;
+  while (g_metaN < n) {
+    metaPlace(g_metaN);
+    g_metaN++;
+  }
+  g_metaN = n;
 }
 static uint8_t modesMetaCount() { return g_metaN; }
 

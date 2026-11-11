@@ -143,11 +143,11 @@ struct LampPrefs {
   uint8_t mode;
   uint8_t fader;
   uint8_t speed;
-  uint8_t pad;
+  uint8_t balls; // 1..8, or 0 when this byte was never written
   uint32_t crc;
 };
 
-static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed) {
+static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* balls) {
   LampPrefs p;
   memcpy(&p, (const void*)LAMP_PREFS_ADDR, sizeof p);
   if (p.magic != LAMP_PREFS_MAGIC) return false;
@@ -155,16 +155,18 @@ static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed) {
   *mode = p.mode;
   *fader = p.fader;
   *speed = p.speed;
+  *balls = p.balls;
   return true;
 }
 
-static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed) {
+static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls) {
   LampPrefs p;
   memset(&p, 0, sizeof p);
   p.magic = LAMP_PREFS_MAGIC;
   p.mode = mode;
   p.fader = fader;
   p.speed = speed;
+  p.balls = balls;
   p.crc = lampCrc32(&p, offsetof(LampPrefs, crc));
 
   uint8_t buf[16];
