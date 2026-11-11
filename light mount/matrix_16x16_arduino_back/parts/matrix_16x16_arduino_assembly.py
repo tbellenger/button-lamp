@@ -10,12 +10,11 @@ def matrix_16x16_arduino_assembly():
     stand = use("matrix_16x16_desk_stand")
     housing_pose = Pos(0.0, -10.0, 96.0) * Rot(90.0, 0.0, 0.0)
 
-    # Shell prints cavity-up. RotX(180) sends +Z to -Z and flips Y; mirroring
-    # across XZ first puts Y back, so a shell point (x, y, z) lands at housing
-    # (x, y, -z): the mating face stays on the backplate and the bay opens rearward.
+    # Shell prints cavity-up. Turn it over about the horizontal axis through the
+    # bay centre: (x, y, z) -> (x, 2*bay_cy - y, -z). That is a real rotation.
+    # The mating face lands on the backplate and the bay opens rearward.
     def onto_back(shape):
-        flipped = shape.mirror(Plane.XZ)
-        return housing_pose * Rot(180.0, 0.0, 0.0) * flipped
+        return housing_pose * Pos(0.0, 2.0 * L["bay_cy"], 0.0) * Rot(180.0, 0.0, 0.0) * shape
 
     housing = housing_pose * use("matrix_16x16_arduino_housing")
     shell = onto_back(use("matrix_16x16_arduino_shell"))

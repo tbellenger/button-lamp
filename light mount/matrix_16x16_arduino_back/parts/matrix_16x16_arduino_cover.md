@@ -14,7 +14,7 @@ Removable back cover for the Arduino bay. A lip locates it in the shell and four
 
 - Prints plate-down, lip up. The lip is 0.3 mm per side smaller than the shell cavity.
 - The lip is notched at the 5 V entry and the button-wire exit, both of which are open at the shell rim. USB-C and the barrel jack are holes below the rim, so the lip stays whole on that wall. The plate still caps the shell.
-- Cover screws are M3×8 into heat-set inserts in the shell bosses, at `(-34, 4.4)`, `(10, 4.4)`, `(-14, 69.2)` and `(40, 69.2)`. Those moved off the Uno outline so the stacked shield can sit flat. Heads sit on the outside face.
+- Cover screws are M3×8 into the shell bosses. On this plate they are at `(-34, 69.1)`, `(10, 69.1)`, `(-14, 4.3)` and `(40, 4.3)`, which is where those bosses sit once the shell is turned over. Heads sit on the outside face. The 5 V notch and the button notch are shifted the same way.
 
 ## Don't
 
@@ -26,3 +26,4 @@ Removable back cover for the Arduino bay. A lip locates it in the shell and four
 
 - 2026-11-01: initial cover with matrix window and port notches.
 - 2026-11-01: dropped the matrix window (the shield covers those LEDs), moved the screws off the board, and notched the lip for the button-wire exit.
+- 2026-11-10: holes and lip notches moved so the cover seats on the shell after the shell is turned over.

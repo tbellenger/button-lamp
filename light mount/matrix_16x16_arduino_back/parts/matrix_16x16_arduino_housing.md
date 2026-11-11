@@ -13,7 +13,7 @@ Front bezel and backplate for the 160 mm WS2812B matrix, with the same baffle tr
 
 - The stepped pocket, 45 degree corbels, open top mouth and six anti-warp windows are copied from the original housing so the same 162.4 mm baffle and 162 mm diffuser slide in.
 - Two strips of the upper side windows are filled back in where the shell's left and right walls land, so the bay perimeter has plastic to sit on.
-- Shell screws are on the 10 mm pixel grid at `(-30, 30)`, `(-30, 50)`, `(30, 30)` and `(30, 60)`, with the same recessed M3 heads as the base-mount screws.
+- Shell screws are at `(-30, 43.5)`, `(-30, 23.5)`, `(30, 43.5)` and `(30, 13.5)`, on the same X = ±30 ribs. That is where the shell's screws land after it is turned over. Heads are recessed like the base-mount screws.
 
 ## Don't
 
@@ -24,3 +24,4 @@ Front bezel and backplate for the 160 mm WS2812B matrix, with the same baffle tr
 ## Changelog
 
 - 2026-11-01: Arduino-back variant. Front stack unchanged; shell screw holes and wall lands added.
+- 2026-11-10: shell screw holes moved to where the shell lands after it is turned over.
