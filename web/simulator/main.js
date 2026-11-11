@@ -8,6 +8,7 @@ const LABELS = {
   fluid: "Fluid",
   heart: "Heart",
   matrix: "Matrix",
+  plaid: "Plaid",
 };
 
 const state = { mode: 0, speed: 50, fader: 50, name: "fire" };
@@ -21,6 +22,7 @@ const CELL = canvas.width / N;
 function noteFor(name) {
   if (name === "spiral") note.textContent = "Speed shifts the spiral colour. Spin stays fixed.";
   else if (name === "matrix") note.textContent = "Speed is how fast the rain falls.";
+  else if (name === "plaid") note.textContent = "Speed is how fast the tunnel rushes.";
   else note.textContent = "Speed is how fast this preset moves.";
 }
 
