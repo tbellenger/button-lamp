@@ -12,6 +12,8 @@
 //              Fixed spin, one turn every 9 s.
 //   fluid      ink advected in a swirl. Speed is the flow.
 //   heart      lub-dub pulse. Speed is the heart rate.
+//   matrix     green rain. Near-white head, fading green tail.
+//              Speed is how fast the drops fall.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music. Nothing here plays a stored frame list.
@@ -30,7 +32,8 @@ static const uint8_t M_SUN = 4;
 static const uint8_t M_SPIRAL = 5;
 static const uint8_t M_FLUID = 6;
 static const uint8_t M_HEART = 7;
-static const uint8_t M_COUNT = 8;
+static const uint8_t M_MATRIX = 8;
+static const uint8_t M_COUNT = 9;
 
 struct ModeIn {
   uint8_t mode;
@@ -39,7 +42,8 @@ struct ModeIn {
 };
 
 static const char* const kModeName[M_COUNT] = {
-  "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart"
+  "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart",
+  "matrix"
 };
 
 static const char* modesName(uint8_t mode) {
@@ -195,6 +199,78 @@ static void geomBoot() {
   }
 }
 
+// Green rain, one drop per column. Logical y = 0 is the top of the
+// picture and y grows toward the desk. panelIndex applies PANEL_ROTATE
+// when the pixel is sent, so the head falls downward on the mounted panel.
+// Head position is 1/16 px. The colour table is one entry per 1/4 px:
+// the leading pixel is near white, then green falls off over about 11 px.
+// Speed changes the fall, not the hue.
+static const uint8_t RAIN_COLS = 16;
+struct RainCol {
+  int16_t head;
+  uint8_t vel;
+  uint8_t tail;
+};
+static RainCol g_rain[RAIN_COLS];
+static uint32_t g_rainRng = 0x6D617472u;
+
+// 48 steps, 12 px. Index 0 is the leading edge of the head.
+static const uint8_t kRain[48 * 3] = {
+  232,255,220, 236,255,226, 240,255,232, 244,255,239,
+  236,255,214, 159,237,144,  91,221, 82,  32,206, 29,
+    0,192,  0,   0,178,  0,   0,166,  0,   0,154,  0,
+    0,144,  0,   0,134,  0,   0,125,  0,   0,116,  0,
+    0,108,  0,   0,101,  0,   0, 94,  0,   0, 87,  0,
+    0, 81,  0,   0, 76,  0,   0, 70,  0,   0, 65,  0,
+    0, 61,  0,   0, 57,  0,   0, 53,  0,   0, 49,  0,
+    0, 46,  0,   0, 43,  0,   0, 40,  0,   0, 37,  0,
+    0, 34,  0,   0, 32,  0,   0, 30,  0,   0, 28,  0,
+    0, 26,  0,   0, 24,  0,   0, 22,  0,   0, 21,  0,
+    0, 19,  0,   0, 18,  0,   0, 17,  0,   0, 16,  0,
+    0, 15,  0,   0, 14,  0,   0, 13,  0,   0, 12,  0
+};
+
+static uint32_t rainRand() {
+  g_rainRng = g_rainRng * 1664525u + 1013904223u;
+  return g_rainRng;
+}
+
+static void rainLaunch(uint8_t x, uint8_t paused) {
+  uint32_t r = rainRand();
+  g_rain[x].vel = (uint8_t)(10u + (r % 13u));
+  g_rain[x].tail = (uint8_t)(6u + ((r >> 4) % 7u));
+  // A finished drop waits 6..36 px above the top before it falls again.
+  int gapPx = paused ? (int)(6u + ((r >> 8) % 31u)) : 0;
+  g_rain[x].head = (int16_t)(-(gapPx << 4));
+}
+
+static void rainBoot() {
+  g_rainRng ^= 0xA5A5u;
+  for (uint8_t x = 0; x < RAIN_COLS; x++) {
+    rainLaunch(x, 0);
+    uint32_t r = rainRand();
+    // Mix drops already on the panel with drops still above it.
+    g_rain[x].head = (int16_t)((int)(r % (28u * 16u)) - (12 * 16));
+  }
+}
+
+static void rainStep(uint8_t speed, uint32_t dt, uint32_t period) {
+  uint32_t scale = 256u;
+  if (period > 0) scale = (dt << 8) / period;
+  if (scale < 64u) scale = 64u;
+  if (scale > 768u) scale = 768u;
+  int sp = modeSpeed256(speed);
+  // Speed 50, vel 16, one frame on time: 20/16 of a pixel.
+  for (uint8_t x = 0; x < RAIN_COLS; x++) {
+    uint32_t add = (uint32_t)sp * (uint32_t)g_rain[x].vel * 20u * scale;
+    add >>= 20;
+    int head = (int)g_rain[x].head + (int)add;
+    int done = (16 << 4) + ((int)g_rain[x].tail << 4);
+    if (head > done) rainLaunch(x, 1);
+    else g_rain[x].head = (int16_t)head;
+  }
+}
+
 static void modesBoot() {
   geomBoot();
   g_metaRng ^= 0xA5A5u;
@@ -205,6 +281,7 @@ static void modesBoot() {
   fluidInject(4, 5, 200, 220);
   fluidInject(11, 10, 30, 200);
   fluidInject(8, 3, 140, 160);
+  rainBoot();
 }
 
 static void sunWarm(float heat, uint8_t* r, uint8_t* g, uint8_t* b) {
@@ -391,6 +468,7 @@ static void modesStep(const ModeIn* in, uint32_t now, uint32_t dt, uint32_t peri
   }
   if (in->mode == M_FLUID) fluidStep(in->speed, timeScale);
   if (in->mode == M_HEART) g_beat = beatScale(now, in->speed);
+  if (in->mode == M_MATRIX) rainStep(in->speed, dt, period);
 }
 
 // Two Archimedean arms, the second rotated 180 degrees.
@@ -536,6 +614,19 @@ static void paintHeart(int x, int y, uint32_t now, uint8_t speed,
   *b = (uint8_t)(glow / 4);
 }
 
+static void paintMatrix(int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
+  if ((unsigned)x >= RAIN_COLS) return;
+  int rel = (int)g_rain[x].head - (y << 4);
+  if (rel < 0) return;
+  if ((rel >> 4) >= (int)g_rain[x].tail) return;
+  int px = rel >> 2;
+  if ((unsigned)px >= 48u) return;
+  const uint8_t* c = kRain + (px * 3);
+  *r = c[0];
+  *g = c[1];
+  *b = c[2];
+}
+
 static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
@@ -606,6 +697,10 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
   }
   if (in->mode == M_FLUID) {
     paintFluid(x, y, r, g, b);
+    return;
+  }
+  if (in->mode == M_MATRIX) {
+    paintMatrix(x, y, r, g, b);
     return;
   }
   if (in->mode == M_HEART) paintHeart(x, y, now, in->speed, r, g, b);
