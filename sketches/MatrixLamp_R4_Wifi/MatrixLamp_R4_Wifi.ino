@@ -48,8 +48,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   114824 B flash (43% of 262144), 17032 B globals (51% of 32768),
-   15736 B left for locals. The .bin is 114832 B. OTA allows at most
+   114856 B flash (43% of 262144), 17032 B globals (51% of 32768),
+   15736 B left for locals. The .bin is 114864 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
