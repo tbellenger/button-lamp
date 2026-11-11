@@ -542,15 +542,6 @@ static int otaDispatchPost(uint32_t now) {
   return 1;
 }
 
-static bool bothHeld() {
-  uint32_t t = millis();
-  while ((uint32_t)(millis() - t) < 500) {
-    if (digitalRead(PIN_RED) != LOW || digitalRead(PIN_WHITE) != LOW) return false;
-    delay(10);
-  }
-  return true;
-}
-
 static void startSetupAp() {
   Serial.println(F("Setup AP MatrixLamp-Setup"));
   uint8_t st = WiFi.beginAP("MatrixLamp-Setup");
@@ -716,8 +707,12 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
   WiFiSSLClient& c = ghClient();
   c.stop();
   if (!c.connect(g_ghHost, 443)) {
-    otaSet("error", "tls connect failed");
-    return false;
+    delay(350);
+    c.stop();
+    if (!c.connect(g_ghHost, 443)) {
+      otaSet("error", "tls connect failed");
+      return false;
+    }
   }
   bool sent = ghSend(c, "GET ") && ghSend(c, g_ghPath) &&
               ghSend(c, " HTTP/1.0\r\nHost: ") && ghSend(c, g_ghHost) &&
@@ -814,10 +809,20 @@ static bool ghFetchManifest() {
     if (h.code == 200) {
       g_ghVer[0] = 0;
       g_ghFile[0] = 0;
+      g_ghSha[0] = 0;
       g_ghHave = 0;
       g_ghSize = jsonLong(g_manifest, "size");
       if (!jsonString(g_manifest, "version", g_ghVer, sizeof g_ghVer)) {
         otaSet("error", "bad manifest");
+        return false;
+      }
+      jsonString(g_manifest, "sha", g_ghSha, sizeof g_ghSha);
+      if (g_ghSize < 4096) {
+        otaSet("error", "bad manifest");
+        return false;
+      }
+      if (g_ghSize > (long)InternalStorage.maxSize()) {
+        otaSet("error", "too big");
         return false;
       }
       char crcHex[12];
@@ -837,10 +842,6 @@ static bool ghFetchManifest() {
           otaSet("error", "bad manifest");
           return false;
         }
-      }
-      if (g_ghSize < 4096) {
-        otaSet("error", "bad manifest");
-        return false;
       }
       if (strcmp(g_ghVer, FW_VERSION) == 0) otaSet("checked", "up to date");
       else otaSet("checked", "update available");

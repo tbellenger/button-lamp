@@ -1,6 +1,6 @@
 # MatrixLamp_R4_Wifi
 
-Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The page is the spiral lamp's physical control panel. Switches at rest play the matrix fire; the other positions play the spiral modes (jumbo, classic, rainbow, the four waves, secret, lava, music). With every switch off, white-white, red-red, white-white, red-red (`rrllrrll`) latches Metaballs, red-red, white-white, red-red, white-white (`llrrllrr`) latches Plasma, and white-white-white, red-red, white-white-white (`rrrllrrr`) latches Sun. In Metaballs, red (D8) adds a blob and white (D4) removes one. In Plasma, red zooms in and white zooms out. In Sun, red grows it and white shrinks it. Those presses are not a second code. The same two buttons are wired, active low, on those pins. The board's 12×8 red matrix scrolls the WiFi IP. There is no animation upload. After one USB flash, firmware updates go over WiFi.
+Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The lamp is the panel and the Uno only: there is no knob, fader, or button. The phone page has a brightness slider, a speed slider, and preset buttons (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart). On Spiral, Speed shifts the colour and the arm keeps a fixed spin. The last preset, brightness, and speed are stored in the data-flash block after the WiFi credentials. The board's 12×8 red matrix scrolls the WiFi IP. After one USB flash, firmware updates go over WiFi.
 
 The project README, section 5, is the full note (page, `GET /api/state`, `GET /api/set`). This file is the wiring and the upload.
 
@@ -23,7 +23,7 @@ Brightness starts at **20** of 255 (`BRIGHTNESS_DEFAULT`). The page cannot raise
 
 ## WiFi
 
-Copy `secrets.example.h` to `secrets.h` in this folder. `secrets.h` is gitignored. Do not commit it. Put the network in `WIFI_SSID` / `WIFI_PASS` and set `OTA_PASSWORD`. A USB build stores those in data flash when they differ. A GitHub build has no `secrets.h` and does not overwrite them. With no stored network, the board opens WiFi `MatrixLamp-Setup` so a phone can enter them. Hold red and white while resetting to open that page again.
+Copy `secrets.example.h` to `secrets.h` in this folder. `secrets.h` is gitignored. Do not commit it. Put the network in `WIFI_SSID` / `WIFI_PASS` and set `OTA_PASSWORD`. A USB build stores those in data flash when they differ. A GitHub build has no `secrets.h` and does not overwrite them. With no stored network, the board opens WiFi `MatrixLamp-Setup` so a phone can enter them.
 
 The lamp is online only when `WiFi.status()` is `WL_CONNECTED` and `WiFi.localIP()` is not `0.0.0.0`. mDNS: `matrixlamp.local` and `matrix-lamp.local`. DHCP name: `matrixlamp`.
 
@@ -36,9 +36,9 @@ Edit only these, at the top of `MatrixLamp_R4_Wifi.ino`:
 | `PANEL_SERPENTINE` | `true` when rows alternate direction (these panels usually do). |
 | `PANEL_SERPENTINE_ODD` | `true`: row 0 left to right, row 1 right to left. |
 | `PANEL_FLIP_X`, `PANEL_FLIP_Y` | Mirror. Both are `false`. |
-| `PANEL_ROTATE` | Clockwise quarter-turns, 0–3. This sketch uses **1**. |
+| `PANEL_ROTATE` | Clockwise quarter-turns, 0–3. This sketch uses **3**. |
 
-In the desk stand, housing +Y is up. The panel's first serpentine row sits on the left edge and the last row on the right, so `PANEL_ROTATE` 0 lays every picture on its side (the fire enters from the right). `1` turns the logical picture clockwise before the serpentine index, which puts the ember row on the bottom. The pocket only allows the four in-plane rotations, so this turn does not mirror the picture.
+In the desk stand, housing +Y is up. `PANEL_ROTATE` 1 left the fire upside down (flames from the top). `3` is that turn plus 180 degrees, so the ember row is the bottom edge. Every preset uses the same map.
 
 ## Upload
 
@@ -70,4 +70,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 122672 B flash (46% of 262144), 15204 B globals (46% of 32768), 17564 B left for locals. The `.bin` is 122680 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 112412 B flash (42% of 262144), 15660 B globals (47% of 32768), 17108 B left for locals. The `.bin` is 112420 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.

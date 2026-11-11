@@ -133,6 +133,65 @@ static void credsBoot() {
   if (g_forceSetup || !ok) g_setupAp = 1;
 }
 
+// UI prefs live in the next 1 KB data-flash block. The credential block
+// at LAMP_DF_ADDR is never erased by this.
+static const uint32_t LAMP_PREFS_MAGIC = 0x32504C4Du; // 'M','L','P','2'
+static const uint32_t LAMP_PREFS_ADDR = LAMP_DF_ADDR + LAMP_DF_BLOCK;
+
+struct LampPrefs {
+  uint32_t magic;
+  uint8_t mode;
+  uint8_t fader;
+  uint8_t speed;
+  uint8_t pad;
+  uint32_t crc;
+};
+
+static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed) {
+  LampPrefs p;
+  memcpy(&p, (const void*)LAMP_PREFS_ADDR, sizeof p);
+  if (p.magic != LAMP_PREFS_MAGIC) return false;
+  if (p.crc != lampCrc32(&p, offsetof(LampPrefs, crc))) return false;
+  *mode = p.mode;
+  *fader = p.fader;
+  *speed = p.speed;
+  return true;
+}
+
+static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed) {
+  LampPrefs p;
+  memset(&p, 0, sizeof p);
+  p.magic = LAMP_PREFS_MAGIC;
+  p.mode = mode;
+  p.fader = fader;
+  p.speed = speed;
+  p.crc = lampCrc32(&p, offsetof(LampPrefs, crc));
+
+  uint8_t buf[16];
+  memset(buf, 0xff, sizeof buf);
+  memcpy(buf, &p, sizeof p);
+  uint32_t n = (sizeof p + 3u) & ~3u;
+
+  flash_lp_instance_ctrl_t ctrl;
+  flash_cfg_t cfg;
+  memset(&ctrl, 0, sizeof ctrl);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.data_flash_bgo = false;
+  cfg.ipl = BSP_IRQ_DISABLED;
+  cfg.irq = FSP_INVALID_VECTOR;
+  cfg.err_ipl = BSP_IRQ_DISABLED;
+  cfg.err_irq = FSP_INVALID_VECTOR;
+
+  if (R_FLASH_LP_Open(&ctrl, &cfg) != FSP_SUCCESS) return false;
+  __disable_irq();
+  fsp_err_t er = R_FLASH_LP_Erase(&ctrl, LAMP_PREFS_ADDR, 1);
+  fsp_err_t wr = FSP_ERR_WRITE_FAILED;
+  if (er == FSP_SUCCESS) wr = R_FLASH_LP_Write(&ctrl, (uint32_t)buf, LAMP_PREFS_ADDR, n);
+  __enable_irq();
+  R_FLASH_LP_Close(&ctrl);
+  return wr == FSP_SUCCESS;
+}
+
 static bool passwordEq(const char* got, const char* want) {
   if (!want || !want[0]) return false;
   size_t n = strlen(want);
