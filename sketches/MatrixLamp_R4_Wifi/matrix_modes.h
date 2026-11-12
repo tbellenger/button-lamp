@@ -17,6 +17,8 @@
 //   lightning  jagged bolt, logical picture space. Outline plus a
 //              darker same-hue fill. A looping ramp scrolls along it.
 //              Speed is that scroll. Flicker stays on.
+//   off        black, except logical (0, 15): raw yellow (6, 6, 0).
+//              Static. Speed is ignored. Brightness cannot round it off.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music. Nothing here plays a stored frame list.
@@ -27,6 +29,7 @@
 #include <string.h>
 #include <math.h>
 #include "lamp_ids.h"
+#include "lamp_core.h"
 
 struct ModeIn {
   uint8_t mode;
@@ -36,7 +39,7 @@ struct ModeIn {
 
 static const char* const kModeName[M_COUNT] = {
   "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart",
-  "matrix", "lightning"
+  "matrix", "lightning", "off"
 };
 
 static const char* modesName(uint8_t mode) {
@@ -701,6 +704,35 @@ static void rampColor(float t, uint8_t* r, uint8_t* g, uint8_t* b) {
   *b = (uint8_t)((1.0f - f) * kRamp[i][2] + f * kRamp[j][2] + 0.5f);
 }
 
+// Night light. Logical (0, 15) is the bottom row, left column of the
+// picture. FX_ROTATE 3 (panelIndex) seats that cell; this is not
+// pre-rotated. On the lamp it is the bottom-left LED.
+//
+// The colour is raw yellow (6, 6, 0). There is no gamma table. NeoPixel
+// show() does (channel * (applied + 1)) >> 8, and applied is
+// fader * cap / 100 with cap 40, so the multiplier is at most 41.
+// 6 * 41 = 246, which shifts to 0, so a literal 6 is fully off at every
+// legal brightness. Each non-zero channel is raised to the smallest
+// value that show() still keeps (at least 1). Fader 0..2 makes applied
+// 0; the multiplier is then 1 and no 8-bit channel survives, so the
+// pixel goes dark with the rest of the panel. Speed is not read.
+static uint8_t offChannel(uint8_t raw, uint8_t applied) {
+  if (raw == 0) return 0;
+  if (lamp_fx_scale(raw, applied) != 0) return raw;
+  uint16_t mul = (uint16_t)applied + 1u;
+  uint16_t need = (uint16_t)((256u + mul - 1u) / mul);
+  if (need > 255u) return raw;
+  return (uint8_t)need;
+}
+
+static void paintOff(int x, int y, uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
+  *r = *g = *b = 0;
+  if (x != 0 || y != 15) return;
+  uint8_t applied = lamp_fx_applied(fader);
+  *r = offChannel(6, applied);
+  *g = offChannel(6, applied);
+}
+
 static void paintLightning(int x, int y, uint32_t now, uint8_t speed,
                            uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
@@ -804,4 +836,5 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
     return;
   }
   if (in->mode == M_LIGHTNING) paintLightning(x, y, now, in->speed, r, g, b);
+  if (in->mode == M_OFF) paintOff(x, y, in->fader, r, g, b);
 }
