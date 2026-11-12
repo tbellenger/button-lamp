@@ -14,7 +14,6 @@ from types import SimpleNamespace
 from nurb import (
     Box,
     Circle,
-    Cone,
     Cylinder,
     Plane,
     Polygon,
@@ -32,12 +31,15 @@ from nurb import (
 BORE_CLEAR = 0.2
 # Half-lap slot is this much wider than the other piece's thickness. Provisional.
 LAP_CLEAR = 0.3
-# Pin hole is this much larger than the pin, on the diameter. Provisional snug fit.
+# Square diamond, point to point, both diagonals equal so every side is 45 degrees.
+# Across the flats this is 8 / sqrt(2) = 5.66 mm, over the 5 mm pin minimum.
+PIN_DIAG = 8.0
+# Extra on the across-flats opening. Snug, from the nurb fit table. Not measured.
 PIN_CLEAR = 0.2
-PIN_R = 3.0
-FLAT_DEPTH = 1.5
-# Extra room past the pin flat so the flat locates without becoming a press fit.
-FLAT_CLEAR = 0.15
+# A square diamond fits four ways. A tooth in the cross and a groove in the pin
+# register the level. The tooth is a 45 degree triangle so the cross still prints flat.
+TOOTH_W = 1.2
+RIB_H = 3.0
 HUB_H = 14.0
 BOSS_R = 14.0
 PLATE = 100.0
@@ -79,16 +81,15 @@ def specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width):
             "the helix bow thins the outer wall under 1.6 mm; raise clip_wall or the coil diameter",
             param="clip_wall",
         )
-    hole_r = PIN_R + PIN_CLEAR / 2.0
-    # 45-degree teardrop apex, measured from the hole centre along print +Z.
-    apex = hole_r * math.sqrt(2.0)
-    if apex + 1.0 > clip_width / 2.0:
+    # 0.2 mm on the opening is 0.1 mm per side, and the diagonal grows by that times sqrt(2).
+    hole_half = PIN_DIAG / 2.0 + PIN_CLEAR * math.sqrt(2.0) / 2.0
+    if hole_half + 2.0 > clip_width / 2.0:
         reject(
-            "clip_width is too thin for a 45 degree teardrop over the centre pin hole",
+            "clip_width is too thin for a 2 mm wall over the diamond pin hole",
             param="clip_width",
         )
-    if HUB_H / 2.0 < hole_r + 2.4:
-        reject("the half-lap tongue is too short to keep a wall past the pin hole", param="clip_width")
+    if HUB_H / 2.0 < hole_half + 2.4:
+        reject("the half-lap tongue is too short to keep a wall past the diamond pin hole", param="clip_width")
     quarter = pitch / 4.0
     return SimpleNamespace(
         tube_od=tube_od,
@@ -101,7 +102,8 @@ def specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width):
         radius=radius,
         rb=rb,
         ro=ro,
-        hole_r=hole_r,
+        pin_half=PIN_DIAG / 2.0,
+        hole_half=hole_half,
         quarter=quarter,
         # Clip centres relative to the hub, lowest piece first.
         low_v=(-1.5 * quarter, 0.5 * quarter),
@@ -151,25 +153,36 @@ def lowest_angle(wire_x, wire_y):
     return math.atan2(wire_y, wire_x) + math.radians(LEAD_IN_DEG)
 
 
-def _teardrop_prism(hole_r, length):
-    """Horizontal hole along Y, 45 degree roof toward print +Z, centred on the origin."""
-    a = hole_r * math.sqrt(2.0) / 2.0
-    apex = hole_r * math.sqrt(2.0)
-    face = Circle(hole_r) + Polygon([(a, a), (-a, a), (0.0, apex)])
-    prism = extrude(face, length)
+def _diamond_face(half):
+    """Square diamond in the sketch plane. Points on the axes, so every side is 45 degrees."""
+    return Polygon([(half, 0.0), (0.0, half), (-half, 0.0), (0.0, -half)])
+
+
+def _diamond_along_y(half, length):
+    """Diamond prism along Y, centred on the origin. Sketch +Y becomes print +Z."""
+    prism = extrude(_diamond_face(half), length)
     # Extrude runs +Z. A +90 degree turn about X sends that axis to -Y and the
-    # apex (+Y in the sketch) to +Z.
+    # sketch's +Y point to print +Z, which is the roof when the cross lies flat.
     return Pos(0, length / 2.0, 0) * Rot(90, 0, 0) * prism
 
 
-def hole_void(spec, with_flat):
-    """Pin hole through the hub. Optional flat on local +X clocks the low piece."""
-    void = _teardrop_prism(spec.hole_r, HUB_H + 4.0)
-    if with_flat:
-        flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
-        blocker = Pos(flat_x + 20.0, 0, 0) * Box(40, HUB_H + 8, spec.clip_width + 8)
-        void -= blocker
-    return void
+def hole_void(spec):
+    """Diamond pin hole through the hub, point toward print +Z."""
+    return _diamond_along_y(spec.hole_half, HUB_H + 4.0)
+
+
+def _clock_tooth(spec, which):
+    """45 degree tooth on local +X. Low sits at the bottom of the hub, high at the top."""
+    w = TOOTH_W
+    x_wall = spec.hole_half + 0.5
+    x_tip = spec.hole_half - w
+    face = Polygon([(x_wall, w), (x_wall, -w), (x_tip, 0.0)])
+    prism = extrude(face, RIB_H)
+    # Same turn as the hole: sketch +Y goes to print +Z, extrude +Z goes to -Y.
+    tooth = Rot(90, 0, 0) * prism
+    if which == "low":
+        return Pos(0, -HUB_H / 2.0, 0) * tooth
+    return Pos(0, HUB_H / 2.0 - RIB_H, 0) * tooth
 
 
 def _bore_void(spec, cx, cy, outward):
@@ -193,7 +206,7 @@ def _bore_void(spec, cx, cy, outward):
     return solid
 
 
-def _cross_blank(spec, vs, with_flat, keep_top):
+def _cross_blank(spec, vs, keep_top):
     """One diameter piece, in its print frame.
 
     Profile in XY, thickness along Z. Local +X runs toward the first clip of
@@ -213,7 +226,8 @@ def _cross_blank(spec, vs, with_flat, keep_top):
         slot_y = HUB_H / 4.0
     body -= Pos(0, slot_y) * Rectangle(spec.slot_w, HUB_H / 2.0 + 0.2)
     solid = Pos(0, 0, -spec.clip_width / 2.0) * extrude(body, spec.clip_width)
-    solid -= hole_void(spec, with_flat)
+    solid -= hole_void(spec)
+    solid += _clock_tooth(spec, "high" if keep_top else "low")
     solid -= _bore_void(spec, radius, vs[0], (1.0, 0.0, 0.0))
     solid -= _bore_void(spec, -radius, vs[1], (-1.0, 0.0, 0.0))
     if len(solid.solids()) != 1:
@@ -223,35 +237,49 @@ def _cross_blank(spec, vs, with_flat, keep_top):
 
 def cross_low(spec):
     """Lower half of the lap. Its +X clip is the lowest clip of the level."""
-    return _cross_blank(spec, spec.low_v, with_flat=True, keep_top=False)
+    return _cross_blank(spec, spec.low_v, keep_top=False)
 
 
 def cross_high(spec):
     """Upper half of the lap. Sits in the low piece's slot, turned 90 degrees."""
-    return _cross_blank(spec, spec.high_v, with_flat=False, keep_top=True)
+    return _cross_blank(spec, spec.high_v, keep_top=True)
 
 
-def _pin(length):
-    """Vertical pin with a flat on +X. Base of the pin is z=0. Tip is chamfered."""
-    pin = Pos(0, 0, length / 2.0) * Cylinder(PIN_R, length)
-    flat_x = PIN_R - FLAT_DEPTH
-    pin -= Pos(flat_x + 8.0, 0, length / 2.0) * Box(16, 2.0 * PIN_R, length)
-    return pin
+def _pin_grooves(z0, length):
+    """Grooves the teeth drop into. Each runs out the top of the pin, so it has no ceiling."""
+    half = PIN_DIAG / 2.0
+    depth = TOOTH_W + PIN_CLEAR + 0.4
+    # Wider than the diamond, so the cut is one flat and does not leave a knife where a corner meets the slope.
+    span = PIN_DIAG + 4.0
+    low = Pos(half - depth / 2.0 + 0.3, 0, (z0 + length) / 2.0 + 1.0) * Box(depth + 0.6, span, length - z0 + 2.0)
+    z_high = z0 + HUB_H - RIB_H
+    high = Pos(0, half - depth / 2.0 + 0.3, (z_high + length) / 2.0 + 1.0) * Box(span, depth + 0.6, length - z_high + 2.0)
+    return low + high
+
+
+def _pin(length, groove_z0=None):
+    """Vertical diamond pin. Base is z=0. Grooves, if any, are measured from the seat."""
+    pin = extrude(_diamond_face(PIN_DIAG / 2.0), length)
+    if groove_z0 is None:
+        return pin
+    return pin - _pin_grooves(groove_z0, length)
 
 
 def _socket_void(spec, web):
-    """Hole up from z=0. A 45 degree cone closes it so the spacer prints without a bridge."""
-    # Stop the cone at 0.6 mm instead of a point so the mesh stays watertight.
-    # The remaining ceiling is under 1.2 mm across and sits inside the pin.
-    tip = 0.6
-    cone_h = spec.hole_r - tip
-    grip = web - cone_h - 0.8
+    """Diamond hole up from z=0. One ruled loft, then a 45 degree pyramid, so there is no ledge."""
+    tip = 0.4
+    pyr_h = (spec.hole_half - tip) / math.sqrt(2.0)
+    grip = web - pyr_h - 0.8
     if grip < 4.0:
         reject("the spacer socket is under 4 mm deep; lower the hub or the pin", param="clip_width")
-    void = Pos(0, 0, grip / 2.0) * Cylinder(spec.hole_r, grip + 0.2)
-    void += Pos(0, 0, grip + cone_h / 2.0) * Cone(spec.hole_r, tip, cone_h)
-    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
-    void -= Pos(flat_x + 15.0, 0, web / 2.0) * Box(30, 40, web + 4)
+    void = loft(
+        [
+            Pos(0, 0, -0.2) * _diamond_face(spec.hole_half),
+            Pos(0, 0, grip) * _diamond_face(spec.hole_half),
+            Pos(0, 0, grip + pyr_h) * _diamond_face(tip),
+        ],
+        ruled=True,
+    )
     return void, grip
 
 
@@ -261,8 +289,8 @@ def spacer(spec):
     void, grip = _socket_void(spec, web)
     disk = Pos(0, 0, web / 2.0) * Cylinder(BOSS_R, web)
     # Root is buried in the disk, wider than the socket, so the pin is part of the disk.
-    root = Pos(0, 0, (grip + web) / 2.0) * Cylinder(PIN_R + 2.2, web - grip)
-    body = disk + root + Pos(0, 0, web - 0.6) * _pin(spec.pin_len + 0.6) - void
+    root = Pos(0, 0, (grip + web) / 2.0) * Cylinder(spec.hole_half + 1.6, web - grip)
+    body = disk + root + Pos(0, 0, web - 0.6) * _pin(spec.pin_len + 0.6, groove_z0=0.6) - void
     if len(body.solids()) != 1:
         reject("the spacer did not come back as a single solid", param="clip_width")
     return body
@@ -272,9 +300,7 @@ def cap(spec):
     """Top clamp. A through hole, so it prints without a bridge. No pin above it."""
     web = spec.web
     disk = Pos(0, 0, web / 2.0) * Cylinder(BOSS_R, web)
-    hole = Pos(0, 0, web / 2.0) * Cylinder(spec.hole_r, web + 2.0)
-    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
-    hole -= Pos(flat_x + 15.0, 0, web / 2.0) * Box(30, 30, web + 4)
+    hole = Pos(0, 0, -0.5) * extrude(_diamond_face(spec.hole_half), web + 1.0)
     body = disk - hole
     if len(body.solids()) != 1:
         reject("the cap did not come back as a single solid", param="clip_width")
@@ -290,7 +316,7 @@ def base_plate(spec, holes):
     boss = Pos(0, 0, FLANGE_T) * extrude(Circle(BOSS_R), boss_h)
     # Flat faces the lowest clip, not world +X. Bolts and the cable window stay put.
     theta = math.degrees(lowest_angle(holes.wire_x, holes.wire_y))
-    pin = Pos(0, 0, spec.shoulder - 1.0) * Rot(0, 0, theta) * _pin(spec.pin_len + 1.0)
+    pin = Pos(0, 0, spec.shoulder - 1.0) * Rot(0, 0, theta) * _pin(spec.pin_len + 1.0, groove_z0=1.0)
     body = plate + boss + pin
     half = holes.bolt / 2.0
     for sx in (-1, 1):
@@ -322,19 +348,19 @@ def _coupon_solid(spec):
 
     low = hub_slice()
     low -= Pos(0, HUB_H / 4.0, spec.clip_width / 2.0) * Box(spec.slot_w, HUB_H / 2.0 + 0.2, spec.clip_width + 2)
-    low -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec, True)
+    low -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec)
+    low += Pos(0, 0, spec.clip_width / 2.0) * _clock_tooth(spec, "low")
     high = hub_slice()
     high -= Pos(0, -HUB_H / 4.0, spec.clip_width / 2.0) * Box(spec.slot_w, HUB_H / 2.0 + 0.2, spec.clip_width + 2)
-    high -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec, False)
+    high -= Pos(0, 0, spec.clip_width / 2.0) * hole_void(spec)
+    high += Pos(0, 0, spec.clip_width / 2.0) * _clock_tooth(spec, "high")
     high = Pos(48, 0, 0) * high
     floor = Pos(24, 0, 1.0) * Box(20, 6, 2.0)
     # The lap slot removes the middle of each tongue, so the spine sits off to one side.
     puck = Pos(-12, 30, spec.web / 2.0) * Cylinder(12, spec.web)
-    hole = Pos(-12, 30, spec.web / 2.0) * Cylinder(spec.hole_r, spec.web + 2)
-    flat_x = PIN_R - FLAT_DEPTH + FLAT_CLEAR
-    hole -= Pos(-12 + flat_x + 10.0, 30, spec.web / 2.0) * Box(20, 20, spec.web + 4)
+    hole = Pos(-12, 30, -0.5) * extrude(_diamond_face(spec.hole_half), spec.web + 1.0)
     puck -= hole
-    pin = Pos(14, 30, 0) * _pin(spec.pin_len)
+    pin = Pos(14, 30, 0) * _pin(spec.pin_len, groove_z0=0.0)
     spine = Pos(-12, 16, 1.0) * Box(6, 24, 2.0)
     tie = Pos(2, 30, 1.0) * Box(22, 6, 2.0)
     body = low + high + floor + puck + pin + spine + tie

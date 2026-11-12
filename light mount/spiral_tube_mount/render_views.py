@@ -14,6 +14,7 @@ import pyvista as pv
 from system import (
     HUB_H,
     HUB_Z0,
+    _pin,
     base_plate,
     cap,
     cross_high,
@@ -190,8 +191,24 @@ def print_layout():
     save(pl, "print_orientation.png")
 
 
+def diamond_closeup():
+    """The hub hole as it prints, point up, with the matching pin beside it."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
+    pl.set_background("white")
+    low = to_poly(cross_low(SPEC))
+    low.translate((0, 0, SPEC.clip_width / 2.0), inplace=True)
+    pin = to_poly(_pin(18.0, groove_z0=0.0))
+    # In front of the hub, clear of the arm, so both diamonds sit in one view.
+    pin.translate((12, 22, 0), inplace=True)
+    add_solid(pl, low, COLORS["low"])
+    add_solid(pl, pin, COLORS["spacer"])
+    shot(pl, (6, 8, 10), (0.05, 1.0, 0.35), 52, up=(0, 0, 1), zoom=1.15)
+    save(pl, "diamond_bore.png")
+
+
 if __name__ == "__main__":
     assembled()
     exploded()
     joint_closeup()
     print_layout()
+    diamond_closeup()

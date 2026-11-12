@@ -1,4 +1,4 @@
-"""Upper half of one level. Turned 90 degrees from the low piece. No clocking flat of its own."""
+"""Upper half of one level. Turned 90 degrees from the low piece. Its own tooth clocks it."""
 
 import os
 import sys
