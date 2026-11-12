@@ -14,6 +14,9 @@
 //   heart      lub-dub pulse. Speed is the heart rate.
 //   matrix     green rain. Light-green head, pure-green tail.
 //              The whole field fades each step. Speed is the fall.
+//   lightning  jagged bolt, logical picture space. Outline plus a
+//              darker same-hue fill. A looping ramp scrolls along it.
+//              Speed is that scroll. Flicker stays on.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music. Nothing here plays a stored frame list.
@@ -33,7 +36,7 @@ struct ModeIn {
 
 static const char* const kModeName[M_COUNT] = {
   "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart",
-  "matrix"
+  "matrix", "lightning"
 };
 
 static const char* modesName(uint8_t mode) {
@@ -632,6 +635,93 @@ static void paintMatrix(int x, int y, uint8_t* r, uint8_t* g, uint8_t* b) {
   *b = p[2];
 }
 
+// Jagged bolt in logical picture space (x = 0 left, y = 0 top).
+// 0 = off, 1 = interior fill, 2 = outline. panelIndex applies
+// PANEL_ROTATE when the pixel is sent; this table is not pre-rotated.
+// The end caps clip the grid corners on purpose.
+static const uint8_t kBoltRole[16][16] = {
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 2 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 2 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 1, 2 },
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 1, 2, 0 },
+  { 0, 0, 0, 0, 0, 2, 2, 2, 2, 1, 1, 1, 1, 2, 0, 0 },
+  { 0, 0, 0, 0, 2, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0 },
+  { 0, 0, 0, 2, 1, 1, 1, 1, 1, 1, 1, 2, 0, 0, 0, 0 },
+  { 0, 0, 2, 1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 0, 0 },
+  { 0, 2, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 2, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 2, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 2, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+// 0 = unlit. Otherwise along = value / 65535 (0 = lower-left tip,
+// 1 = upper-right tip).
+static const uint16_t kBoltAlongQ16[16][16] = {
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0, 61192, 63122 },
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0, 57331, 59261, 61192 },
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0, 53470, 55401, 57331, 59261 },
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0, 49610, 51540, 53470, 55401, 57331 },
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0,     0, 45749, 47679, 49610, 51540, 53470, 55401 },
+  {     0,     0,     0,     0,     0,     0,     0,     0,     0, 41888, 43819, 45749, 47679, 49610, 51540,     0 },
+  {     0,     0,     0,     0,     0, 27990, 28673, 31403, 34132, 39958, 41888, 43819, 45749, 47679,     0,     0 },
+  {     0,     0,     0,     0, 25577, 27508, 28673, 31403, 34132, 36862, 39958, 41888, 43819,     0,     0,     0 },
+  {     0,     0,     0, 21716, 23647, 25577, 28673, 31403, 34132, 36862, 38027, 39958,     0,     0,     0,     0 },
+  {     0,     0, 17856, 19786, 21716, 23647, 25577, 31403, 34132, 36862, 37545,     0,     0,     0,     0,     0 },
+  {     0, 13995, 15925, 17856, 19786, 21716, 23647,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+  { 10134, 12065, 13995, 15925, 17856, 19786,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+  {  8204, 10134, 12065, 13995, 15925,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+  {  6274,  8204, 10134, 12065,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+  {  4343,  6274,  8204,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+  {  2413,  4343,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0 },
+};
+
+static const uint8_t kRamp[][3] = {
+  {255,  20, 170}, {255,  25,  90}, {255,  55,  30},
+  {255, 140,  20}, {255, 210,  45}, {170, 220,  50},
+  { 30, 210, 150}, { 15, 200, 230}, { 40, 100, 255},
+  {130,  40, 255}, {210,  20, 230},
+};
+static const int kRampN = 11;
+
+static void rampColor(float t, uint8_t* r, uint8_t* g, uint8_t* b) {
+  // floorf already folds a negative phase into [0, 1). A per-cycle
+  // add would spin for the whole uptime on every lit pixel.
+  t = t - floorf(t);
+  if (t < 0.0f) t += 1.0f;
+  float x = t * (float)kRampN;
+  int i = (int)x; if (i >= kRampN) i = kRampN - 1;
+  int j = i + 1; if (j >= kRampN) j = 0;
+  float f = x - (float)i; f = f * f * (3.0f - 2.0f * f);
+  *r = (uint8_t)((1.0f - f) * kRamp[i][0] + f * kRamp[j][0] + 0.5f);
+  *g = (uint8_t)((1.0f - f) * kRamp[i][1] + f * kRamp[j][1] + 0.5f);
+  *b = (uint8_t)((1.0f - f) * kRamp[i][2] + f * kRamp[j][2] + 0.5f);
+}
+
+static void paintLightning(int x, int y, uint32_t now, uint8_t speed,
+                           uint8_t* r, uint8_t* g, uint8_t* b) {
+  *r = *g = *b = 0;
+  if ((unsigned)x >= 16u || (unsigned)y >= 16u) return;
+  uint8_t role = kBoltRole[y][x];
+  if (role == 0) return;
+  float along = (float)kBoltAlongQ16[y][x] / 65535.0f;
+  float cps = 0.12f + (float)speed * 0.0044f;
+  float phase = ((float)now / 1000.0f) * cps;
+  uint32_t rng = now * 1664525u + 1013904223u;
+  float wobble = 0.5f + 0.5f * sinf((float)now * 0.031f);
+  float crackle = (float)((rng >> 8) & 255) / 255.0f;
+  float flick = 0.96f + 0.03f * wobble + 0.01f * crackle;
+  if (flick > 1.0f) flick = 1.0f;
+  rampColor(along - phase, r, g, b);
+  float scale = (role == 2) ? flick : (0.50f * flick);
+  *r = (uint8_t)((float)*r * scale + 0.5f);
+  *g = (uint8_t)((float)*g * scale + 0.5f);
+  *b = (uint8_t)((float)*b * scale + 0.5f);
+}
+
 static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
@@ -708,5 +798,9 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
     paintMatrix(x, y, r, g, b);
     return;
   }
-  if (in->mode == M_HEART) paintHeart(x, y, now, in->speed, r, g, b);
+  if (in->mode == M_HEART) {
+    paintHeart(x, y, now, in->speed, r, g, b);
+    return;
+  }
+  if (in->mode == M_LIGHTNING) paintLightning(x, y, now, in->speed, r, g, b);
 }

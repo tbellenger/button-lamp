@@ -1,6 +1,6 @@
 # MatrixLamp_R4_Wifi
 
-Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The lamp is the panel and the Uno only: there is no knob, fader, or button. The phone page has a brightness slider, a speed slider, and preset buttons (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart, matrix). Matrix is green digital rain: a saturated green head (80, 255, 80), a short pure-green tail, and a field that fades toward black. Speed is how fast it falls. While Meatballs is showing, + Ball and − Ball change the count from 1 to 8. A new ball gets a random position and velocity. On Spiral, Speed shifts the colour and the arm keeps a fixed spin. The last preset, brightness, speed, and ball count are stored in the data-flash block after the WiFi credentials. The board's 12×8 red matrix scrolls the WiFi IP. After one USB flash, firmware updates go over WiFi.
+Uno R4 WiFi sketch for Tom's BTF-LIGHTING WS2812B 16×16 panel (256 LEDs). The lamp is the panel and the Uno only: there is no knob, fader, or button. The phone page has a brightness slider, a speed slider, and preset buttons (fire, rainbow, meatballs, plasma, sun, spiral, fluid, heart, matrix, lightning). Matrix is green digital rain: a saturated green head (80, 255, 80), a short pure-green tail, and a field that fades toward black. Speed is how fast it falls. Lightning is a jagged bolt with a scrolling colour ramp; Speed is how fast that ramp moves. While Meatballs is showing, + Ball and − Ball change the count from 1 to 8. A new ball gets a random position and velocity. On Spiral, Speed shifts the colour and the arm keeps a fixed spin. The last preset, brightness, speed, and ball count are stored in the data-flash block after the WiFi credentials. The board's 12×8 red matrix scrolls the WiFi IP. After one USB flash, firmware updates go over WiFi.
 
 The project README, section 5, is the full note (page, `GET /api/state`, `GET /api/set`). This file is the wiring and the upload.
 
@@ -72,4 +72,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 116916 B flash (44% of 262144), 18568 B globals (56% of 32768), 14200 B left for locals. The `.bin` is 116924 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
+Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no `secrets.h`: 118340 B flash (45% of 262144), 18568 B globals (56% of 32768), 14200 B left for locals. The `.bin` is 118348 B. OTA accepts at most 122880 B. NeoPixel mallocs another 768 B for the 256 LEDs.
