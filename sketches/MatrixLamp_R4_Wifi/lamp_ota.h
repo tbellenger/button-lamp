@@ -312,6 +312,10 @@ static void otaCopyAndReset(flash_lp_instance_ctrl_t* ctrl,
 }
 
 static bool otaCommit() {
+  // loop() will not save prefs while an upload or a GitHub job is in
+  // flight, and the AIRCR reset below does not come back to loop().
+  // Write the live preset first so the new image restores it.
+  flushPrefs();
   uint32_t start = (uint32_t)&__ROM_Start;
   uint32_t maxSketch = (262144u - start) / 2u;
   maxSketch &= ~2047u;

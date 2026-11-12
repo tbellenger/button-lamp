@@ -175,7 +175,10 @@ struct LampPrefs {
 
 static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* balls) {
   LampPrefs p;
-  memcpy(&p, (const void*)LAMP_PREFS_ADDR, sizeof p);
+  // Byte at a time, same as the credential block. A wide memcpy reads
+  // the data-flash buffer and returns stale bytes, so a valid MLP2
+  // record looks blank and the lamp boots into Fire.
+  dfRead(LAMP_PREFS_ADDR, &p, sizeof p);
   if (p.magic != LAMP_PREFS_MAGIC) return false;
   if (p.crc != lampCrc32(&p, offsetof(LampPrefs, crc))) return false;
   *mode = p.mode;

@@ -25,17 +25,17 @@
    brightness past that cap.
 
    WiFi is WiFiS3 plus secrets.h. An AIRCR reboot resets only the RA4M1.
-   The ESP32-S3 keeps its old station, sockets, and SoftAP. SOFTRESETWIFI
-   does not reboot that chip: it disconnects and calls softAPdisconnect(),
-   which leaves the default access point at 192.168.4.1. Boot therefore
-   sends AT+RESET (ESP.restart()) and waits until the bridge answers
-   again, then joins. 192.168.4.1 is ignored unless the setup AP is up.
+   The ESP32-S3 keeps its old station, sockets, and SoftAP. Boot therefore
+   calls WiFi.end() (SOFTRESETWIFI through the WiFiS3 API) and then
+   AT+RESET (ESP.restart()) before any WiFi.begin(), and waits until the
+   bridge answers. SOFTRESETWIFI alone leaves the default access point
+   at 192.168.4.1. The lamp is online only when localIP() is a real
+   station address: not 0.0.0.0, not 169.254.x.x, and not 192.168.4.x.
+   WL_CONNECTED by itself is not enough. If that address never arrives,
+   the next WIFI_RETRY_MS (22 s) resets the modem and joins again.
    The first begin() uses the library's 10 s timeout and runs before the
    matrix timer starts. After that, WiFi.setTimeout(0) and
    modem.timeout(800) keep the loop bounded.
-   status() can report WL_CONNECTED as soon as the radio associates,
-   while localIP() is still 0.0.0.0, so the lamp stays offline until the
-   address is non-zero. A new begin() is not sent for 22 s.
    mDNS answers matrixlamp.local and matrix-lamp.local (UDP 5353).
    DHCP hostname is matrixlamp.
 
@@ -48,13 +48,17 @@
    WiFi names and the OTA password live in data flash, not in the
    GitHub build. A USB build that has secrets.h copies them in when they
    differ. With neither, the board opens the setup AP MatrixLamp-Setup.
+   Mode, brightness, speed, and ball count are the next block. That
+   block is read a byte at a time (a wide copy returns stale data flash)
+   and written again just before an OTA apply, so the new boot restores
+   the preset instead of Fire.
    POST /update (header X-OTA-Password) streams a .bin into ArduinoOTA
    InternalStorage. A bad or short image is not applied. The 16x16 shows
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   118340 B flash (45% of 262144), 18568 B globals (56% of 32768),
-   14200 B left for locals. The .bin is 118348 B. OTA allows at most
+   118596 B flash (45% of 262144), 18568 B globals (56% of 32768),
+   14200 B left for locals. The .bin is 118604 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -817,6 +821,13 @@ static void httpJson(bool ok, const char* err) {
 
 static void rememberIp(const IPAddress& ip);
 
+// loop() skips this while an upload or a GitHub job is in flight.
+// otaCommit() calls it immediately before the AIRCR reset.
+static void flushPrefs() {
+  if (prefsSave(g_mode, g_fader, g_speed, lamp_fx_balls())) g_prefsDirty = 0;
+  else Serial.println(F("Prefs save failed"));
+}
+
 #include "lamp_ota.h"
 
 // AT+RESET is ESP.restart() and does not send OK. The RA4M1 then resets
@@ -1093,6 +1104,27 @@ static void wifiResetModem() {
   else Serial.println(F("WiFi modem silent"));
 }
 
+// First thing setup() does to the co-processor, before any WiFi.begin().
+// otaAirCrReset() writes AIRCR and resets the RA4M1 only. The ESP32-S3
+// is not power-cycled, so it is still half-joined and the next begin()
+// reports WL_CONNECTED with 0.0.0.0 or the SoftAP. WiFi.end() is the
+// WiFiS3 SOFTRESETWIFI. AT+RESET inside wifiResetModem() is ESP.restart(),
+// which SOFTRESETWIFI is not.
+static void wifiBootResync() {
+  Serial.println(F("WiFi modem resync"));
+  modem.timeout(500);
+  modem.beginned = false;
+  modem.begin(115200, 1);
+  // begin() forces the library's 10 s command timeout on the way out.
+  // Put the short budget back, and skip begin()'s own retry, so end()'s
+  // SOFTRESETWIFI cannot sit for 10 s. The UART is already up.
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  modem.beginned = true;
+  WiFi.end();
+  modem.beginned = false;
+  wifiResetModem();
+}
+
 static void ensureServer() {
   if (g_serverUp) return;
   g_server.begin();
@@ -1103,26 +1135,24 @@ static void ensureServer() {
 
 // Core 1.6.0: status() is WL_CONNECTED once the radio associates. localIP()
 // stays 0.0.0.0 until DHCP finishes, and a failed modem read looks the same.
+// Mode 3 (station plus SoftAP) also comes back as 0.0.0.0, because the
+// library only reads the station address when the mode is exactly 1.
 static bool ipReady(const IPAddress& ip) {
   if (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0) return false;
   if (ip[0] == 0) return false;
   return true;
 }
 
-// 1 = station, 2 = SoftAP, 3 = both. -1 if the modem did not answer.
-static int wifiLinkMode() {
-  std::string res;
-  if (!modem.write(std::string("+WIFIMODE:"), res, "AT+WIFIMODE?\r\n")) return -1;
-  return atoi(res.c_str());
-}
-
-// 192.168.4.1 is the ESP32 default SoftAP address. A real station lease
-// of that exact address is accepted only when the modem reports station mode.
+// A usable station lease. 0.0.0.0 is "no DHCP yet" (and a timed-out modem
+// read). 169.254.0.0/16 is link-local. 192.168.4.0/24 is the ESP32 SoftAP,
+// including 192.168.4.1. None of those is the home network. The setup AP
+// is the one time that subnet is the address we serve.
 static bool stationReady(const IPAddress& ip) {
   if (!ipReady(ip)) return false;
   if (g_setupAp) return true;
-  if (ip[0] != 192 || ip[1] != 168 || ip[2] != 4 || ip[3] != 1) return true;
-  return wifiLinkMode() == 1;
+  if (ip[0] == 169 && ip[1] == 254) return false;
+  if (ip[0] == 192 && ip[1] == 168 && ip[2] == 4) return false;
+  return true;
 }
 
 static void rememberIp(const IPAddress& ip) {
@@ -1219,14 +1249,12 @@ static void wifiPollStatus(uint32_t now) {
   uint8_t st = WiFi.status();
   if (st == WL_CONNECTED) {
     IPAddress ip = WiFi.localIP();
-    // Ignore a 0.0.0.0 read once we already have an address: localIP()
-    // returns that on a modem timeout as well as before DHCP.
-    if (!ipReady(ip)) return;
     if (adoptIp(ip)) return;
-    // Non-zero, but it is the SoftAP. Do not stay "online" there, or the
-    // matrix scrolls 192.168.4.1 and the station join is never retried.
+    // Associated, but the address is missing, link-local, or the SoftAP.
+    // WL_CONNECTED alone is not a join. Returning here used to latch
+    // forever after an RA4M1-only reset, with localIP stuck at 0.0.0.0.
     if ((uint32_t)(now - g_joinSince) >= WIFI_RETRY_MS) {
-      Serial.println(F("WiFi SoftAP address, rejoining"));
+      Serial.println(F("WiFi no station IP, resetting modem"));
       g_joinTries++;
       wifiDrop(now);
       wifiResetModem();
@@ -1248,6 +1276,20 @@ static void wifiPollStatus(uint32_t now) {
   }
 }
 
+// begin() returns on WL_CONNECTED, before DHCP. If the radio is
+// associated, wait out the rest of this join window for a real station
+// address. 0.0.0.0, 169.254.x.x, and 192.168.4.x are not success.
+static bool waitForStation() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  while ((uint32_t)(millis() - g_joinSince) < WIFI_RETRY_MS) {
+    IPAddress ip = WiFi.localIP();
+    if (adoptIp(ip)) return true;
+    if (WiFi.status() != WL_CONNECTED) return false;
+    delay(WIFI_STATUS_JOIN_MS);
+  }
+  return false;
+}
+
 static void webSetup() {
   size_t n = strlen(PAGE);
   g_pageLen = (n > 65535u) ? 65535u : (uint16_t)n;
@@ -1257,8 +1299,8 @@ static void webSetup() {
     Serial.println(F("WiFi skipped (no credentials in EEPROM or secrets.h)"));
     return;
   }
-  // Before the matrix timer, so the modem round trips can block.
-  wifiResetModem();
+  // The ESP was resynced at the start of setup(). Do not SOFTRESETWIFI
+  // again here: that brings 192.168.4.1 back after AT+RESET.
   if (g_setupAp) {
     startSetupAp();
     WiFi.setTimeout(0);
@@ -1273,9 +1315,11 @@ static void webSetup() {
   // running yet, so the wait does not fight the LED ISR.
   WiFi.setHostname("matrixlamp");
   wifiBegin();
-  if (WiFi.status() == WL_CONNECTED) {
-    IPAddress ip = WiFi.localIP();
-    if (ipReady(ip)) adoptIp(ip);
+  if (!waitForStation() && WiFi.status() == WL_CONNECTED) {
+    Serial.println(F("WiFi no station IP, resetting modem"));
+    g_joinTries++;
+    wifiResetModem();
+    wifiBegin();
   }
   WiFi.setTimeout(0);
   modem.timeout(MODEM_CMD_BUDGET_MS);
@@ -1347,6 +1391,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
   Serial.println(FW_MARK);
+  // Before any WiFi.begin(), including the setup AP. A warm RA4M1 reset
+  // does not restart the ESP32-S3.
+  wifiBootResync();
   Serial.print(F("OTA max bytes "));
   Serial.println(InternalStorage.maxSize());
   Serial.print(F("Panel "));
