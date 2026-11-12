@@ -12,6 +12,8 @@
    green head (80, 255, 80), a short pure-green tail, and a field that
    fades to black.
    Speed is how fast those drops fall.
+   Off is black except one dim yellow pixel at logical (0, 15),
+   the bottom-left of the lamp. Speed does not move it.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no
@@ -57,8 +59,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   118596 B flash (45% of 262144), 18568 B globals (56% of 32768),
-   14200 B left for locals. The .bin is 118604 B. OTA allows at most
+   118772 B flash (45% of 262144), 18568 B globals (56% of 32768),
+   14200 B left for locals. The .bin is 118780 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -311,7 +313,7 @@ button:disabled{opacity:.35}
 <button type=button id=badd>+ Ball</button>
 </div>
 <details><summary>Update</summary>
-<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. Everywhere else, Speed is how fast the preset moves.</p>
+<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. On Off, Speed does nothing. Everywhere else, Speed is how fast the preset moves.</p>
 <input id=otap type=password placeholder="OTA password" autocomplete=current-password>
 <input id=bin type=file accept=.bin>
 <div class=row>
@@ -323,8 +325,8 @@ button:disabled{opacity:.35}
 </details>
 <pre id=st></pre>
 <script>
-var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','lightning'];
-var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',lightning:'Lightning'};
+var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','lightning','off'];
+var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',lightning:'Lightning',off:'Off'};
 var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');
@@ -332,7 +334,7 @@ var grid=document.getElementById('grid');
 var note=document.getElementById('spdnote');
 function say(t){otast.textContent=t;}
 function noteFor(m){
-  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : 'Speed is how fast this preset moves.';
+  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : m=='off' ? 'Off stays still. Speed does nothing.' : 'Speed is how fast this preset moves.';
 }
 function paintBtns(){
   var bs=grid.querySelectorAll('button');
@@ -1373,6 +1375,7 @@ static void webPoll(uint32_t now) {
 static void loadPrefs() {
   uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0;
   if (!prefsLoad(&mode, &fader, &speed, &balls)) return;
+  // MLP2 mode byte. M_OFF (10) is inside M_COUNT; anything past it stays Fire.
   if (mode < M_COUNT) g_mode = mode;
   if (fader <= 100) g_fader = fader;
   if (speed <= 100) g_speed = speed;

@@ -1,6 +1,6 @@
 # Matrix Lamp preview
 
-A local browser view of the Matrix Lamp presets. The picture is the firmware's C++ effect core (`sketches/MatrixLamp_R4_Wifi/lamp_core.cpp`), compiled to WebAssembly. It is not a JavaScript rewrite. Fire, Rainbow, Meatballs, Plasma, Sun, Spiral, Fluid, Heart, Matrix rain, and Lightning are the same functions the Uno runs. The view is after rotate 3, so the ember row sits on the bottom the way it does on the desk.
+A local browser view of the Matrix Lamp presets. The picture is the firmware's C++ effect core (`sketches/MatrixLamp_R4_Wifi/lamp_core.cpp`), compiled to WebAssembly. It is not a JavaScript rewrite. Fire, Rainbow, Meatballs, Plasma, Sun, Spiral, Fluid, Heart, Matrix rain, Lightning, and Off are the same functions the Uno runs. Off is black except a dim yellow pixel at logical (0, 15). The view is after rotate 3, so the ember row sits on the bottom the way it does on the desk.
 
 Nothing here is deployed. `npm start` only listens on `127.0.0.1`.
 
