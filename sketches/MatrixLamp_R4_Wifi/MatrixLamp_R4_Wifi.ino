@@ -53,8 +53,8 @@
    an orange progress bar and the onboard matrix scan is stopped.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   116916 B flash (44% of 262144), 18568 B globals (56% of 32768),
-   14200 B left for locals. The .bin is 116924 B. OTA allows at most
+   118340 B flash (45% of 262144), 18568 B globals (56% of 32768),
+   14200 B left for locals. The .bin is 118348 B. OTA allows at most
    122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -319,8 +319,8 @@ button:disabled{opacity:.35}
 </details>
 <pre id=st></pre>
 <script>
-var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix'];
-var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix'};
+var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','lightning'];
+var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',lightning:'Lightning'};
 var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');

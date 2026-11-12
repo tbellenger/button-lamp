@@ -8,6 +8,7 @@ const LABELS = {
   fluid: "Fluid",
   heart: "Heart",
   matrix: "Matrix",
+  lightning: "Lightning",
 };
 
 const state = { mode: 0, speed: 50, fader: 50, name: "fire" };
