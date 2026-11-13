@@ -20,7 +20,8 @@
 //   off        black, except logical (0, 15): raw yellow (6, 6, 0).
 //              Static. Speed is ignored. Brightness cannot round it off.
 //   radar      live NEXRAD frames. North is up in this picture. Speed
-//              is ignored. A dim white pixel marks home at (7, 7).
+//              is ignored. A mid-grey pixel marks home at (7, 7),
+//              drawn last, on top of the rain.
 //              The bottom row is a frame-progress bar.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
@@ -764,6 +765,15 @@ static void paintDimWhite(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = w;
 }
 
+// Home is neutral mid-grey in the frame buffer, before NeoPixel brightness.
+// offChannel is the same floor paintOff uses, so a low fader cannot round
+// a non-zero channel to black. Drawn after the rain and the progress bar.
+static void paintRadarHome(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
+  uint8_t applied = lamp_fx_applied(fader);
+  uint8_t w = offChannel(128, applied);
+  *r = *g = *b = w;
+}
+
 static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
@@ -782,7 +792,7 @@ static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
   *b = offChannel(kRadarRgb[level][2], applied);
   uint8_t bar = radarBarLength(n ? idx : 0, n);
   if (y == 15 && (unsigned)x < bar) paintDimWhite(fader, r, g, b);
-  if (x == 7 && y == 7) paintDimWhite(fader, r, g, b);
+  if (x == 7 && y == 7) paintRadarHome(fader, r, g, b);
 }
 
 static void paintOff(int x, int y, uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
