@@ -58,8 +58,8 @@
    ArduinoOTA InternalStorage. There is no local .bin upload.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   121632 B flash (46% of 262144), 22440 B globals (68% of 32768),
-   10328 B left for locals. The .bin is 121640 B. The GitHub image
+   121116 B flash (46% of 262144), 22240 B globals (67% of 32768),
+   10528 B left for locals. The .bin is 121124 B. The GitHub image
    must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -309,12 +309,6 @@ button:disabled{opacity:.35}
 <button type=button id=badd>+ Ball</button>
 </div>
 <label><input id=ar type=checkbox checked> Auto radar</label>
-<p>
-<input id=rh size=22 placeholder="api.drunkwallaby.com">
-<input id=rp size=5 placeholder="80">
-<input id=ru size=12 placeholder="/radar.bin">
-<button type=button id=rs>Set</button>
-</p>
 <details><summary>Update</summary>
 <p class=sub>On Spiral, Speed shifts the colour. On Matrix, Speed is the fall. On Radar and Off, Speed does nothing. Updates come from GitHub.</p>
 <div class=row>
@@ -371,12 +365,6 @@ function show(s){
   ver.textContent='firmware '+(s.fw==='local'?s.fw:('v'+(s.fw||'').replace(/^v/i,'')))+(s.built?('  '+s.built):'');
   st.textContent=s.mode+'  bri '+s.brightness+'/'+s.brightnessCap+'  speed '+s.speed+(s.rfresh?(s.rain?'  rain':'  dry'):'')+'\n'+s.wifi+' '+s.ip;
   if(s.auto!=null) document.getElementById('ar').checked=!!s.auto;
-  if(!rFilled && s.rh){
-    document.getElementById('rh').value=s.rh;
-    document.getElementById('rp').value=s.rp;
-    document.getElementById('ru').value=s.ru;
-    rFilled=1;
-  }
   var inst=document.getElementById('gh');
   if(inst) inst.disabled=!s.ghNewer;
   if(s.ota==='download'||s.ota==='applying') say((s.otaMsg||s.ota)+' '+(s.otaPct||0)+'%');
@@ -386,11 +374,7 @@ document.getElementById('bri').oninput=function(){drag=1; S.fader=+this.value;};
 document.getElementById('bri').onchange=function(){drag=0; send('fader='+S.fader);};
 document.getElementById('spd').oninput=function(){drag=1; S.speed=+this.value; noteFor(S.mode);};
 document.getElementById('spd').onchange=function(){drag=0; send('speed='+S.speed);};
-var rFilled=0;
 document.getElementById('ar').onchange=function(){send('auto='+(this.checked?'1':'0'));};
-document.getElementById('rs').onclick=function(){
-  send('rhost='+document.getElementById('rh').value+'&rport='+document.getElementById('rp').value+'&rpath='+document.getElementById('ru').value);
-};
 function otaPost(u){fetch(u,{method:'POST'}).catch(function(){say('no reply');});}
 function watch(done,n){
   var i=0,t=setInterval(function(){
@@ -632,40 +616,6 @@ static bool parseU100(const char* v, int* out) {
   return true;
 }
 
-static bool parseU16(const char* v, int* out) {
-  if (!v[0]) return false;
-  long n = 0;
-  for (const char* p = v; *p; p++) {
-    if (*p < '0' || *p > '9') return false;
-    n = n * 10 + (*p - '0');
-    if (n > 65535) return false;
-  }
-  *out = (int)n;
-  return true;
-}
-
-static bool radarHostOk(const char* s) {
-  if (!s[0]) return true;
-  size_t n = strlen(s);
-  if (n > 39) return false;
-  for (size_t i = 0; i < n; i++) {
-    char c = s[i];
-    bool okc = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-               (c >= 'A' && c <= 'Z') || c == '.' || c == '-';
-    if (!okc) return false;
-  }
-  return true;
-}
-
-static bool radarPathOk(const char* s) {
-  if (!s[0]) return true;
-  if (s[0] != '/' || strlen(s) > 31) return false;
-  for (const char* p = s; *p; p++) {
-    if (*p <= ' ' || *p == '"' || *p == '?' || *p == '\\') return false;
-  }
-  return true;
-}
-
 static bool parseU255(const char* v, int* out) {
   if (!v[0]) return false;
   int n = 0;
@@ -746,26 +696,6 @@ static bool applyOne(const char* key, const char* val, const char** err) {
     if (v) g_autoBlock = 0;
     return true;
   }
-  if (!strcmp(key, "rhost")) {
-    if (!radarHostOk(val)) { *err = "rhost"; return false; }
-    radarConfigure(val, radarPort(), radarPath(), 1);
-    return true;
-  }
-  if (!strcmp(key, "rport")) {
-    if (!val[0]) {
-      radarConfigure(radarHost(), (uint16_t)RADAR_PORT, radarPath(), 1);
-      return true;
-    }
-    int n = 0;
-    if (!parseU16(val, &n) || n < 1) { *err = "rport"; return false; }
-    radarConfigure(radarHost(), (uint16_t)n, radarPath(), 1);
-    return true;
-  }
-  if (!strcmp(key, "rpath")) {
-    if (!radarPathOk(val)) { *err = "rpath"; return false; }
-    radarConfigure(radarHost(), radarPort(), val, 1);
-    return true;
-  }
   if (!strcmp(key, "balls")) {
     uint8_t before = lamp_fx_balls();
     if (!strcmp(val, "add") || !strcmp(val, "+")) lamp_fx_balls_add();
@@ -799,8 +729,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,\"rotate\":%u,"
     "\"fw\":\"%s\",\"built\":\"%s\",\"ota\":\"%s\",\"otaPct\":%d,"
     "\"otaMsg\":\"%s\",\"ghVersion\":\"%s\",\"ghSha\":\"%s\",\"ghSize\":%ld,"
-    "\"ghNewer\":%s,\"auto\":%u,\"rain\":%u,\"rfresh\":%u,\"rframes\":%u,"
-    "\"rh\":\"%s\",\"rp\":%u,\"ru\":\"%s\"}",
+    "\"ghNewer\":%s,\"auto\":%u,\"rain\":%u,\"rfresh\":%u,\"rframes\":%u}",
     ok ? "true" : "false",
     err ? err : "",
     lamp_fx_mode_name(g_mode),
@@ -824,10 +753,7 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     (unsigned)g_autoRadar,
     (unsigned)radarRain(),
     (unsigned)radarFresh(),
-    (unsigned)radarFrameCount(),
-    radarHost(),
-    (unsigned)radarPort(),
-    radarPath());
+    (unsigned)radarFrameCount());
 }
 
 static void applyQuery(const char* q, const char** err) {
@@ -908,7 +834,7 @@ static void rememberIp(const IPAddress& ip);
 // otaCommit() calls it immediately before the AIRCR reset.
 static bool savePrefs() {
   return prefsSave(prefsMode(), g_fader, g_speed, lamp_fx_balls(),
-                   g_autoRadar, radarPort(), radarHost(), radarPath());
+                   g_autoRadar, (uint16_t)RADAR_PORT, RADAR_HOST, RADAR_PATH);
 }
 
 static void flushPrefs() {
@@ -1471,8 +1397,6 @@ static void loadPrefs() {
   if (speed <= 100) g_speed = speed;
   if (balls >= META_MIN && balls <= META_MAX) lamp_fx_balls_set(balls);
   g_autoRadar = autoR ? 1 : 0;
-  if (radarLegacy(host, &port)) g_prefsDirty = 1;
-  radarConfigure(host, port, path, 0);
   Serial.print(F("Prefs "));
   Serial.print(lamp_fx_mode_name(g_mode));
   Serial.print(F(" bri "));
@@ -1504,7 +1428,6 @@ void setup() {
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros());
   lamp_fx_init();
-  radarBoot();
   loadPrefs();
   webSetup();
   g_panel.begin();
@@ -1519,8 +1442,15 @@ void setup() {
 void loop() {
   uint32_t now = millis();
   if (g_rebootAfter && (int32_t)(now - g_rebootAt) >= 0) rebootNow();
+  // Paint before any radar AT command. A connect still blocks once it
+  // starts, but the scroll has already moved this iteration, and the
+  // first poll waits until WiFi has been up for 20 s.
+  if (!g_otaActive) {
+    tickScroll(now);
+    tickPanel(now);
+  }
   webPoll(now);
-  radarPoll(now);
+  if (g_http == PH_IDLE && !g_otaActive && !g_ghPend) radarPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;
     if (!savePrefs()) Serial.println(F("Prefs save failed"));
@@ -1529,9 +1459,5 @@ void loop() {
     uint8_t job = g_ghPend;
     g_ghPend = 0;
     githubRun(job);
-  }
-  if (!g_otaActive) {
-    tickScroll(now);
-    tickPanel(now);
   }
 }
