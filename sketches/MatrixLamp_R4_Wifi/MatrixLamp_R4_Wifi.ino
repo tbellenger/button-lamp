@@ -58,8 +58,8 @@
    ArduinoOTA InternalStorage. There is no local .bin upload.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   121328 B flash (46% of 262144), 22248 B globals (67% of 32768),
-   10520 B left for locals. The .bin is 121336 B. The GitHub image
+   121592 B flash (46% of 262144), 22248 B globals (67% of 32768),
+   10520 B left for locals. The .bin is 121600 B. The GitHub image
    must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -310,7 +310,7 @@ button:disabled{opacity:.35}
 </div>
 <label><input id=ar type=checkbox checked> Auto radar</label>
 <p>
-<input id=rh size=15 placeholder="radar host">
+<input id=rh size=22 placeholder="api.drunkwallaby.com">
 <input id=rp size=5 placeholder="port">
 <input id=ru size=12 placeholder="/radar.bin">
 <button type=button id=rs>Set</button>

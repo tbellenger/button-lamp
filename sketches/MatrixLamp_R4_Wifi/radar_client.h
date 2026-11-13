@@ -9,7 +9,7 @@
 // Defaults, until the dw-api radar route publishes a port and path.
 // The page can replace host, port, and path; those are stored in prefs.
 #ifndef RADAR_HOST
-#define RADAR_HOST "76.13.99.44"
+#define RADAR_HOST "api.drunkwallaby.com"
 #endif
 #ifndef RADAR_PORT
 #define RADAR_PORT 8787
@@ -236,13 +236,48 @@ static void radarRead(uint32_t now) {
   }
 }
 
+// True for a dotted IPv4 literal, including a prefs value of 76.13.99.44
+// saved before the default became a hostname. Those records stay valid.
+static bool radarIpv4(const char* s, IPAddress* ip) {
+  int part[4];
+  int n = 0;
+  int acc = -1;
+  for (const char* p = s;; p++) {
+    if (*p >= '0' && *p <= '9') {
+      if (acc < 0) acc = 0;
+      acc = acc * 10 + (*p - '0');
+      if (acc > 255) return false;
+    } else if (*p == '.' || *p == 0) {
+      if (acc < 0 || n >= 4) return false;
+      part[n++] = acc;
+      acc = -1;
+      if (*p == 0) break;
+    } else {
+      return false;
+    }
+  }
+  if (n != 4) return false;
+  *ip = IPAddress((uint8_t)part[0], (uint8_t)part[1], (uint8_t)part[2], (uint8_t)part[3]);
+  return true;
+}
+
 static void radarBegin(uint32_t now) {
   const char* host = g_rHost[0] ? g_rHost : RADAR_HOST;
   const char* path = g_rPath[0] ? g_rPath : RADAR_PATH;
   uint16_t port = g_rPort ? g_rPort : (uint16_t)RADAR_PORT;
+  // A hostname is resolved here. The HTTP Host header stays that name,
+  // not the address it resolved to. A stored IPv4 literal skips DNS.
+  IPAddress ip;
   g_rCli.setConnectionTimeout(1200);
   modem.timeout(1500);
-  int ok = g_rCli.connect(host, port);
+  if (!radarIpv4(host, &ip)) {
+    if (WiFi.hostByName(host, ip) != 1) {
+      modem.timeout(MODEM_CMD_BUDGET_MS);
+      radarFail(F("dns"));
+      return;
+    }
+  }
+  int ok = g_rCli.connect(ip, port);
   modem.timeout(MODEM_CMD_BUDGET_MS);
   if (!ok) {
     radarFail(F("down"));
