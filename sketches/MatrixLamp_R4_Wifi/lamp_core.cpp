@@ -189,6 +189,10 @@ const uint8_t* lamp_fx_frame() { return g_rgb; }
 
 const char* lamp_fx_mode_name(uint8_t mode) { return modesName(mode); }
 int lamp_fx_mode_from_name(const char* s) { return modesFromName(s); }
+void lamp_fx_radar_set(const uint8_t* packed, uint8_t count) {
+  modesRadarSet(packed, count);
+  g_fxDirty = 1;
+}
 void lamp_fx_balls_add() { modesMetaAdd(); }
 void lamp_fx_balls_remove() { modesMetaRemove(); }
 void lamp_fx_balls_set(uint8_t n) { modesMetaSet(n); }

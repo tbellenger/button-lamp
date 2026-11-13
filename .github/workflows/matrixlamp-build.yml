@@ -99,17 +99,34 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -eu
+          # manifest.json "version" is ${VERSION}, the same string as FW_VERSION.
+          # The moving release must say that in its title and body. Uploading
+          # over an old release left the previous notes ("41d87cd-19") and a
+          # same-named .bin from an earlier run. Delete every asset, then edit.
+          TITLE="Matrix Lamp ${VERSION}"
           NOTES="Uno R4 WiFi firmware ${VERSION}.
-          The lamp downloads the matrixlamp-latest tag.
+          The lamp reads manifest.json version ${VERSION} (FW_VERSION in the .bin).
           WiFi credentials are not in this file."
-          gh release delete matrixlamp-latest --yes --cleanup-tag || true
-          gh release create matrixlamp-latest \
-            dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json \
-            --title "Matrix Lamp firmware (latest)" \
-            --notes "$NOTES" \
-            --target "${{ github.sha }}"
+          if gh release view matrixlamp-latest >/dev/null 2>&1; then
+            gh release view matrixlamp-latest --json assets --jq '.assets[].name' | while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              gh release delete-asset matrixlamp-latest "$asset" --yes
+            done
+            gh release edit matrixlamp-latest \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --target "${{ github.sha }}"
+            gh release upload matrixlamp-latest \
+              dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json --clobber
+          else
+            gh release create matrixlamp-latest \
+              dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --target "${{ github.sha }}"
+          fi
           gh release create "matrixlamp-${VERSION}" \
             dist/MatrixLamp_R4_Wifi.ino.bin dist/manifest.json \
-            --title "Matrix Lamp ${VERSION}" \
+            --title "$TITLE" \
             --notes "$NOTES" \
             --target "${{ github.sha }}"

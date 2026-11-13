@@ -10,6 +10,7 @@ const LABELS = {
   matrix: "Matrix",
   lightning: "Lightning",
   off: "Off",
+  radar: "Radar",
 };
 
 const state = { mode: 0, speed: 50, fader: 50, name: "fire" };
@@ -23,7 +24,7 @@ const CELL = canvas.width / N;
 function noteFor(name) {
   if (name === "spiral") note.textContent = "Speed shifts the spiral colour. Spin stays fixed.";
   else if (name === "matrix") note.textContent = "Speed is how fast the rain falls.";
-  else if (name === "off") note.textContent = "Off stays still. Speed does nothing.";
+  else if (name === "off" || name === "radar") note.textContent = "This preset keeps its own timing. Speed does nothing.";
   else note.textContent = "Speed is how fast this preset moves.";
 }
 

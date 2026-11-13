@@ -19,9 +19,13 @@
 //              Speed is that scroll. Flicker stays on.
 //   off        black, except logical (0, 15): raw yellow (6, 6, 0).
 //              Static. Speed is ignored. Brightness cannot round it off.
+//   radar      live NEXRAD frames. North is up in this picture. Speed
+//              is ignored. A mid-grey pixel marks home at (7, 7),
+//              drawn last, on top of the rain.
+//              The bottom row is a frame-progress bar.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
-// secret, lava, music. Nothing here plays a stored frame list.
+// secret, lava, music.
 
 #pragma once
 
@@ -30,6 +34,7 @@
 #include <math.h>
 #include "lamp_ids.h"
 #include "lamp_core.h"
+#include "radar_format.h"
 
 struct ModeIn {
   uint8_t mode;
@@ -39,7 +44,7 @@ struct ModeIn {
 
 static const char* const kModeName[M_COUNT] = {
   "fire", "rainbow", "metaballs", "plasma", "sun", "spiral", "fluid", "heart",
-  "matrix", "lightning", "off"
+  "matrix", "lightning", "off", "radar"
 };
 
 static const char* modesName(uint8_t mode) {
@@ -725,6 +730,71 @@ static uint8_t offChannel(uint8_t raw, uint8_t applied) {
   return (uint8_t)need;
 }
 
+// Level 0 is no echo. 1..15 step by 5 dBZ from 5 through 75+.
+static const uint8_t kRadarRgb[16][3] = {
+  {  0,   0,   0},
+  {130, 230, 140},
+  { 40, 200,  50},
+  {  0, 150,   0},
+  {220, 220,  40},
+  {255, 200,   0},
+  {255, 140,   0},
+  {255,  90,   0},
+  {230,  40,   0},
+  {190,   0,   0},
+  {150,   0,   0},
+  {140,   0,  50},
+  {180,   0, 120},
+  {210,   0, 170},
+  {240,  40, 210},
+  {255, 150, 240},
+};
+
+static const uint8_t* g_radarBits = 0;
+static uint8_t g_radarN = 0;
+
+static void modesRadarSet(const uint8_t* bits, uint8_t n) {
+  if (n > RADAR_FRAMES_MAX) n = RADAR_FRAMES_MAX;
+  g_radarBits = (n && bits) ? bits : 0;
+  g_radarN = g_radarBits ? n : 0;
+}
+
+static void paintDimWhite(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
+  uint8_t applied = lamp_fx_applied(fader);
+  uint8_t w = offChannel(40, applied);
+  *r = *g = *b = w;
+}
+
+// Home is neutral mid-grey in the frame buffer, before NeoPixel brightness.
+// offChannel is the same floor paintOff uses, so a low fader cannot round
+// a non-zero channel to black. Drawn after the rain and the progress bar.
+static void paintRadarHome(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
+  uint8_t applied = lamp_fx_applied(fader);
+  uint8_t w = offChannel(128, applied);
+  *r = *g = *b = w;
+}
+
+static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
+                       uint8_t* r, uint8_t* g, uint8_t* b) {
+  *r = *g = *b = 0;
+  uint8_t n = g_radarN;
+  uint8_t idx = 0;
+  uint8_t level = 0;
+  if (n && g_radarBits && (unsigned)x < 16u && (unsigned)y < 16u) {
+    idx = radarFrameIndex(now, n);
+    const uint8_t* frame = g_radarBits + (uint16_t)idx * RADAR_FRAME_BYTES;
+    level = radarLevelAt(frame, x, y);
+    if (level > 15) level = 15;
+  }
+  uint8_t applied = lamp_fx_applied(fader);
+  *r = offChannel(kRadarRgb[level][0], applied);
+  *g = offChannel(kRadarRgb[level][1], applied);
+  *b = offChannel(kRadarRgb[level][2], applied);
+  uint8_t bar = radarBarLength(n ? idx : 0, n);
+  if (y == 15 && (unsigned)x < bar) paintDimWhite(fader, r, g, b);
+  if (x == 7 && y == 7) paintRadarHome(fader, r, g, b);
+}
+
 static void paintOff(int x, int y, uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
   if (x != 0 || y != 15) return;
@@ -837,4 +907,5 @@ static void modesColor(const ModeIn* in, int x, int y, uint32_t now,
   }
   if (in->mode == M_LIGHTNING) paintLightning(x, y, now, in->speed, r, g, b);
   if (in->mode == M_OFF) paintOff(x, y, in->fader, r, g, b);
+  if (in->mode == M_RADAR) paintRadar(x, y, now, in->fader, r, g, b);
 }
