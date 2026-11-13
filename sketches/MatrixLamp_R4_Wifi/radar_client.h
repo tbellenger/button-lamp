@@ -1,14 +1,23 @@
-// Plain-HTTP fetch of /radar.bin. Included once from the sketch, after
-// g_mode, g_wifi, g_http, g_otaActive, and g_ghPend.
+// Background fetch of http://api.drunkwallaby.com/radar.bin (port 80).
+// Included once from the sketch, after g_mode, g_wifi, g_http, g_otaActive,
+// and g_ghPend.
 //
-// One socket, short timeouts. Connect is the only blocking call (about
-// 1.2 s if the host is down). Reads are one modem command per loop.
-// The lamp, the page, and OTA are not held across loops. A transfer is
-// dropped if an OTA or a GitHub fetch starts.
+// The ESP32-S3 bridge runs one AT command at a time, and that command blocks
+// the RA4M1 until modem.timeout. available() and connected() are AT commands.
+// Calling them every loop, or aborting connect/DNS before the ESP finishes,
+// wedges the bridge: the IP scroll and the panel stop because loop() never
+// reaches them again. This file therefore:
+//   - waits 20 s after WiFi is up before the first poll (the scroll runs)
+//   - does at most one modem call per loop, and not while the web server
+//     or a GitHub update owns the bridge
+//   - connects with one AT command (DNS + TCP inside the ESP) and waits
+//     longer than that command so the bridge stays in sync
+//   - reads on a 40 ms pace, in chunks, and never calls connected()
+//   - keeps the bytes in a staging buffer until the header checks pass,
+//     then copies them into the frame the panel paints
 //
-// Default URL is http://api.drunkwallaby.com/radar.bin (port 80).
-// Caddy routes on the Host header, which stays the configured name.
-// The page can replace host, port, and path; those are stored in prefs.
+// Host is api.drunkwallaby.com so Caddy can route. There is no page field
+// and no prefs host.
 #ifndef RADAR_HOST
 #define RADAR_HOST "api.drunkwallaby.com"
 #endif
@@ -25,57 +34,52 @@
 #include "radar_format.h"
 
 static const uint32_t RADAR_POLL_OK_MS = 300000ul;
-static const uint32_t RADAR_POLL_RETRY_MS = 30000ul;
-static const uint32_t RADAR_STALE_S = 1200ul;
+static const uint32_t RADAR_POLL_FAIL_MS = 600000ul;
+static const uint32_t RADAR_FIRST_MS = 20000ul;
 static const uint32_t RADAR_STALE_MS = 1200000ul;
+static const uint32_t RADAR_FETCH_MS = 8000ul;
+static const uint32_t RADAR_PACE_MS = 40ul;
 static const uint8_t RF_IDLE = 0;
 static const uint8_t RF_HDR = 1;
 static const uint8_t RF_BODY = 2;
 
-static WiFiClient g_rCli;
+static WiFiClient& radarCli() {
+  static WiFiClient c;
+  return c;
+}
+
 static uint8_t g_rPhase = RF_IDLE;
 static uint8_t g_rArm = 0;
 static uint32_t g_rNext = 0;
-static uint32_t g_rSince = 0;
-static uint32_t g_rConnChk = 0;
-// Room for a status line plus a few proxy headers (Caddy adds Server and Date).
-// Unknown headers are ignored. Content-Length is required. Chunked is rejected.
-static char g_rHdr[384];
+static uint32_t g_rStart = 0;
+static uint32_t g_rPace = 0;
+static char g_rHdr[256];
 static uint16_t g_rHdrN = 0;
 static uint16_t g_rNeed = 0;
+static uint16_t g_rExpect = 0;
 static uint16_t g_rFill = 0;
+static uint8_t g_rWrote = 0;
 static uint8_t g_rHead[RADAR_HEAD_BYTES];
 static uint8_t g_rShow[RADAR_FRAMES_MAX * RADAR_FRAME_BYTES];
 static uint8_t g_rCount = 0;
 static uint8_t g_rFlags = 0;
 static int8_t g_rMax = 0;
 static uint32_t g_rUnix = 0;
-static uint16_t g_rIv = 300;
 static uint32_t g_rGotMs = 0;
-static uint32_t g_rClock = 0;
 static uint8_t g_rFresh = 0;
 static uint8_t g_rRain = 0;
-static char g_rHost[40];
-static char g_rPath[32];
-static uint16_t g_rPort = RADAR_PORT;
 
-static const char* radarHost() { return g_rHost; }
-static uint16_t radarPort() { return g_rPort; }
-static const char* radarPath() { return g_rPath; }
 static uint8_t radarFrameCount() { return g_rCount; }
 static uint8_t radarFresh() { return g_rFresh; }
 static uint8_t radarRain() { return (g_rFresh && (g_rFlags & 1u)) ? 1 : 0; }
-static int8_t radarMaxDbz() { return g_rMax; }
-
-static int radarAgeSec() {
-  if (!g_rUnix || !g_rClock) return -1;
-  if (g_rClock < g_rUnix) return 0;
-  uint32_t age = g_rClock - g_rUnix;
-  if (age > 86400ul) return 86400;
-  return (int)age;
-}
 
 static void radarOnSample(uint8_t ok, uint8_t fresh, uint8_t rain);
+
+static void radarLog(const __FlashStringHelper* s) {
+  Serial.print(millis());
+  Serial.print(' ');
+  Serial.println(s);
+}
 
 static void radarShowCommit(uint8_t n) {
   g_rCount = n;
@@ -84,15 +88,27 @@ static void radarShowCommit(uint8_t n) {
 }
 
 static void radarFail(const __FlashStringHelper* why) {
-  uint8_t wiped = g_rFill > RADAR_HEAD_BYTES;
-  g_rCli.stop();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  if (g_rPhase != RF_IDLE) {
+    uint32_t t0 = millis();
+    radarLog(F("radar stop b"));
+    radarCli().stop();
+    Serial.print(millis());
+    Serial.print(F(" radar stop e "));
+    Serial.println(millis() - t0);
+  }
   g_rPhase = RF_IDLE;
   g_rFill = 0;
   g_rNeed = 0;
+  g_rExpect = 0;
+  if (g_rWrote) {
+    g_rWrote = 0;
+    radarShowCommit(0);
+  }
   g_rFresh = 0;
-  g_rNext = millis() + RADAR_POLL_RETRY_MS;
-  if (wiped) radarShowCommit(0);
-  Serial.print(F("Radar "));
+  g_rNext = millis() + RADAR_POLL_FAIL_MS;
+  Serial.print(millis());
+  Serial.print(F(" radar fail "));
   Serial.println(why);
   radarOnSample(0, 0, 0);
 }
@@ -148,38 +164,42 @@ static bool radarHdrReady() {
   }
   g_rNeed = (uint16_t)n;
   g_rFill = 0;
+  g_rExpect = 0;
   return true;
-}
-
-static uint8_t radarUnixStale(uint32_t unixTime) {
-  g_rClock = (uint32_t)WiFi.getTime();
-  if (!unixTime) return 1;
-  if (!g_rClock || g_rClock < unixTime) return 0;
-  return (g_rClock - unixTime) > RADAR_STALE_S;
 }
 
 static void radarCommit() {
   RadarInfo info;
   uint16_t total = 0;
-  if (!radarDecodeHead(g_rHead, &info, &total) || total != g_rFill ||
-      (g_rNeed && g_rFill != g_rNeed)) {
+  if (g_rFill < RADAR_HEAD_BYTES || !radarDecodeHead(g_rHead, &info, &total) ||
+      total != g_rFill || total != g_rNeed || info.frames > RADAR_FRAMES_MAX) {
     radarFail(F("bad"));
     return;
   }
-  g_rCli.stop();
+  g_rWrote = 0;
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  uint32_t t0 = millis();
+  radarLog(F("radar stop b"));
+  radarCli().stop();
+  Serial.print(millis());
+  Serial.print(F(" radar stop e "));
+  Serial.println(millis() - t0);
   g_rPhase = RF_IDLE;
   g_rFlags = info.flags;
   g_rMax = info.maxDbz;
   g_rUnix = info.newest;
-  g_rIv = info.interval ? info.interval : 300;
   g_rGotMs = millis();
   g_rFill = 0;
+  g_rNeed = 0;
+  g_rExpect = 0;
   radarShowCommit(info.frames);
-  uint8_t stale = radarUnixStale(info.newest);
-  g_rFresh = stale ? 0 : 1;
+  // Age is time since this body arrived. WiFi.getTime() is another AT
+  // command and is not used here.
+  g_rFresh = info.newest ? 1 : 0;
   g_rRain = (info.flags & 1u) ? 1 : 0;
   g_rNext = millis() + RADAR_POLL_OK_MS;
-  Serial.print(F("Radar "));
+  Serial.print(millis());
+  Serial.print(F(" radar ok "));
   Serial.print(info.frames);
   Serial.print(F(" rain "));
   Serial.println(g_rRain);
@@ -189,7 +209,7 @@ static void radarCommit() {
 static bool radarTake(uint8_t byte) {
   if (g_rPhase == RF_HDR) {
     if (g_rHdrN + 1 >= sizeof g_rHdr) {
-      radarFail(F("bad"));
+      radarFail(F("hdr"));
       return false;
     }
     g_rHdr[g_rHdrN++] = (char)byte;
@@ -204,10 +224,35 @@ static bool radarTake(uint8_t byte) {
     radarFail(F("big"));
     return false;
   }
-  if (g_rFill < RADAR_HEAD_BYTES) g_rHead[g_rFill] = byte;
-  else g_rShow[g_rFill - RADAR_HEAD_BYTES] = byte;
+  if (g_rFill < RADAR_HEAD_BYTES) {
+    g_rHead[g_rFill++] = byte;
+    if (g_rFill < RADAR_HEAD_BYTES) return true;
+    RadarInfo info;
+    uint16_t total = 0;
+    if (!radarDecodeHead(g_rHead, &info, &total) || total != g_rNeed ||
+        info.frames > RADAR_FRAMES_MAX) {
+      radarFail(F("head"));
+      return false;
+    }
+    g_rExpect = total;
+    Serial.print(millis());
+    Serial.print(F(" radar head "));
+    Serial.println(total);
+    if (g_rFill >= g_rExpect) {
+      radarCommit();
+      return false;
+    }
+    return true;
+  }
+  uint16_t off = (uint16_t)(g_rFill - RADAR_HEAD_BYTES);
+  if (off >= RADAR_FRAMES_MAX * RADAR_FRAME_BYTES) {
+    radarFail(F("big"));
+    return false;
+  }
+  g_rShow[off] = byte;
   g_rFill++;
-  if (g_rNeed && g_rFill >= g_rNeed) {
+  g_rWrote = 1;
+  if (g_rExpect && g_rFill >= g_rExpect) {
     radarCommit();
     return false;
   }
@@ -215,176 +260,127 @@ static bool radarTake(uint8_t byte) {
 }
 
 static void radarRead(uint32_t now) {
-  if ((uint32_t)(now - g_rSince) > 8000ul) {
+  if ((uint32_t)(now - g_rStart) > RADAR_FETCH_MS) {
     radarFail(F("time"));
     return;
   }
-  int avail = g_rCli.available();
-  if (avail <= 0) {
-    if ((uint32_t)(now - g_rConnChk) < 500ul) return;
-    g_rConnChk = now;
-    if (!g_rCli.connected()) {
-      if (g_rPhase == RF_BODY && g_rNeed && g_rFill >= g_rNeed) radarCommit();
-      else radarFail(F("down"));
-    }
-    return;
-  }
-  if (avail > 64) avail = 64;
-  uint8_t tmp[64];
-  int n = g_rCli.read(tmp, (size_t)avail);
+  if ((uint32_t)(now - g_rPace) < RADAR_PACE_MS) return;
+  g_rPace = now;
+  uint32_t t0 = millis();
+  Serial.print(t0);
+  Serial.println(F(" radar av b"));
+  modem.timeout(400);
+  int avail = radarCli().available();
+  uint32_t t1 = millis();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  Serial.print(t1);
+  Serial.print(F(" radar av e "));
+  Serial.print(avail);
+  Serial.print(' ');
+  Serial.println(t1 - t0);
+  if (avail <= 0) return;
+  if (avail > 256) avail = 256;
+  uint8_t tmp[256];
+  t0 = millis();
+  Serial.print(t0);
+  Serial.println(F(" radar rd b"));
+  modem.timeout(800);
+  int n = radarCli().read(tmp, (size_t)avail);
+  t1 = millis();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  Serial.print(t1);
+  Serial.print(F(" radar rd e "));
+  Serial.print(n);
+  Serial.print(' ');
+  Serial.println(t1 - t0);
   if (n <= 0) return;
-  g_rSince = now;
   for (int i = 0; i < n; i++) {
     if (!radarTake(tmp[i])) return;
   }
 }
 
-// True for a dotted IPv4 literal. A stored raw address still connects;
-// boot migration clears the previous default address before this runs.
-static bool radarIpv4(const char* s, IPAddress* ip) {
-  int part[4];
-  int n = 0;
-  int acc = -1;
-  for (const char* p = s;; p++) {
-    if (*p >= '0' && *p <= '9') {
-      if (acc < 0) acc = 0;
-      acc = acc * 10 + (*p - '0');
-      if (acc > 255) return false;
-    } else if (*p == '.' || *p == 0) {
-      if (acc < 0 || n >= 4) return false;
-      part[n++] = acc;
-      acc = -1;
-      if (*p == 0) break;
-    } else {
-      return false;
-    }
-  }
-  if (n != 4) return false;
-  *ip = IPAddress((uint8_t)part[0], (uint8_t)part[1], (uint8_t)part[2], (uint8_t)part[3]);
-  return true;
-}
-
 static void radarBegin(uint32_t now) {
-  const char* host = g_rHost[0] ? g_rHost : RADAR_HOST;
-  const char* path = g_rPath[0] ? g_rPath : RADAR_PATH;
-  uint16_t port = g_rPort ? g_rPort : (uint16_t)RADAR_PORT;
-  // A hostname is resolved here. The HTTP Host header stays that name,
-  // not the address it resolved to. A stored IPv4 literal skips DNS.
-  IPAddress ip;
-  g_rCli.setConnectionTimeout(1200);
-  modem.timeout(1500);
-  if (!radarIpv4(host, &ip)) {
-    if (WiFi.hostByName(host, ip) != 1) {
-      modem.timeout(MODEM_CMD_BUDGET_MS);
-      radarFail(F("dns"));
-      return;
-    }
-  }
-  int ok = g_rCli.connect(ip, port);
+  WiFiClient& c = radarCli();
+  c.stop();
+  c.setConnectionTimeout(3000);
+  // The ESP does DNS and TCP inside this one command. The RA4M1 must wait
+  // until that command ends. A shorter modem timeout desyncs the bridge
+  // and the next AT call never returns, which freezes the scroll.
+  uint32_t t0 = millis();
+  Serial.print(t0);
+  Serial.println(F(" radar connect b"));
+  modem.timeout(4500);
+  int ok = c.connect(RADAR_HOST, (uint16_t)RADAR_PORT);
+  uint32_t t1 = millis();
   modem.timeout(MODEM_CMD_BUDGET_MS);
+  Serial.print(t1);
+  Serial.print(F(" radar connect e "));
+  Serial.print(ok);
+  Serial.print(' ');
+  Serial.println(t1 - t0);
   if (!ok) {
-    radarFail(F("down"));
+    radarFail(F("connect"));
     return;
   }
-  char req[160];
-  int n = snprintf(req, sizeof req,
-                   "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n",
-                   path, host);
-  if (n < 0 || n >= (int)sizeof req ||
-      g_rCli.write((const uint8_t*)req, (size_t)n) != (size_t)n) {
-    radarFail(F("down"));
+  static const char kReq[] =
+      "GET " RADAR_PATH " HTTP/1.0\r\n"
+      "Host: " RADAR_HOST "\r\n"
+      "Connection: close\r\n"
+      "\r\n";
+  t0 = millis();
+  Serial.print(t0);
+  Serial.println(F(" radar write b"));
+  modem.timeout(800);
+  size_t w = c.write((const uint8_t*)kReq, sizeof kReq - 1);
+  t1 = millis();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  Serial.print(t1);
+  Serial.print(F(" radar write e "));
+  Serial.println(t1 - t0);
+  if (w != sizeof kReq - 1) {
+    radarFail(F("write"));
     return;
   }
   g_rPhase = RF_HDR;
+  g_rStart = now;
+  g_rPace = now;
   g_rHdrN = 0;
   g_rHdr[0] = 0;
   g_rFill = 0;
   g_rNeed = 0;
-  g_rSince = now;
-  g_rConnChk = now;
+  g_rExpect = 0;
 }
 
 static void radarPoll(uint32_t now) {
-  if (g_otaActive || g_ghPend) {
-    if (g_rPhase != RF_IDLE) {
-      uint8_t wiped = g_rFill > RADAR_HEAD_BYTES;
-      g_rCli.stop();
-      g_rPhase = RF_IDLE;
-      g_rFill = 0;
-      g_rNext = now + 8000ul;
-      if (wiped) radarShowCommit(0);
-    }
+  // The web server and GitHub update share the same AT bridge. Do not
+  // start or continue a radar command while either one is using it.
+  if (g_http != PH_IDLE || g_otaActive || g_ghPend) {
+    if (g_rPhase != RF_IDLE) g_rStart = now;
     return;
+  }
+  if (g_wifi != WIFI_ONLINE || g_setupAp) {
+    g_rArm = 0;
+    return;
+  }
+  if (!g_rArm) {
+    g_rArm = 1;
+    g_rNext = now + RADAR_FIRST_MS;
+    radarLog(F("radar wait 20s"));
+    return;
+  }
+  if (g_rFresh && g_rGotMs && (uint32_t)(now - g_rGotMs) > RADAR_STALE_MS) {
+    g_rFresh = 0;
+    radarOnSample(1, 0, 0);
   }
   if (g_rPhase == RF_IDLE) {
-    if (g_rFresh && g_rGotMs && (uint32_t)(now - g_rGotMs) > RADAR_STALE_MS) {
-      g_rFresh = 0;
-      radarOnSample(1, 0, 0);
-    }
-    if (!g_rArm) {
-      if (g_wifi != WIFI_ONLINE || g_setupAp) return;
-      g_rArm = 1;
-      g_rNext = now + 3000ul;
-      return;
-    }
     if ((int32_t)(now - g_rNext) < 0) return;
-    if (g_wifi != WIFI_ONLINE || g_setupAp || g_http != PH_IDLE) return;
+    g_rNext = now + RADAR_POLL_FAIL_MS;
     radarBegin(now);
-    if (g_rPhase != RF_IDLE) radarRead(now);
-    return;
-  }
-  if (g_http != PH_IDLE) {
-    g_rSince = now;
     return;
   }
   radarRead(now);
 }
 
-static void radarConfigure(const char* host, uint16_t port, const char* path, uint8_t touch) {
-  if (host && host[0]) strncpy(g_rHost, host, sizeof g_rHost - 1);
-  else strncpy(g_rHost, RADAR_HOST, sizeof g_rHost - 1);
-  g_rHost[sizeof g_rHost - 1] = 0;
-  g_rPort = port ? port : (uint16_t)RADAR_PORT;
-  if (path && path[0]) strncpy(g_rPath, path, sizeof g_rPath - 1);
-  else strncpy(g_rPath, RADAR_PATH, sizeof g_rPath - 1);
-  g_rPath[sizeof g_rPath - 1] = 0;
-  if (!touch) return;
-  g_prefsDirty = 1;
-  g_rNext = millis();
-  g_rArm = 1;
-  if (g_rPhase != RF_IDLE) {
-    g_rCli.stop();
-    g_rPhase = RF_IDLE;
-    g_rFill = 0;
-  }
-}
-
-static void radarBoot() {
-  radarConfigure(0, 0, 0, 0);
-  g_rIv = 300;
-}
-
-// Previous defaults were a raw address and a high port. Either one stored
-// in prefs is replaced with the current host and port 80 on boot.
-static uint8_t radarLegacy(char* host, uint16_t* port) {
-  uint8_t changed = 0;
-  if (host && strcmp(host, "76.13.99.44") == 0) {
-    host[0] = 0;
-    changed = 1;
-  }
-  if (port && *port == 8787) {
-    *port = 0;
-    changed = 1;
-  }
-  return changed;
-}
-
-// Auto radar. Default on. A fresh rain_nearby enters M_RADAR and remembers
-// the preset. Two fresh polls with the flag clear return to it. A manual
-// preset change during that visit cancels the return and holds the user's
-// choice until a later fresh poll says the rain has gone. Unreachable or
-// stale (newest frame older than 20 min, or no good poll for 20 min) does
-// not enter, and leaves if this visit was automatic.
 static uint8_t g_autoRadar = 1;
 static uint8_t g_autoHeld = 0;
 static uint8_t g_autoPrev = M_FIRE;

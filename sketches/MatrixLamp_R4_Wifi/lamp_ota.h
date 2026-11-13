@@ -641,23 +641,36 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
   g_ghPath[sizeof g_ghPath - 1] = 0;
   WiFiSSLClient& c = ghClient();
   c.stop();
-  if (!c.connect(g_ghHost, 443)) {
+  // Wait out the TLS handshake. Cutting modem.timeout short of the ESP
+  // command desyncs the bridge and the lamp stops answering.
+  uint32_t t0 = millis();
+  Serial.print(t0);
+  Serial.print(F(" GitHub TLS b "));
+  Serial.println(g_ghHost);
+  modem.timeout(12000);
+  int connected = c.connect(g_ghHost, 443);
+  if (!connected) {
     delay(350);
     c.stop();
-    if (!c.connect(g_ghHost, 443)) {
-      otaSet("error", "tls connect failed");
-      return false;
-    }
+    connected = c.connect(g_ghHost, 443);
+  }
+  Serial.print(millis());
+  Serial.print(F(" GitHub TLS e "));
+  Serial.print(connected);
+  Serial.print(' ');
+  Serial.println(millis() - t0);
+  if (!connected) {
+    modem.timeout(MODEM_CMD_BUDGET_MS);
+    otaSet("error", "tls connect failed");
+    return false;
   }
   bool sent = ghSend(c, "GET ") && ghSend(c, g_ghPath) &&
               ghSend(c, " HTTP/1.0\r\nHost: ") && ghSend(c, g_ghHost) &&
               ghSend(c, "\r\nUser-Agent: MatrixLamp\r\nConnection: close\r\n\r\n");
-  // Short modem timeout: a stalled SSL read must not sit forever.
-  modem.timeout(1500);
+  modem.timeout(8000);
   int rd = sent ? ghReadResponse(c, h, onHead, onBody) : 0;
-  modem.timeout(400);
+  modem.timeout(MODEM_CMD_BUDGET_MS);
   c.stop();
-  modem.timeout(20000);
   if (rd == 2) {
     otaSet("error", "timeout");
     return false;
@@ -735,7 +748,9 @@ static void otaNoteRelease() {
   Serial.print(F("GitHub firmware "));
   Serial.print(g_ghVer);
   Serial.print(F(" running "));
-  Serial.println(FW_VERSION);
+  Serial.print(FW_VERSION);
+  Serial.print(F(" cmp "));
+  Serial.println(cmp);
 }
 
 static bool ghFetchManifest() {
