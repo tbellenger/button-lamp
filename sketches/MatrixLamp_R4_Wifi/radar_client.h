@@ -6,13 +6,14 @@
 // The lamp, the page, and OTA are not held across loops. A transfer is
 // dropped if an OTA or a GitHub fetch starts.
 //
-// Defaults, until the dw-api radar route publishes a port and path.
+// Default URL is http://api.drunkwallaby.com/radar.bin (port 80).
+// Caddy routes on the Host header, which stays the configured name.
 // The page can replace host, port, and path; those are stored in prefs.
 #ifndef RADAR_HOST
 #define RADAR_HOST "api.drunkwallaby.com"
 #endif
 #ifndef RADAR_PORT
-#define RADAR_PORT 8787
+#define RADAR_PORT 80
 #endif
 #ifndef RADAR_PATH
 #define RADAR_PATH "/radar.bin"
@@ -37,7 +38,9 @@ static uint8_t g_rArm = 0;
 static uint32_t g_rNext = 0;
 static uint32_t g_rSince = 0;
 static uint32_t g_rConnChk = 0;
-static char g_rHdr[192];
+// Room for a status line plus a few proxy headers (Caddy adds Server and Date).
+// Unknown headers are ignored. Content-Length is required. Chunked is rejected.
+static char g_rHdr[384];
 static uint16_t g_rHdrN = 0;
 static uint16_t g_rNeed = 0;
 static uint16_t g_rFill = 0;
@@ -236,8 +239,8 @@ static void radarRead(uint32_t now) {
   }
 }
 
-// True for a dotted IPv4 literal, including a prefs value of 76.13.99.44
-// saved before the default became a hostname. Those records stay valid.
+// True for a dotted IPv4 literal. A stored raw address still connects;
+// boot migration clears the previous default address before this runs.
 static bool radarIpv4(const char* s, IPAddress* ip) {
   int part[4];
   int n = 0;
@@ -359,6 +362,21 @@ static void radarConfigure(const char* host, uint16_t port, const char* path, ui
 static void radarBoot() {
   radarConfigure(0, 0, 0, 0);
   g_rIv = 300;
+}
+
+// Previous defaults were a raw address and a high port. Either one stored
+// in prefs is replaced with the current host and port 80 on boot.
+static uint8_t radarLegacy(char* host, uint16_t* port) {
+  uint8_t changed = 0;
+  if (host && strcmp(host, "76.13.99.44") == 0) {
+    host[0] = 0;
+    changed = 1;
+  }
+  if (port && *port == 8787) {
+    *port = 0;
+    changed = 1;
+  }
+  return changed;
 }
 
 // Auto radar. Default on. A fresh rain_nearby enters M_RADAR and remembers

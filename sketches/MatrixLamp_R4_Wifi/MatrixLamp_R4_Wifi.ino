@@ -58,8 +58,8 @@
    ArduinoOTA InternalStorage. There is no local .bin upload.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   121592 B flash (46% of 262144), 22248 B globals (67% of 32768),
-   10520 B left for locals. The .bin is 121600 B. The GitHub image
+   121632 B flash (46% of 262144), 22440 B globals (68% of 32768),
+   10328 B left for locals. The .bin is 121640 B. The GitHub image
    must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -311,7 +311,7 @@ button:disabled{opacity:.35}
 <label><input id=ar type=checkbox checked> Auto radar</label>
 <p>
 <input id=rh size=22 placeholder="api.drunkwallaby.com">
-<input id=rp size=5 placeholder="port">
+<input id=rp size=5 placeholder="80">
 <input id=ru size=12 placeholder="/radar.bin">
 <button type=button id=rs>Set</button>
 </p>
@@ -1471,6 +1471,7 @@ static void loadPrefs() {
   if (speed <= 100) g_speed = speed;
   if (balls >= META_MIN && balls <= META_MAX) lamp_fx_balls_set(balls);
   g_autoRadar = autoR ? 1 : 0;
+  if (radarLegacy(host, &port)) g_prefsDirty = 1;
   radarConfigure(host, port, path, 0);
   Serial.print(F("Prefs "));
   Serial.print(lamp_fx_mode_name(g_mode));
