@@ -1,6 +1,6 @@
-// WiFi and OTA password in the RA4M1 data flash (8 KB at 0x40100000).
+// WiFi name and password in the RA4M1 data flash (8 KB at 0x40100000).
 // The credential block is the first 1 KB, at 0x40100000. Preferences are
-// the next block, at 0x40100400. Code-flash OTA does not erase either.
+// the next block, at 0x40100400. A code-flash update does not erase either.
 // A USB build that compiled in secrets.h copies those values when they
 // differ. A CI build has no secrets.h and keeps whatever is already stored.
 //
@@ -23,7 +23,9 @@ struct LampCreds {
   uint16_t reserved;
   char ssid[33];
   char pass[64];
-  char ota[33];
+  // 33 bytes kept so records written by older firmware still validate.
+  // Nothing reads them.
+  char unused[33];
   uint32_t crc;
 };
 
@@ -57,7 +59,7 @@ static void credsClear(LampCreds* c) {
 static bool credsValid(const LampCreds* c) {
   if (c->magic != LAMP_CREDS_MAGIC || c->ver != LAMP_CREDS_VER) return false;
   if (c->crc != credsCrc(c)) return false;
-  if (c->ssid[32] != 0 || c->pass[63] != 0 || c->ota[32] != 0) return false;
+  if (c->ssid[32] != 0 || c->pass[63] != 0 || c->unused[32] != 0) return false;
   return c->ssid[0] != 0;
 }
 
@@ -83,7 +85,7 @@ static bool credsSave(const LampCreds& in) {
   c.ver = LAMP_CREDS_VER;
   c.ssid[32] = 0;
   c.pass[63] = 0;
-  c.ota[32] = 0;
+  c.unused[32] = 0;
   c.crc = credsCrc(&c);
 
   uint8_t buf[160];
@@ -134,14 +136,11 @@ static void credsBoot() {
   if (LAMP_COMPILED_SECRETS && WIFI_SSID[0]) {
     bool ssidDiff = !ok || strcmp(g_creds.ssid, WIFI_SSID) != 0;
     bool passDiff = !ok || strcmp(g_creds.pass, WIFI_PASS) != 0;
-    bool otaDiff = OTA_PASSWORD[0] && (!ok || strcmp(g_creds.ota, OTA_PASSWORD) != 0);
-    if (!ok || ssidDiff || passDiff || otaDiff) {
+    if (!ok || ssidDiff || passDiff) {
       LampCreds c;
       credsClear(&c);
       strncpy(c.ssid, WIFI_SSID, 32);
       strncpy(c.pass, WIFI_PASS, 63);
-      if (OTA_PASSWORD[0]) strncpy(c.ota, OTA_PASSWORD, 32);
-      else if (ok) strncpy(c.ota, g_creds.ota, 32);
       if (credsSave(c)) {
         ok = true;
         Serial.println(F("Stored WiFi from secrets.h"));
@@ -161,8 +160,18 @@ static void credsBoot() {
 
 // UI prefs live in the next 1 KB data-flash block. The credential block
 // at LAMP_DF_ADDR is never erased by this.
-static const uint32_t LAMP_PREFS_MAGIC = 0x32504C4Du; // 'M','L','P','2'
+static const uint32_t LAMP_PREFS_MAGIC_V2 = 0x32504C4Du; // 'M','L','P','2'
+static const uint32_t LAMP_PREFS_MAGIC = 0x33504C4Du; // 'M','L','P','3'
 static const uint32_t LAMP_PREFS_ADDR = LAMP_DF_ADDR + LAMP_DF_BLOCK;
+
+struct LampPrefsV2 {
+  uint32_t magic;
+  uint8_t mode;
+  uint8_t fader;
+  uint8_t speed;
+  uint8_t balls;
+  uint32_t crc;
+};
 
 struct LampPrefs {
   uint32_t magic;
@@ -170,25 +179,61 @@ struct LampPrefs {
   uint8_t fader;
   uint8_t speed;
   uint8_t balls; // 1..8, or 0 when this byte was never written
+  uint8_t autoRadar;
+  uint8_t pad0;
+  uint16_t radarPort; // 0 means the compiled default
+  char host[40];
+  char path[32];
   uint32_t crc;
 };
 
-static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* balls) {
+static_assert(sizeof(LampPrefs) == 88, "prefs size");
+static_assert(offsetof(LampPrefs, crc) == 84, "prefs crc");
+
+static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* balls,
+                      uint8_t* autoRadar, uint16_t* port, char* host, size_t hostN,
+                      char* path, size_t pathN) {
   LampPrefs p;
   // Byte at a time, same as the credential block. A wide memcpy reads
-  // the data-flash buffer and returns stale bytes, so a valid MLP2
-  // record looks blank and the lamp boots into Fire.
+  // the data-flash buffer and returns stale bytes, so a valid record
+  // looks blank and the lamp boots into Fire.
   dfRead(LAMP_PREFS_ADDR, &p, sizeof p);
-  if (p.magic != LAMP_PREFS_MAGIC) return false;
-  if (p.crc != lampCrc32(&p, offsetof(LampPrefs, crc))) return false;
-  *mode = p.mode;
-  *fader = p.fader;
-  *speed = p.speed;
-  *balls = p.balls;
+  if (hostN) host[0] = 0;
+  if (pathN) path[0] = 0;
+  *autoRadar = 1;
+  *port = 0;
+  if (p.magic == LAMP_PREFS_MAGIC &&
+      p.crc == lampCrc32(&p, offsetof(LampPrefs, crc)) &&
+      p.host[sizeof p.host - 1] == 0 && p.path[sizeof p.path - 1] == 0) {
+    *mode = p.mode;
+    *fader = p.fader;
+    *speed = p.speed;
+    *balls = p.balls;
+    *autoRadar = p.autoRadar ? 1 : 0;
+    *port = p.radarPort;
+    if (host && hostN) {
+      strncpy(host, p.host, hostN - 1);
+      host[hostN - 1] = 0;
+    }
+    if (path && pathN) {
+      strncpy(path, p.path, pathN - 1);
+      path[pathN - 1] = 0;
+    }
+    return true;
+  }
+  LampPrefsV2 old;
+  memcpy(&old, &p, sizeof old);
+  if (old.magic != LAMP_PREFS_MAGIC_V2) return false;
+  if (old.crc != lampCrc32(&old, offsetof(LampPrefsV2, crc))) return false;
+  *mode = old.mode;
+  *fader = old.fader;
+  *speed = old.speed;
+  *balls = old.balls;
   return true;
 }
 
-static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls) {
+static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls,
+                      uint8_t autoRadar, uint16_t port, const char* host, const char* path) {
   LampPrefs p;
   memset(&p, 0, sizeof p);
   p.magic = LAMP_PREFS_MAGIC;
@@ -196,9 +241,13 @@ static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls)
   p.fader = fader;
   p.speed = speed;
   p.balls = balls;
+  p.autoRadar = autoRadar ? 1 : 0;
+  p.radarPort = port;
+  if (host) strncpy(p.host, host, sizeof p.host - 1);
+  if (path) strncpy(p.path, path, sizeof p.path - 1);
   p.crc = lampCrc32(&p, offsetof(LampPrefs, crc));
 
-  uint8_t buf[16];
+  uint8_t buf[96];
   memset(buf, 0xff, sizeof buf);
   memcpy(buf, &p, sizeof p);
   uint32_t n = (sizeof p + 3u) & ~3u;
@@ -221,19 +270,4 @@ static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls)
   __enable_irq();
   R_FLASH_LP_Close(&ctrl);
   return wr == FSP_SUCCESS;
-}
-
-static bool passwordEq(const char* got, const char* want) {
-  if (!want || !want[0]) return false;
-  size_t n = strlen(want);
-  size_t m = got ? strlen(got) : 0;
-  uint8_t diff = (uint8_t)(n ^ m);
-  size_t lim = n > m ? n : m;
-  if (lim > 64) lim = 64;
-  for (size_t i = 0; i < lim; i++) {
-    char a = i < n ? want[i] : 0;
-    char b = (got && i < m) ? got[i] : 0;
-    diff = (uint8_t)(diff | (uint8_t)(a ^ b));
-  }
-  return diff == 0 && n == m;
 }

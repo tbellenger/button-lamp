@@ -47,21 +47,20 @@
    Host check for the fire:
      g++ -std=c++17 -DMATRIX_FIRE_TEST -x c++ matrix_fire.h -o /tmp/matrix_fire_test
 
-   WiFi names and the OTA password live in data flash, not in the
-   GitHub build. A USB build that has secrets.h copies them in when they
-   differ. With neither, the board opens the setup AP MatrixLamp-Setup.
-   Mode, brightness, speed, and ball count are the next block. That
-   block is read a byte at a time (a wide copy returns stale data flash)
-   and written again just before an OTA apply, so the new boot restores
-   the preset instead of Fire.
-   POST /update (header X-OTA-Password) streams a .bin into ArduinoOTA
-   InternalStorage. A bad or short image is not applied. The 16x16 shows
-   an orange progress bar and the onboard matrix scan is stopped.
+   WiFi names live in data flash, not in the GitHub build. A USB build
+   that has secrets.h copies them in when they differ. With neither, the
+   board opens the setup AP MatrixLamp-Setup. Mode, brightness, speed,
+   ball count, auto-radar, and the radar host are the next block. That
+   block is read a byte at a time and written again just before a GitHub
+   apply, so the new boot restores the preset instead of Fire.
+   Firmware updates are only the GitHub release (manifest.json version
+   matches FW_VERSION, <sha7>-<run>). The download is staged with
+   ArduinoOTA InternalStorage. There is no local .bin upload.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   118772 B flash (45% of 262144), 18568 B globals (56% of 32768),
-   14200 B left for locals. The .bin is 118780 B. OTA allows at most
-   122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
+   121328 B flash (46% of 262144), 22248 B globals (67% of 32768),
+   10520 B left for locals. The .bin is 121336 B. The GitHub image
+   must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
@@ -93,9 +92,6 @@
 #endif
 #ifndef WIFI_PASS
 #define WIFI_PASS ""
-#endif
-#ifndef OTA_PASSWORD
-#define OTA_PASSWORD ""
 #endif
 
 static const char FW_BUILT[] = __DATE__ " " __TIME__;
@@ -158,7 +154,6 @@ static const uint8_t WIFI_ONLINE = 2;
 static const uint8_t PH_IDLE = 0;
 static const uint8_t PH_READ = 1;
 static const uint8_t PH_WRITE = 2;
-static const uint8_t PH_OTA = 3;
 
 #include "lamp_core.h"
 
@@ -227,8 +222,7 @@ static uint8_t g_ghJob = 0;
 // GitHub fetch runs from loop, after the POST response has been flushed.
 // httpStop clears g_ghJob, so the pending job lives here.
 static uint8_t g_ghPend = 0;
-static uint8_t g_wantCrc = 0;
-static uint32_t g_crcExpect = 0;
+static uint8_t g_ghNewer = 0;
 static uint32_t g_crcGot = 0;
 static uint32_t g_crcState = 0xffffffffu;
 static uint32_t g_otaLen = 0;
@@ -272,6 +266,8 @@ static uint32_t g_scrollLast = 0;
 static char g_ipText[16] = "";
 static int g_ipCols = 0;
 
+#include "radar_client.h"
+
 static const char PAGE[] = R"PAGE(
 <!DOCTYPE html>
 <html lang=en><head>
@@ -312,21 +308,25 @@ button:disabled{opacity:.35}
 <span id=bcnt>3 of 8</span>
 <button type=button id=badd>+ Ball</button>
 </div>
+<label><input id=ar type=checkbox checked> Auto radar</label>
+<p>
+<input id=rh size=15 placeholder="radar host">
+<input id=rp size=5 placeholder="port">
+<input id=ru size=12 placeholder="/radar.bin">
+<button type=button id=rs>Set</button>
+</p>
 <details><summary>Update</summary>
-<p class=sub>On Spiral, Speed shifts the colour and the arm keeps a fixed spin. On Matrix, Speed is how fast the rain falls. On Off, Speed does nothing. Everywhere else, Speed is how fast the preset moves.</p>
-<input id=otap type=password placeholder="OTA password" autocomplete=current-password>
-<input id=bin type=file accept=.bin>
+<p class=sub>On Spiral, Speed shifts the colour. On Matrix, Speed is the fall. On Radar and Off, Speed does nothing. Updates come from GitHub.</p>
 <div class=row>
 <button type=button id=chk>Check GitHub</button>
-<button type=button id=gh>Update</button>
-<button type=button id=up>Upload .bin</button>
+<button type=button id=gh disabled>Install</button>
 </div>
 <pre id=otast></pre>
 </details>
 <pre id=st></pre>
 <script>
-var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','lightning','off'];
-var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',lightning:'Lightning',off:'Off'};
+var NAMES=['fire','rainbow','metaballs','plasma','sun','spiral','fluid','heart','matrix','lightning','off','radar'];
+var LABELS={fire:'Fire',rainbow:'Rainbow',metaballs:'Meatballs',plasma:'Plasma',sun:'Sun',spiral:'Spiral',fluid:'Fluid',heart:'Heart',matrix:'Matrix',lightning:'Lightning',off:'Off',radar:'Radar'};
 var S={mode:'fire',fader:50,speed:50,balls:3};
 var linkBusy=0,drag=0;
 var ver=document.getElementById('ver'),st=document.getElementById('st'),otast=document.getElementById('otast');
@@ -334,7 +334,7 @@ var grid=document.getElementById('grid');
 var note=document.getElementById('spdnote');
 function say(t){otast.textContent=t;}
 function noteFor(m){
-  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : m=='off' ? 'Off stays still. Speed does nothing.' : 'Speed is how fast this preset moves.';
+  note.textContent = m=='spiral' ? 'Speed shifts the spiral colour. Spin stays fixed.' : m=='matrix' ? 'Speed is how fast the rain falls.' : (m=='off'||m=='radar') ? 'This preset keeps its own timing. Speed does nothing.' : 'Speed is how fast this preset moves.';
 }
 function paintBtns(){
   var bs=grid.querySelectorAll('button');
@@ -368,18 +368,30 @@ function show(s){
     document.getElementById('spd').value=S.speed;
     paintBtns(); noteFor(S.mode); ballRow();
   }
-  ver.textContent='firmware '+s.fw+(s.built?('  '+s.built):'')+(s.ghVersion?('   release '+s.ghVersion+(s.ghSha?(' '+s.ghSha.slice(0,7)):'')):'');
-  st.textContent=s.mode+'  bri '+s.brightness+'/'+s.brightnessCap+'  speed '+s.speed+'\n'+s.wifi+' '+s.ip;
-  if(s.ota&&s.ota!='idle') say(s.ota+' '+(s.otaPct||0)+'% '+(s.otaMsg||'')+(s.ghVersion?('  '+s.ghVersion):''));
+  ver.textContent='firmware '+(s.fw==='local'?s.fw:('v'+(s.fw||'').replace(/^v/i,'')))+(s.built?('  '+s.built):'');
+  st.textContent=s.mode+'  bri '+s.brightness+'/'+s.brightnessCap+'  speed '+s.speed+(s.rfresh?(s.rain?'  rain':'  dry'):'')+'\n'+s.wifi+' '+s.ip;
+  if(s.auto!=null) document.getElementById('ar').checked=!!s.auto;
+  if(!rFilled && s.rh){
+    document.getElementById('rh').value=s.rh;
+    document.getElementById('rp').value=s.rp;
+    document.getElementById('ru').value=s.ru;
+    rFilled=1;
+  }
+  var inst=document.getElementById('gh');
+  if(inst) inst.disabled=!s.ghNewer;
+  if(s.ota==='download'||s.ota==='applying') say((s.otaMsg||s.ota)+' '+(s.otaPct||0)+'%');
+  else if(s.ota&&s.ota!=='idle') say(s.otaMsg||s.ota);
 }
 document.getElementById('bri').oninput=function(){drag=1; S.fader=+this.value;};
 document.getElementById('bri').onchange=function(){drag=0; send('fader='+S.fader);};
 document.getElementById('spd').oninput=function(){drag=1; S.speed=+this.value; noteFor(S.mode);};
 document.getElementById('spd').onchange=function(){drag=0; send('speed='+S.speed);};
-var otap=document.getElementById('otap');
-try{otap.value=sessionStorage.getItem('otap')||'';}catch(e){}
-otap.onchange=function(){try{sessionStorage.setItem('otap',otap.value);}catch(e){}};
-function otaPost(u){fetch(u,{method:'POST',headers:{'X-OTA-Password':otap.value}}).catch(function(){say('no reply');});}
+var rFilled=0;
+document.getElementById('ar').onchange=function(){send('auto='+(this.checked?'1':'0'));};
+document.getElementById('rs').onclick=function(){
+  send('rhost='+document.getElementById('rh').value+'&rport='+document.getElementById('rp').value+'&rpath='+document.getElementById('ru').value);
+};
+function otaPost(u){fetch(u,{method:'POST'}).catch(function(){say('no reply');});}
 function watch(done,n){
   var i=0,t=setInterval(function(){
     fetch('/api/state').then(function(r){return r.json();}).then(function(s){show(s); if(done(s))clearInterval(t);}).catch(function(){});
@@ -391,6 +403,7 @@ document.getElementById('chk').onclick=function(){
   watch(function(s){return s.ota=='checked'||s.ota=='error';},40);
 };
 document.getElementById('gh').onclick=function(){
+  if(this.disabled) return;
   say('fetching'); otaPost('/api/ota/apply');
   var stamp=ver.textContent;
   watch(function(s){
@@ -398,15 +411,6 @@ document.getElementById('gh').onclick=function(){
     if(ver.textContent!=stamp && s.fw){say('updated '+s.fw); setTimeout(function(){location.reload();},800); return 1;}
     return 0;
   },90);
-};
-document.getElementById('up').onclick=function(){
-  var f=document.getElementById('bin').files[0]; if(!f){say('Choose a .bin');return;}
-  var x=new XMLHttpRequest(); x.open('POST','/update');
-  x.setRequestHeader('X-OTA-Password',otap.value);
-  x.upload.onprogress=function(e){if(e.lengthComputable)say('send '+Math.round(100*e.loaded/e.total)+'%');};
-  x.onload=function(){say(x.status+' '+(x.responseText||'')); if(x.status==200)setTimeout(function(){location.reload();},4000);};
-  x.onerror=function(){say('closed before reply');};
-  x.send(f);
 };
 function poll(){if(drag)return; fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});}
 setInterval(poll,1000); poll();
@@ -628,6 +632,40 @@ static bool parseU100(const char* v, int* out) {
   return true;
 }
 
+static bool parseU16(const char* v, int* out) {
+  if (!v[0]) return false;
+  long n = 0;
+  for (const char* p = v; *p; p++) {
+    if (*p < '0' || *p > '9') return false;
+    n = n * 10 + (*p - '0');
+    if (n > 65535) return false;
+  }
+  *out = (int)n;
+  return true;
+}
+
+static bool radarHostOk(const char* s) {
+  if (!s[0]) return true;
+  size_t n = strlen(s);
+  if (n > 39) return false;
+  for (size_t i = 0; i < n; i++) {
+    char c = s[i];
+    bool okc = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+               (c >= 'A' && c <= 'Z') || c == '.' || c == '-';
+    if (!okc) return false;
+  }
+  return true;
+}
+
+static bool radarPathOk(const char* s) {
+  if (!s[0]) return true;
+  if (s[0] != '/' || strlen(s) > 31) return false;
+  for (const char* p = s; *p; p++) {
+    if (*p <= ' ' || *p == '"' || *p == '?' || *p == '\\') return false;
+  }
+  return true;
+}
+
 static bool parseU255(const char* v, int* out) {
   if (!v[0]) return false;
   int n = 0;
@@ -692,7 +730,40 @@ static bool applyOne(const char* key, const char* val, const char** err) {
   if (!strcmp(key, "mode") || !strcmp(key, "preset")) {
     int m = lamp_fx_mode_from_name(val);
     if (m < 0) { *err = "mode"; return false; }
+    radarUserMode((uint8_t)m);
     setMode((uint8_t)m);
+    return true;
+  }
+  if (!strcmp(key, "auto")) {
+    uint8_t v = g_autoRadar;
+    if (!parseSwitch(val, &v)) { *err = "auto"; return false; }
+    if (!v && g_autoHeld) {
+      g_autoHeld = 0;
+      g_prefsDirty = 1;
+    }
+    if (v != g_autoRadar) g_prefsDirty = 1;
+    g_autoRadar = v ? 1 : 0;
+    if (v) g_autoBlock = 0;
+    return true;
+  }
+  if (!strcmp(key, "rhost")) {
+    if (!radarHostOk(val)) { *err = "rhost"; return false; }
+    radarConfigure(val, radarPort(), radarPath(), 1);
+    return true;
+  }
+  if (!strcmp(key, "rport")) {
+    if (!val[0]) {
+      radarConfigure(radarHost(), (uint16_t)RADAR_PORT, radarPath(), 1);
+      return true;
+    }
+    int n = 0;
+    if (!parseU16(val, &n) || n < 1) { *err = "rport"; return false; }
+    radarConfigure(radarHost(), (uint16_t)n, radarPath(), 1);
+    return true;
+  }
+  if (!strcmp(key, "rpath")) {
+    if (!radarPathOk(val)) { *err = "rpath"; return false; }
+    radarConfigure(radarHost(), radarPort(), val, 1);
     return true;
   }
   if (!strcmp(key, "balls")) {
@@ -727,7 +798,9 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     "\"wifi\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"rssi\":%d,"
     "\"ledCount\":%u,\"width\":%u,\"height\":%u,\"rotate\":%u,"
     "\"fw\":\"%s\",\"built\":\"%s\",\"ota\":\"%s\",\"otaPct\":%d,"
-    "\"otaMsg\":\"%s\",\"ghVersion\":\"%s\",\"ghSha\":\"%s\",\"ghSize\":%ld}",
+    "\"otaMsg\":\"%s\",\"ghVersion\":\"%s\",\"ghSha\":\"%s\",\"ghSize\":%ld,"
+    "\"ghNewer\":%s,\"auto\":%u,\"rain\":%u,\"rfresh\":%u,\"rframes\":%u,"
+    "\"rh\":\"%s\",\"rp\":%u,\"ru\":\"%s\"}",
     ok ? "true" : "false",
     err ? err : "",
     lamp_fx_mode_name(g_mode),
@@ -746,13 +819,21 @@ static int buildState(char* b, size_t n, bool ok, const char* err) {
     (unsigned)PANEL_H,
     (unsigned)lamp_fx_rotate(),
     FW_VERSION, FW_BUILT, g_otaState, g_otaPct,
-    g_otaMsg, g_ghVer, g_ghSha, g_ghSize);
+    g_otaMsg, g_ghVer, g_ghSha, g_ghSize,
+    g_ghNewer ? "true" : "false",
+    (unsigned)g_autoRadar,
+    (unsigned)radarRain(),
+    (unsigned)radarFresh(),
+    (unsigned)radarFrameCount(),
+    radarHost(),
+    (unsigned)radarPort(),
+    radarPath());
 }
 
 static void applyQuery(const char* q, const char** err) {
   while (*q) {
     char key[16];
-    char val[24];
+    char val[48];
     uint8_t ki = 0, vi = 0;
     bool trunc = false;
     while (*q && *q != '=' && *q != '&') {
@@ -825,8 +906,13 @@ static void rememberIp(const IPAddress& ip);
 
 // loop() skips this while an upload or a GitHub job is in flight.
 // otaCommit() calls it immediately before the AIRCR reset.
+static bool savePrefs() {
+  return prefsSave(prefsMode(), g_fader, g_speed, lamp_fx_balls(),
+                   g_autoRadar, radarPort(), radarHost(), radarPath());
+}
+
 static void flushPrefs() {
-  if (prefsSave(g_mode, g_fader, g_speed, lamp_fx_balls())) g_prefsDirty = 0;
+  if (savePrefs()) g_prefsDirty = 0;
   else Serial.println(F("Prefs save failed"));
 }
 
@@ -1329,7 +1415,6 @@ static void webSetup() {
 
 static void webPoll(uint32_t now) {
   if (g_wifi == WIFI_OFF) return;
-  if (g_http == PH_OTA) { otaHttpRead(now); return; }
   if (g_http == PH_READ) { httpRead(now); return; }
   if (g_http == PH_WRITE) { httpWrite(); return; }
   if (g_setupAp) {
@@ -1373,13 +1458,20 @@ static void webPoll(uint32_t now) {
 }
 
 static void loadPrefs() {
-  uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0;
-  if (!prefsLoad(&mode, &fader, &speed, &balls)) return;
-  // MLP2 mode byte. M_OFF (10) is inside M_COUNT; anything past it stays Fire.
+  uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0, autoR = 1;
+  uint16_t port = 0;
+  char host[40];
+  char path[32];
+  host[0] = 0;
+  path[0] = 0;
+  if (!prefsLoad(&mode, &fader, &speed, &balls, &autoR, &port, host, sizeof host, path, sizeof path)) return;
+  // Mode byte. M_OFF is 10 and M_RADAR is 11. Anything past M_COUNT stays Fire.
   if (mode < M_COUNT) g_mode = mode;
   if (fader <= 100) g_fader = fader;
   if (speed <= 100) g_speed = speed;
   if (balls >= META_MIN && balls <= META_MAX) lamp_fx_balls_set(balls);
+  g_autoRadar = autoR ? 1 : 0;
+  radarConfigure(host, port, path, 0);
   Serial.print(F("Prefs "));
   Serial.print(lamp_fx_mode_name(g_mode));
   Serial.print(F(" bri "));
@@ -1411,6 +1503,7 @@ void setup() {
   Serial.println(brightnessLimit());
   randomSeed((uint32_t)micros());
   lamp_fx_init();
+  radarBoot();
   loadPrefs();
   webSetup();
   g_panel.begin();
@@ -1426,11 +1519,10 @@ void loop() {
   uint32_t now = millis();
   if (g_rebootAfter && (int32_t)(now - g_rebootAt) >= 0) rebootNow();
   webPoll(now);
+  radarPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;
-    if (!prefsSave(g_mode, g_fader, g_speed, lamp_fx_balls())) {
-      Serial.println(F("Prefs save failed"));
-    }
+    if (!savePrefs()) Serial.println(F("Prefs save failed"));
   }
   if (g_ghPend && g_http == PH_IDLE && !g_otaActive) {
     uint8_t job = g_ghPend;

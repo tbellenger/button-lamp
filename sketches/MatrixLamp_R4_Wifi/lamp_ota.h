@@ -7,6 +7,7 @@
 #include <WiFiSSLClient.h>
 #include <string.h>
 #include <stdlib.h>
+#include "ver_cmp.h"
 
 static const char SETUP_PAGE[] =
   "<!DOCTYPE html><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
@@ -15,7 +16,6 @@ static const char SETUP_PAGE[] =
   "<form method=POST action=/setup>"
   "WiFi name<br><input name=ssid required maxlength=32><br>"
   "WiFi password<br><input name=pass type=password maxlength=63><br>"
-  "OTA password<br><input name=ota required maxlength=32><br>"
   "<button>Save</button></form>";
 
 static const char GH_MANIFEST[] =
@@ -143,25 +143,6 @@ static void otaResumeLamp() {
   g_otaPaint = -1;
   matrixResume();
   lamp_fx_mark_dirty();
-}
-
-static bool otaAuthed() {
-  if (g_setupAp) {
-    otaReply(409, "Conflict", "join the home wifi first\n");
-    return false;
-  }
-  if (!g_creds.ota[0]) {
-    otaReply(403, "Forbidden", "ota disabled\n");
-    otaSet("error", "ota disabled");
-    return false;
-  }
-  char pass[40];
-  headerValue("X-OTA-Password", pass, sizeof pass);
-  if (!passwordEq(pass, g_creds.ota)) {
-    otaReply(401, "Unauthorized", "bad password\n");
-    return false;
-  }
-  return true;
 }
 
 static void crcBegin() { g_crcState = 0xffffffffu; }
@@ -359,22 +340,9 @@ static bool otaCommit() {
 
 // The file picker posts the raw .bin (XHR send(file), not multipart).
 // iOS will not send a body this large until it sees 100 Continue.
-static bool otaExpectContinue() {
-  char b[24];
-  return headerValue("Expect", b, sizeof b) && strstr(b, "100") != 0;
-}
-
-static void otaSendContinue() {
-  static const char k[] = "HTTP/1.1 100 Continue\r\n\r\n";
-  modem.timeout(400);
-  g_client.write((const uint8_t*)k, sizeof k - 1);
-  g_client.flush();
-  modem.timeout(MODEM_CMD_BUDGET_MS);
-}
-
 // Erase the staging half. Code-flash erase runs with interrupts off. Call it
-// only when no socket read is in progress (after 100 Continue has been
-// written, or before the GitHub asset connection is opened).
+// only when no socket read is in progress (before the GitHub asset
+// connection is opened).
 static bool otaOpenStorage(uint32_t len) {
   long cap = InternalStorage.maxSize();
   if (len < 4096 || (long)len > cap) {
@@ -394,107 +362,6 @@ static bool otaOpenStorage(uint32_t len) {
   }
   g_otaOpened = 1;
   return true;
-}
-
-static void otaBeginUpload() {
-  if (!otaAuthed()) return;
-  long len = headerLong("Content-Length");
-  long cap = InternalStorage.maxSize();
-  if (len < 4096) {
-    otaReply(400, "Bad Request", "short image\n");
-    return;
-  }
-  if (len > cap) {
-    otaReply(413, "Payload Too Large", "image too large\n");
-    return;
-  }
-  g_wantCrc = 0;
-  char crcHex[12];
-  if (headerValue("X-OTA-Crc32", crcHex, sizeof crcHex) && crcHex[0]) {
-    if (!parseHex32(crcHex, &g_crcExpect)) {
-      otaReply(400, "Bad Request", "bad crc\n");
-      return;
-    }
-    g_wantCrc = 1;
-  }
-  // iOS will not send a body this size until it sees 100 Continue, and it
-  // gives up after a few seconds. Answer first, then erase. The WiFi link
-  // is polled, so the body sits on the modem until the next read; the erase
-  // (60 blocks for a 122672 byte image, interrupts off) does not share the
-  // UART with that transfer. Erasing while the body was already being read
-  // is what dropped the socket: the page's XHR onerror is "closed", there
-  // is no status line, and the lamp never reboots.
-  bool cont = otaExpectContinue();
-  matrixPause();
-  g_otaActive = 1;
-  otaSet("upload", "receiving");
-  g_otaPaint = -1;
-  otaPaint(0);
-  if (cont) otaSendContinue();
-  if (!otaOpenStorage((uint32_t)len)) {
-    otaResumeLamp();
-    otaReply(500, "Error", "flash open failed\n");
-    return;
-  }
-  Serial.print(F("OTA receive "));
-  Serial.println(g_otaLen);
-  const char* hdr = strstr(g_req, "\r\n\r\n");
-  const uint8_t* body = (const uint8_t*)hdr + 4;
-  uint32_t have = g_reqLen - (uint32_t)(body - (const uint8_t*)g_req);
-  if (have > g_otaLen) have = g_otaLen;
-  otaConsume(body, have);
-  if (g_otaFail) {
-    otaFail("write failed\n");
-    return;
-  }
-  if (g_otaGot >= g_otaLen) otaFinishUpload();
-  else {
-    g_clientMs = millis();
-    g_http = PH_OTA;
-  }
-}
-
-static void otaFinishUpload() {
-  uint32_t sum = crcEnd();
-  g_crcGot = sum;
-  otaCloseStorage();
-  if (!imageOk()) {
-    otaFail("bad image\n");
-    return;
-  }
-  if (g_wantCrc && sum != g_crcExpect) {
-    otaFail("bad crc\n");
-    return;
-  }
-  otaSet("applying", "rebooting");
-  Serial.println(F("OTA stored"));
-  g_otaApply = 1;
-  otaReply(200, "OK", "ok\n");
-}
-
-static void otaHttpRead(uint32_t now) {
-  if (!g_client.connected() && g_client.available() <= 0) {
-    otaFail("incomplete\n");
-    return;
-  }
-  int avail = g_client.available();
-  if (avail <= 0) {
-    if ((uint32_t)(now - g_clientMs) > 20000) otaFail("timeout\n");
-    return;
-  }
-  uint8_t buf[128];
-  if (avail > (int)sizeof buf) avail = (int)sizeof buf;
-  int n = g_client.read(buf, (size_t)avail);
-  if (n <= 0) return;
-  g_clientMs = now;
-  uint32_t left = g_otaLen - g_otaGot;
-  if ((uint32_t)n > left) n = (int)left;
-  otaConsume(buf, (uint32_t)n);
-  if (g_otaFail) {
-    otaFail("write failed\n");
-    return;
-  }
-  if (g_otaGot >= g_otaLen) otaFinishUpload();
 }
 
 static void urlDecode(char* s) {
@@ -544,22 +411,16 @@ static void setupSave() {
   }
   char ssid[33];
   char pass[64];
-  char ota[33];
   if (!formGet(hdr + 4, "ssid", ssid, sizeof ssid) || !ssid[0]) {
     otaReply(400, "Bad Request", "ssid required\n");
     return;
   }
   if (!formGet(hdr + 4, "pass", pass, sizeof pass)) pass[0] = 0;
-  if (!formGet(hdr + 4, "ota", ota, sizeof ota) || !ota[0]) {
-    otaReply(400, "Bad Request", "ota password required\n");
-    return;
-  }
   matrixPause();
   LampCreds c;
   credsClear(&c);
   strncpy(c.ssid, ssid, 32);
   strncpy(c.pass, pass, 63);
-  strncpy(c.ota, ota, 32);
   if (!credsSave(c)) {
     matrixResume();
     otaReply(500, "Error", "save failed\n");
@@ -572,7 +433,10 @@ static void setupSave() {
 }
 
 static void otaQueueGithub(uint8_t job) {
-  if (!otaAuthed()) return;
+  if (g_setupAp) {
+    otaReply(409, "Conflict", "join the home wifi first\n");
+    return;
+  }
   g_ghJob = job;
   otaSet(job == 1 ? "check" : "download", "starting");
   otaReply(200, "OK", job == 1 ? "ok check\n" : "ok apply\n");
@@ -585,15 +449,10 @@ static int otaDispatchPost(uint32_t now) {
     otaReply(400, "Bad Request", "path\n");
     return 1;
   }
-  bool stream = strcmp(path, "/update") == 0;
   bool small = strcmp(path, "/setup") == 0 || strcmp(path, "/api/ota/check") == 0 ||
                strcmp(path, "/api/ota/apply") == 0;
-  if (!stream && !small) {
+  if (!small) {
     otaReply(404, "Not Found", "not found\n");
-    return 1;
-  }
-  if (stream) {
-    otaBeginUpload();
     return 1;
   }
   long len = headerLong("Content-Length");
@@ -861,6 +720,24 @@ static int manifestHead(GhHead* h) {
   return 1;
 }
 
+// manifest.json "version" only. Not the release notes, not the tag.
+static void otaNoteRelease() {
+  char local[28];
+  char remote[28];
+  fwVersionNorm(FW_VERSION, local, sizeof local);
+  fwVersionNorm(g_ghVer, remote, sizeof remote);
+  int cmp = fwVersionCmp(FW_VERSION, g_ghVer);
+  g_ghNewer = cmp > 0 ? 1 : 0;
+  char msg[40];
+  if (g_ghNewer) snprintf(msg, sizeof msg, "Update available v%s", remote);
+  else snprintf(msg, sizeof msg, "Up to date (v%s)", local[0] ? local : remote);
+  otaSet("checked", msg);
+  Serial.print(F("GitHub firmware "));
+  Serial.print(g_ghVer);
+  Serial.print(F(" running "));
+  Serial.println(FW_VERSION);
+}
+
 static bool ghFetchManifest() {
   strncpy(g_ghHost, "github.com", sizeof g_ghHost);
   g_manifestN = 0;
@@ -883,6 +760,7 @@ static bool ghFetchManifest() {
     }
     if (!ghOnce(pathBuf, manifestHead, manifestBody, &h)) return false;
     if (h.code == 200) {
+      g_ghNewer = 0;
       g_ghVer[0] = 0;
       g_ghFile[0] = 0;
       g_ghSha[0] = 0;
@@ -919,10 +797,7 @@ static bool ghFetchManifest() {
           return false;
         }
       }
-      if (strcmp(g_ghVer, FW_VERSION) == 0) otaSet("checked", "up to date");
-      else otaSet("checked", "update available");
-      Serial.print(F("GitHub firmware "));
-      Serial.println(g_ghVer);
+      otaNoteRelease();
       return true;
     }
     if (h.code >= 300 && h.code < 400 && h.loc && ghTakeLocation()) continue;
@@ -1017,8 +892,8 @@ static void githubRun(uint8_t job) {
     otaSet("download", "github");
     if (!g_ghFile[0] || !g_ghHave || g_ghSize < 4096) ok = ghFetchManifest();
     else ok = true;
-    if (ok && strcmp(g_ghVer, FW_VERSION) == 0) {
-      otaSet("checked", "up to date");
+    if (ok && fwVersionCmp(FW_VERSION, g_ghVer) <= 0) {
+      otaNoteRelease();
       ok = false;
     } else if (ok) {
       ok = ghFetchBin();

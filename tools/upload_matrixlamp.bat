@@ -6,11 +6,8 @@ REM   tools\upload_matrixlamp.bat
 REM   tools\upload_matrixlamp.bat COM5
 REM   tools\upload_matrixlamp.bat COM5 --monitor
 REM   tools\upload_matrixlamp.bat --monitor
-REM   tools\upload_matrixlamp.bat ota
-REM   tools\upload_matrixlamp.bat --ota 192.168.1.20
 REM --monitor opens the serial monitor at 115200 after a successful USB upload.
-REM ota / --ota [host] compiles and sends the firmware over WiFi.
-REM The host defaults to matrixlamp.local. USB stays the default.
+REM Firmware updates after the first USB flash come from the lamp's GitHub button.
 REM The window stays open at the end.
 
 cd /d "%~dp0.."
@@ -58,14 +55,12 @@ if not exist "sketches\MatrixLamp_R4_Wifi\secrets.h" (
   echo A USB build will not contain the WiFi name. A blank board opens MatrixLamp-Setup.
   echo A board that already stored a network keeps using it.
   echo   copy sketches\MatrixLamp_R4_Wifi\secrets.example.h sketches\MatrixLamp_R4_Wifi\secrets.h
-  echo Then put the home network in WIFI_SSID and WIFI_PASS, and set OTA_PASSWORD.
+  echo Then put the home network in WIFI_SSID and WIFI_PASS.
   echo secrets.h is gitignored. Do not commit it.
 )
 
 set "PORT="
 set "MONITOR=0"
-set "OTA=0"
-set "HOST="
 :parse
 if "%~1"=="" goto parsed
 if /I "%~1"=="--monitor" (
@@ -80,28 +75,7 @@ if /I "%~1"=="-m" (
 )
 if /I "%~1"=="--help" goto usage
 if /I "%~1"=="-h" goto usage
-if /I "%~1"=="--ota" (
-  set "OTA=1"
-  shift
-  if "%~1"=="" goto parsed
-  echo %~1 | findstr /b "-" >nul
-  if errorlevel 1 (
-    set "HOST=%~1"
-    shift
-  )
-  goto parse
-)
-if /I "%~1"=="ota" (
-  set "OTA=1"
-  shift
-  goto parse
-)
 if not defined PORT (
-  if "%OTA%"=="1" if not defined HOST (
-    set "HOST=%~1"
-    shift
-    goto parse
-  )
   set "PORT=%~1"
   shift
   goto parse
@@ -110,18 +84,6 @@ echo Unexpected extra argument: %~1
 goto usage
 
 :parsed
-if "%OTA%"=="1" (
-  if "%MONITOR%"=="1" (
-    echo --monitor is only for a USB upload.
-    goto fail
-  )
-  if defined PORT (
-    echo Pass either a serial port or ota, not both.
-    goto fail
-  )
-  if not defined HOST set "HOST=matrixlamp.local"
-  goto ota
-)
 if defined PORT goto upload
 
 echo Looking for an Arduino Uno R4 WiFi...
@@ -183,38 +145,10 @@ echo Done.
 pause
 exit /b 0
 
-:ota
-echo OTA target http://%HOST%/
-if exist "build\matrixlamp" rmdir /s /q "build\matrixlamp"
-mkdir "build\matrixlamp"
-echo Compiling
-arduino-cli compile -b arduino:renesas_uno:unor4wifi --output-dir build\matrixlamp sketches\MatrixLamp_R4_Wifi
-if errorlevel 1 (
-  echo FAILED: compile failed.
-  goto fail
-)
-if not exist "build\matrixlamp\MatrixLamp_R4_Wifi.ino.bin" (
-  echo FAILED: no .bin was produced.
-  goto fail
-)
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0matrixlamp_ota.ps1" -Bin "%CD%\build\matrixlamp\MatrixLamp_R4_Wifi.ino.bin" -HostName "%HOST%"
-if errorlevel 1 (
-  echo FAILED: the lamp did not take the update.
-  echo If matrixlamp.local does not resolve, rerun with the IP from the web page or the serial monitor.
-  goto fail
-)
-echo.
-echo Done.
-pause
-exit /b 0
-
 :usage
 echo Usage: tools\upload_matrixlamp.bat [PORT] [--monitor]
-echo        tools\upload_matrixlamp.bat ota [HOST]
-echo        tools\upload_matrixlamp.bat --ota [HOST]
 echo   PORT       serial port, for example COM5. If omitted, the script looks for one Uno R4 WiFi.
 echo   --monitor  open the serial monitor at 115200 baud after a USB upload.
-echo   ota        compile and send the firmware over WiFi. HOST defaults to matrixlamp.local.
 goto fail
 
 :fail
