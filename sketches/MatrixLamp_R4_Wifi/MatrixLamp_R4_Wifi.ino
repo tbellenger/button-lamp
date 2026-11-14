@@ -53,20 +53,20 @@
    ball count, auto-radar, and the radar host are the next block. That
    block is read a byte at a time and written again just before a GitHub
    apply, so the new boot restores the preset instead of Fire.
-   Firmware updates are only the GitHub release (manifest.json version
-   matches FW_VERSION, <sha7>-<run>). The download is staged with
-   ArduinoOTA InternalStorage. There is no local .bin upload.
+   Firmware updates are only the GitHub release. Install update compares
+   manifest.json "version" to FW_VERSION (<sha7>-<run>). The same version
+   reports up to date. A newer one downloads the release .ota through
+   OTAUpdate's non-blocking startDownload. There is no local upload.
 
-   Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   122220 B flash (46% of 262144), 22244 B globals (67% of 32768),
-   10524 B left for locals. The .bin is 122228 B. The GitHub image
-   must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
+   Core 1.6.0, NeoPixel 1.15.5, OTAUpdate from that core, no secrets.h:
+   122636 B flash (46% of the 262144 boards.txt figure), 20936 B globals
+   (63% of 32768), 11832 B left for locals. The .bin is 122644 B and the
+   .ota is 98758 B. The linker image max is 245760 B (256 KB minus the
+   16 KB bootloader). NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
 #include <Arduino.h>
 #include <WiFiS3.h>
-#define NO_OTA_NETWORK
-#include <ArduinoOTA.h>
 #include <Modem.h>
 #include <Adafruit_NeoPixel.h>
 #include <stdio.h>
@@ -215,31 +215,19 @@ static char g_json[1280];
 static uint8_t g_fail = 0;
 static uint16_t g_pageLen = 0;
 static uint8_t g_otaActive = 0;
-static uint8_t g_otaOpened = 0;
-static uint8_t g_otaFail = 0;
-static uint8_t g_otaApply = 0;
 static uint8_t g_rebootAfter = 0;
 static uint32_t g_rebootAt = 0;
 static uint8_t g_ghJob = 0;
-// GitHub fetch runs from loop, after the POST response has been flushed.
+// The install runs from loop, after the POST response has been flushed.
 // httpStop clears g_ghJob, so the pending job lives here.
 static uint8_t g_ghPend = 0;
 static uint8_t g_ghNewer = 0;
-static uint32_t g_crcGot = 0;
-static uint32_t g_crcState = 0xffffffffu;
-static uint32_t g_otaLen = 0;
-static uint32_t g_otaGot = 0;
-static uint8_t g_otaHead[8];
-static uint8_t g_otaHeadN = 0;
 static int g_otaPct = 0;
-static int g_otaPaint = -1;
 static const char* g_otaState = "idle";
 static char g_otaMsg[40];
 static char g_ghVer[24];
 static char g_ghSha[48];
 static char g_ghFile[40];
-static uint32_t g_ghCrc = 0;
-static uint8_t g_ghHave = 0;
 static long g_ghSize = 0;
 static char g_ghHost[64];
 static char g_ghPath[1400];
@@ -314,8 +302,7 @@ button:disabled{opacity:.35}
 <details><summary>Update</summary>
 <p class=sub>On Spiral, Speed shifts the colour. On Matrix, Speed is the fall. On Radar and Off, Speed does nothing. Updates come from GitHub.</p>
 <div class=row>
-<button type=button id=chk>Check GitHub</button>
-<button type=button id=gh disabled>Install</button>
+<button type=button id=inst>Install update</button>
 </div>
 <pre id=otast></pre>
 </details>
@@ -367,8 +354,6 @@ function show(s){
   ver.textContent='firmware '+(s.fw==='local'?s.fw:('v'+(s.fw||'').replace(/^v/i,'')))+(s.built?('  '+s.built):'');
   st.textContent=s.mode+'  bri '+s.brightness+'/'+s.brightnessCap+'  speed '+s.speed+(s.rfresh?(s.rain?'  rain':'  dry'):'')+'\n'+s.wifi+' '+s.ip;
   if(s.auto!=null) document.getElementById('ar').checked=!!s.auto;
-  var inst=document.getElementById('gh');
-  if(inst) inst.disabled=!s.ghNewer;
   if(s.ota==='download'||s.ota==='applying') say((s.otaMsg||s.ota)+' '+(s.otaPct||0)+'%');
   else if(s.ota&&s.ota!=='idle') say(s.otaMsg||s.ota);
 }
@@ -384,19 +369,16 @@ function watch(done,n){
     if(++i>n)clearInterval(t);
   },1000);
 }
-document.getElementById('chk').onclick=function(){
-  say('checking'); otaPost('/api/ota/check');
-  watch(function(s){return s.ota=='checked'||s.ota=='error';},40);
-};
-document.getElementById('gh').onclick=function(){
-  if(this.disabled) return;
-  say('fetching'); otaPost('/api/ota/apply');
+document.getElementById('inst').onclick=function(){
+  say('checking'); otaPost('/api/ota/install');
   var stamp=ver.textContent;
   watch(function(s){
-    if(s.ota=='error')return 1;
-    if(ver.textContent!=stamp && s.fw){say('updated '+s.fw); setTimeout(function(){location.reload();},800); return 1;}
+    if(s.ota=='error'||s.ota=='checked')return 1;
+    if(ver.textContent!=stamp && s.fw && s.ota!='download' && s.ota!='applying' && s.ota!='check'){
+      say('updated '+s.fw); setTimeout(function(){location.reload();},800); return 1;
+    }
     return 0;
-  },90);
+  },240);
 };
 function poll(){if(drag)return; fetch('/api/state').then(function(r){return r.json();}).then(show).catch(function(){});}
 setInterval(poll,1000); poll();
@@ -832,8 +814,8 @@ static void httpJson(bool ok, const char* err) {
 
 static void rememberIp(const IPAddress& ip);
 
-// loop() skips this while an upload or a GitHub job is in flight.
-// otaCommit() calls it immediately before the AIRCR reset.
+// loop() skips this while an update or a GitHub check is in flight.
+// The install path calls it immediately before ota.update().
 static bool savePrefs() {
   return prefsSave(prefsMode(), g_fader, g_speed, lamp_fx_balls(),
                    g_autoRadar, (uint16_t)RADAR_PORT, RADAR_HOST, RADAR_PATH);
@@ -864,7 +846,6 @@ static void httpStop() {
   g_client.stop();
   g_http = PH_IDLE;
   g_ghJob = 0;
-  g_otaApply = 0;
   // A saved setup must still reboot if this socket dies after the phone
   // has already shown "Saved. Restarting."
 }
@@ -1002,11 +983,9 @@ static void httpWrite() {
     return;
   }
   uint8_t job = g_ghJob;
-  uint8_t apply = g_otaApply;
   uint8_t reboot = g_rebootAfter;
   g_ghJob = 0;
-  g_otaApply = 0;
-  if (job || apply || reboot) {
+  if (job || reboot) {
     // The WiFi stack buffers the reply. Closing before flush makes the
     // phone see a dead socket and the page used to call that a reboot.
     modem.timeout(400);
@@ -1015,15 +994,6 @@ static void httpWrite() {
     modem.timeout(MODEM_CMD_BUDGET_MS);
   }
   httpStop();
-  if (apply) {
-    if (!otaCommit()) {
-      otaSet("error", "apply failed");
-      otaSolid(180, 0, 0);
-      delay(1000);
-      otaResumeLamp();
-    }
-    return;
-  }
   if (reboot) rebootNow();
   if (job) g_ghPend = job;
 }
@@ -1117,6 +1087,7 @@ static bool wifiModemAnswers() {
 static void wifiResetModem() {
   Serial.println(F("WiFi modem restart"));
   if (wifiEspRestart()) {
+    Serial.println(F("bridge ok"));
     Serial.println(F("WiFi modem ready"));
     return;
   }
@@ -1128,8 +1099,13 @@ static void wifiResetModem() {
   modem.begin(115200, 1);
   waitAnim(400);
   modem.timeout(MODEM_CMD_BUDGET_MS);
-  if (wifiModemAnswers()) Serial.println(F("WiFi modem ready"));
-  else Serial.println(F("WiFi modem silent"));
+  if (wifiModemAnswers()) {
+    Serial.println(F("bridge ok"));
+    Serial.println(F("WiFi modem ready"));
+  } else {
+    Serial.println(F("bridge not ready"));
+    Serial.println(F("WiFi modem silent"));
+  }
 }
 
 // First thing setup() does to the co-processor, before any WiFi.begin().
@@ -1157,8 +1133,10 @@ static void ensureServer() {
   if (g_serverUp) return;
   g_server.begin();
   g_serverUp = g_server ? 1 : 0;
-  if (g_serverUp) g_serverMiss = 0;
-  else if (g_serverMiss < 250) g_serverMiss++;
+  if (g_serverUp) {
+    g_serverMiss = 0;
+    Serial.println(F("server started"));
+  } else if (g_serverMiss < 250) g_serverMiss++;
 }
 
 // Core 1.6.0: status() is WL_CONNECTED once the radio associates. localIP()
@@ -1194,6 +1172,11 @@ static void rememberIp(const IPAddress& ip) {
 static void noteConnected() {
   g_rssi = (int16_t)WiFi.RSSI();
   g_lastRssi = millis();
+  Serial.print(F("wifi joined "));
+  Serial.print(g_ip[0]); Serial.print('.');
+  Serial.print(g_ip[1]); Serial.print('.');
+  Serial.print(g_ip[2]); Serial.print('.');
+  Serial.println(g_ip[3]);
   Serial.print(F("WiFi "));
   Serial.print(g_ip[0]); Serial.print('.');
   Serial.print(g_ip[1]); Serial.print('.');
@@ -1424,13 +1407,14 @@ static void loadPrefs() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.println(F("boot"));
   Serial.println(F("Matrix Lamp R4 WiFi starting"));
   Serial.println(FW_MARK);
   // Before any WiFi.begin(), including the setup AP. A warm RA4M1 reset
   // does not restart the ESP32-S3.
   wifiBootResync();
-  Serial.print(F("OTA max bytes "));
-  Serial.println(InternalStorage.maxSize());
+  Serial.print(F("OTA sketch max "));
+  Serial.println(SKETCH_MAX_BYTES);
   Serial.print(F("Panel "));
   Serial.print(PANEL_W);
   Serial.print(F("x"));
@@ -1487,19 +1471,13 @@ void loop() {
   // Paint before any radar AT command. A connect still blocks once it
   // starts, but the scroll has already moved this iteration, and the
   // first poll waits until WiFi has been up for 20 s.
-  if (!g_otaActive) {
-    tickScroll(now);
-    tickPanel(now);
-  }
+  tickScroll(now);
+  tickPanel(now);
   webPoll(now);
   if (g_http == PH_IDLE && !g_otaActive && !g_ghPend) radarPoll(now);
   if (g_prefsDirty && g_http == PH_IDLE && !g_otaActive && !g_ghPend) {
     g_prefsDirty = 0;
     if (!savePrefs()) Serial.println(F("Prefs save failed"));
   }
-  if (g_ghPend && g_http == PH_IDLE && !g_otaActive) {
-    uint8_t job = g_ghPend;
-    g_ghPend = 0;
-    githubRun(job);
-  }
+  otaService(now);
 }

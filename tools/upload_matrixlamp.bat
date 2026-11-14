@@ -7,7 +7,7 @@ REM   tools\upload_matrixlamp.bat COM5
 REM   tools\upload_matrixlamp.bat COM5 --monitor
 REM   tools\upload_matrixlamp.bat --monitor
 REM --monitor opens the serial monitor at 115200 after a successful USB upload.
-REM Firmware updates after the first USB flash come from the lamp's GitHub button.
+REM Firmware updates after the first USB flash use Install update on the lamp page.
 REM The window stays open at the end.
 
 cd /d "%~dp0.."
@@ -30,7 +30,7 @@ if errorlevel 1 (
   goto fail
 )
 
-echo Checking the Uno R4 WiFi core, Adafruit NeoPixel, and ArduinoOTA...
+echo Checking the Uno R4 WiFi core and Adafruit NeoPixel...
 arduino-cli core update-index
 if errorlevel 1 echo WARNING: could not refresh the board index. Continuing if the core is already installed.
 arduino-cli core install arduino:renesas_uno
@@ -42,11 +42,6 @@ if errorlevel 1 (
 arduino-cli lib install "Adafruit NeoPixel"
 if errorlevel 1 (
   echo Could not install the Adafruit NeoPixel library ^(1.12 or newer^).
-  goto fail
-)
-arduino-cli lib install "ArduinoOTA"
-if errorlevel 1 (
-  echo Could not install the ArduinoOTA library ^(JAndrassy, 1.1.0 or newer^).
   goto fail
 )
 

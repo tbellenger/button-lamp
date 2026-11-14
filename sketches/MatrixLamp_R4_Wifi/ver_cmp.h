@@ -12,10 +12,28 @@
 // <sha>-<run> compares the run number (it only increases). Equal runs
 // still have to be the same string. Anything else matches only when the
 // normalized strings are equal; a different string counts as newer.
+//
+// "Up to date" is normalized string equality (case-insensitive, prefix
+// stripped). A download happens only when the remote compares newer.
+// An older release is not an update.
 #pragma once
 
 #include <stdint.h>
 #include <string.h>
+
+static char fwLower(char c) {
+  if (c >= 'A' && c <= 'Z') return (char)(c - 'A' + 'a');
+  return c;
+}
+
+static int fwCiPrefix(const char* s, const char* p) {
+  while (*p) {
+    if (fwLower(*s) != fwLower(*p)) return 0;
+    s++;
+    p++;
+  }
+  return 1;
+}
 
 static void fwVersionNorm(const char* in, char* out, unsigned n) {
   if (!out || n == 0) return;
@@ -24,11 +42,11 @@ static void fwVersionNorm(const char* in, char* out, unsigned n) {
   while (*in == ' ' || *in == '\t' || *in == '\r' || *in == '\n') in++;
   if ((in[0] == 'v' || in[0] == 'V') && in[1]) in++;
   static const char kPrefix[] = "matrixlamp-";
-  if (strncmp(in, kPrefix, sizeof kPrefix - 1) == 0) in += sizeof kPrefix - 1;
+  if (fwCiPrefix(in, kPrefix)) in += sizeof kPrefix - 1;
   if ((in[0] == 'v' || in[0] == 'V') && in[1]) in++;
   unsigned i = 0;
   while (*in && *in != ' ' && *in != '\t' && *in != '\r' && *in != '\n' && i + 1 < n) {
-    out[i++] = *in++;
+    out[i++] = fwLower(*in++);
   }
   out[i] = 0;
 }
@@ -105,6 +123,17 @@ static int fwVersionCmp(const char* localRaw, const char* remoteRaw) {
   return strcmp(local, remote) == 0 ? 0 : 1;
 }
 
+// 1: remote is an update the lamp should install. 0: same version, or the
+// release is older than what is running.
+static int fwShouldInstall(const char* localRaw, const char* remoteRaw) {
+  char local[28];
+  char remote[28];
+  fwVersionNorm(localRaw, local, sizeof local);
+  fwVersionNorm(remoteRaw, remote, sizeof remote);
+  if (local[0] && strcmp(local, remote) == 0) return 0;
+  return fwVersionCmp(localRaw, remoteRaw) > 0 ? 1 : 0;
+}
+
 #if defined(FW_VER_TEST)
 #include <stdio.h>
 int main() {
@@ -125,6 +154,14 @@ int main() {
   if (fwVersionCmp("1.4.0", "1.3.9") >= 0) return 11;
   if (fwVersionCmp("local", "f8347da-22") <= 0) return 12;
   if (fwVersionCmp("f8347da-22", "  f8347da-22\n") != 0) return 13;
+  fwVersionNorm("MatrixLamp-F8347DA-22", n, sizeof n);
+  if (strcmp(n, "f8347da-22") != 0) return 14;
+  if (fwShouldInstall("f8347da-22", "f8347da-22") != 0) return 15;
+  if (fwShouldInstall("f8347da-22", "matrixlamp-f8347da-22") != 0) return 16;
+  if (fwShouldInstall("f8347da-22", "MatrixLamp-F8347DA-22") != 0) return 17;
+  if (fwShouldInstall("f8347da-22", "f8347da-23") != 1) return 18;
+  if (fwShouldInstall("f8347da-23", "f8347da-22") != 0) return 19;
+  if (fwShouldInstall("local", "f8347da-22") != 1) return 20;
   printf("ok\n");
   return 0;
 }
