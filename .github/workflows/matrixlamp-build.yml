@@ -46,7 +46,10 @@ jobs:
         id: ver
         run: |
           SHORT=$(git rev-parse --short=7 HEAD)
-          echo "version=${SHORT}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # -r2 marks the smooth-rain firmware so it cannot match the
+          # 8c451aa release already on the lamp. Install update compares
+          # this string to FW_VERSION.
+          echo "version=${SHORT}-${{ github.run_number }}-r2" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Compile

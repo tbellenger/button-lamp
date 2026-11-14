@@ -203,22 +203,23 @@ static void geomBoot() {
 // picture and y grows toward the desk. panelIndex applies PANEL_ROTATE
 // when the pixel is sent, so the head falls downward on the mounted panel.
 //
-// The head is saturated green (80, 255, 80). Pixel j behind it is pure
-// green, 255 - j*35. Every 50 ms step the whole field is scaled by
-// 185/256 (fade by 70), so old drops leave a decaying trail. The Speed
-// slider scales that clock. At 50 it matches a 50 ms frame.
+// y is Q8 pixels (8 fraction bits) plus a private phase, so columns do
+// not hop together. Each show advances y by speed*dt. The head is blended
+// across the two rows it straddles. The field fades in proportion to dt:
+// the old 185/256 cut was once per 50 ms, which is 71 counts of /256.
+// Speed class 1, 2, 3 is 20, 10, and 7 px/s at slider 50. The slider
+// scales that. The head is saturated green (80, 255, 80). Pixel j behind
+// it is pure green, 255 - j*35.
 static const uint8_t RAIN_COLS = 16;
-static const uint8_t RAIN_FRAME_MS = 50;
 struct RainDrop {
-  int8_t y;
+  int16_t y;
   uint8_t len;
   uint8_t speed;
-  uint8_t counter;
+  uint8_t phase;
 };
 static RainDrop g_rain[RAIN_COLS];
 static uint8_t (&g_rainRgb)[256 * 3] = g_modeRam.fx.rainRgb;
 static uint32_t g_rainRng = 0x6D617472u;
-static uint16_t g_rainAcc = 0;
 
 static uint32_t rainRand() {
   g_rainRng = g_rainRng * 1664525u + 1013904223u;
@@ -227,69 +228,88 @@ static uint32_t rainRand() {
 
 static void rainSpawn(uint8_t x, uint8_t fresh) {
   uint32_t r = rainRand();
-  // Length 4..9, speed 1..3. A new drop starts above the panel.
-  // A fresh boot scatters them further up so they do not arrive together.
+  uint8_t phase = (uint8_t)(r >> 16);
+  int row = fresh ? (-20 + (int)((r >> 8) % 20u)) : (-10 + (int)((r >> 8) % 11u));
   g_rain[x].len = (uint8_t)(4u + (r % 6u));
   g_rain[x].speed = (uint8_t)(1u + ((r >> 4) % 3u));
-  g_rain[x].counter = 0;
-  if (fresh) g_rain[x].y = (int8_t)(-20 + (int)((r >> 8) % 20u));
-  else g_rain[x].y = (int8_t)(-10 + (int)((r >> 8) % 11u));
+  g_rain[x].phase = phase;
+  g_rain[x].y = (int16_t)((int32_t)row * 256 + (int)phase);
+}
+
+// Q8 pixels per second. phase spreads columns that share a speed class.
+static int32_t rainVelQ8(uint8_t speed, uint8_t phase, int sp) {
+  int32_t px = (speed == 1) ? 20 : (speed == 2) ? 10 : 7;
+  int32_t wobble = 176 + (int32_t)(phase >> 1);
+  return (px * (int32_t)sp * wobble) / 256;
+}
+
+static void rainBlend(int row, int col, uint8_t cr, uint8_t cg, uint8_t cb, int w) {
+  if (row < 0 || row > 15 || col < 0 || col > 15 || w <= 0) return;
+  uint8_t* p = g_rainRgb + ((row * 16 + col) * 3);
+  uint8_t nr = (uint8_t)(((uint16_t)cr * (uint16_t)w) >> 8);
+  uint8_t ng = (uint8_t)(((uint16_t)cg * (uint16_t)w) >> 8);
+  uint8_t nb = (uint8_t)(((uint16_t)cb * (uint16_t)w) >> 8);
+  if (nr > p[0]) p[0] = nr;
+  if (ng > p[1]) p[1] = ng;
+  if (nb > p[2]) p[2] = nb;
+}
+
+static void rainPaintAt(int col, int32_t posQ8, uint8_t cr, uint8_t cg, uint8_t cb) {
+  int frac = (int)(posQ8 % 256);
+  int row = (int)(posQ8 / 256);
+  if (frac < 0) {
+    frac += 256;
+    row -= 1;
+  }
+  rainBlend(row, col, cr, cg, cb, 256 - frac);
+  rainBlend(row + 1, col, cr, cg, cb, frac);
 }
 
 static void rainPaintDrop(uint8_t x) {
   RainDrop* d = &g_rain[x];
   for (uint8_t j = 0; j < d->len; j++) {
-    int cy = (int)d->y - (int)j;
-    if (cy < 0 || cy > 15) continue;
-    uint8_t* p = g_rainRgb + ((cy * 16 + x) * 3);
-    if (j == 0) {
-      p[0] = 80;
-      p[1] = 255;
-      p[2] = 80;
-    } else {
+    int32_t pos = (int32_t)d->y - ((int32_t)j << 8);
+    if (j == 0) rainPaintAt(x, pos, 80, 255, 80);
+    else {
       int g = 255 - (int)j * 35;
       if (g < 0) g = 0;
-      p[0] = 0;
-      p[1] = (uint8_t)g;
-      p[2] = 0;
+      rainPaintAt(x, pos, 0, (uint8_t)g, 0);
     }
   }
 }
 
-static void rainFrame() {
+static void rainFade(uint32_t dt) {
+  // 71/256 lost per 50 ms, spread across the frames that actually show.
+  int loss = (int)((dt * 71u) / 50u);
+  if (loss < 1) loss = 1;
+  if (loss > 200) loss = 200;
+  uint16_t keep = (uint16_t)(256 - loss);
   for (int i = 0; i < 256 * 3; i++) {
-    g_rainRgb[i] = (uint8_t)(((uint16_t)g_rainRgb[i] * 185u) >> 8);
-  }
-  for (uint8_t x = 0; x < RAIN_COLS; x++) {
-    RainDrop* d = &g_rain[x];
-    d->counter++;
-    if (d->counter >= d->speed) {
-      d->counter = 0;
-      d->y++;
-      if ((int)d->y - (int)d->len > 16) rainSpawn(x, 0);
-    }
-    rainPaintDrop(x);
+    g_rainRgb[i] = (uint8_t)(((uint16_t)g_rainRgb[i] * keep) >> 8);
   }
 }
 
 static void rainBoot() {
   g_rainRng ^= 0xA5A5u;
-  g_rainAcc = 0;
   memset(g_rainRgb, 0, sizeof g_rainRgb);
   for (uint8_t x = 0; x < RAIN_COLS; x++) rainSpawn(x, 1);
 }
 
 static void rainStep(uint8_t speed, uint32_t dt, uint32_t period) {
   (void)period;
+  if (dt < 1u) dt = 1u;
+  if (dt > 100u) dt = 100u;
   int sp = modeSpeed256(speed);
-  uint32_t add = (dt * (uint32_t)sp) / 256u;
-  if (add > 400u) add = 400u;
-  g_rainAcc = (uint16_t)(g_rainAcc + add);
-  uint8_t n = 0;
-  while (g_rainAcc >= RAIN_FRAME_MS && n < 8) {
-    g_rainAcc = (uint16_t)(g_rainAcc - RAIN_FRAME_MS);
-    rainFrame();
-    n++;
+  rainFade(dt);
+  for (uint8_t x = 0; x < RAIN_COLS; x++) {
+    RainDrop* d = &g_rain[x];
+    int32_t vel = rainVelQ8(d->speed, d->phase, sp);
+    int32_t ny = (int32_t)d->y + (vel * (int32_t)dt) / 1000;
+    if (ny > 32767) ny = 32767;
+    if (ny < -32768) ny = -32768;
+    d->y = (int16_t)ny;
+    if (((int)d->y >> 8) - (int)d->len > 16) rainSpawn(x, 0);
+    rainPaintDrop(x);
   }
 }
 
