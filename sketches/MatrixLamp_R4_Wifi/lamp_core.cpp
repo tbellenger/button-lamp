@@ -1,6 +1,9 @@
 #include "lamp_core.h"
+#include "mode_ram.h"
 
 #include <string.h>
+
+LampModeRam g_modeRam;
 
 #if defined(ARDUINO)
 #include <Arduino.h>
@@ -33,8 +36,9 @@ static const uint8_t FX_BRIGHTNESS_CAP = 40;
 static const uint16_t FX_LED_MA_FULL = 60;
 static const uint16_t FX_POWER_BUDGET_MA = 2500;
 
-static uint8_t g_heat[LAMP_FX_N];
+static uint8_t (&g_heat)[LAMP_FX_N] = g_modeRam.fx.heat;
 static uint8_t g_rgb[LAMP_FX_N * 3];
+static_assert(LAMP_FX_N == 256, "heat overlay is 256 bytes");
 static uint8_t g_fxMode = M_FIRE;
 static uint8_t g_fxSpeed = 50;
 static uint8_t g_fxFader = 50;
@@ -140,6 +144,16 @@ void lamp_fx_configure(uint8_t mode, uint8_t speed, uint8_t fader) {
   if (mode >= M_COUNT) mode = M_FIRE;
   if (speed > 100) speed = 100;
   if (fader > 100) fader = 100;
+  if (mode != g_fxMode) {
+    uint8_t prev = g_fxMode;
+    if (prev == M_RADAR && mode != M_RADAR) modesAfterRadar();
+    if (mode == M_FIRE && prev == M_RADAR) {
+      matrixFireReset();
+      matrixFireSetIntensity(50);
+      memset(g_heat, 0, sizeof g_heat);
+      for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
+    }
+  }
   if (mode != g_fxMode || speed != g_fxSpeed || fader != g_fxFader) g_fxDirty = 1;
   g_fxMode = mode;
   g_fxSpeed = speed;
@@ -193,6 +207,7 @@ void lamp_fx_radar_set(const uint8_t* packed, uint8_t count) {
   modesRadarSet(packed, count);
   g_fxDirty = 1;
 }
+uint8_t* lamp_fx_radar_bytes() { return g_modeRam.radar; }
 void lamp_fx_balls_add() { modesMetaAdd(); }
 void lamp_fx_balls_remove() { modesMetaRemove(); }
 void lamp_fx_balls_set(uint8_t n) { modesMetaSet(n); }

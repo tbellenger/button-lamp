@@ -62,4 +62,4 @@ If the panel stays white, or the board never comes back, double-tap reset until 
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 122636 B flash (46% of the 262144 figure in `boards.txt`), 20936 B globals (63% of 32768), 11832 B left for locals. The `.bin` is 122644 B. The `.ota` is 98758 B. The linker stops the image at 245760 B. NeoPixel mallocs another 768 B for the 256 LEDs. The radar loop keeps up to 26 frames (3328 B) in RAM.
+Core 1.6.0, NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 123520 B flash (47% of the 262144 figure in `boards.txt`), 18456 B globals (56% of 32768), 14312 B left for locals. The `.bin` is 123528 B. The `.ota` is 99579 B. The linker stops the image at 245760 B. NeoPixel mallocs another 768 B for the 256 LEDs. The radar frames are 26×128 B and share that RAM with the other presets' scratch. A watchdog reboots the board if the main loop stays stuck.

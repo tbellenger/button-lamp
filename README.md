@@ -289,7 +289,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 122636 B flash (46% of the 262144 `boards.txt` figure), 20936 B globals (63% of 32768), 11832 B left for locals. The exported `.bin` is 122644 B. The `.ota` is 98758 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. WiFiClient adds a 1024 B receive FIFO on the heap while a client is connected. The radar client adds another while a poll is up. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. The committed radar frames are 3328 B. A refresh is staged in the HTTP and OTA scratch buffers, which are free while that fetch runs, so a failed download leaves the previous frames on the panel.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 123520 B flash (47% of the 262144 `boards.txt` figure), 18456 B globals (56% of 32768), 14312 B left for locals. The exported `.bin` is 123528 B. The `.ota` is 99579 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. One `WiFiClient` RX fifo (1024 B) is shared by the page and the radar fetch. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. The 3328 B of nibble-packed radar frames share RAM with the other presets' scratch, so they are not a second buffer. A refresh is staged in the HTTP and OTA scratch buffers, which are free while that fetch runs, so a failed download leaves the previous frames on the panel.
 
 #### WiFi firmware update
 
