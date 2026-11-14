@@ -12,7 +12,7 @@
 //     or a GitHub update owns the bridge
 //   - connects with one AT command (DNS + TCP inside the ESP) and waits
 //     longer than that command so the bridge stays in sync
-//   - reads on a 40 ms pace, in chunks, and never calls connected()
+//   - reads on a 40 ms pace, 64 bytes per AT+CLIENTRECEIVE, never WiFiClient::read()
 //   - keeps the bytes in a staging buffer until the header checks pass,
 //     then copies them into the frame the panel paints
 //
@@ -43,8 +43,8 @@ static const uint8_t RF_IDLE = 0;
 static const uint8_t RF_HDR = 1;
 static const uint8_t RF_BODY = 2;
 
-static WiFiClient& radarCli() {
-  static WiFiClient c;
+static AtClient& radarCli() {
+  static AtClient c;
   return c;
 }
 
@@ -68,6 +68,8 @@ static uint32_t g_rUnix = 0;
 static uint32_t g_rGotMs = 0;
 static uint8_t g_rFresh = 0;
 static uint8_t g_rRain = 0;
+// 0 off. 1 means the page toggle is on (prefs store that as 2).
+static uint8_t g_autoRadar = 0;
 
 static uint8_t radarFrameCount() { return g_rCount; }
 static uint8_t radarFresh() { return g_rFresh; }
@@ -279,13 +281,12 @@ static void radarRead(uint32_t now) {
   Serial.print(' ');
   Serial.println(t1 - t0);
   if (avail <= 0) return;
-  if (avail > 256) avail = 256;
-  uint8_t tmp[256];
+  if (avail > (int)AT_READ_MAX) avail = (int)AT_READ_MAX;
+  uint8_t tmp[AT_READ_MAX];
   t0 = millis();
   Serial.print(t0);
   Serial.println(F(" radar rd b"));
-  modem.timeout(800);
-  int n = radarCli().read(tmp, (size_t)avail);
+  int n = radarCli().readAt(tmp, (size_t)avail);
   t1 = millis();
   modem.timeout(MODEM_CMD_BUDGET_MS);
   Serial.print(t1);
@@ -352,6 +353,14 @@ static void radarBegin(uint32_t now) {
 }
 
 static void radarPoll(uint32_t now) {
+  // Background fetch only while the radar preset is showing, or after the
+  // page toggle has been turned on (saved as 2, loaded into g_autoRadar).
+  // The old pref value 1 was an implicit default and must not poll.
+  if (g_mode != M_RADAR && !g_autoRadar) {
+    if (g_rPhase != RF_IDLE) radarFail(F("off"));
+    g_rArm = 0;
+    return;
+  }
   // The web server and GitHub update share the same AT bridge. Do not
   // start or continue a radar command while either one is using it.
   if (g_http != PH_IDLE || g_otaActive || g_ghPend) {
@@ -381,7 +390,6 @@ static void radarPoll(uint32_t now) {
   radarRead(now);
 }
 
-static uint8_t g_autoRadar = 1;
 static uint8_t g_autoHeld = 0;
 static uint8_t g_autoPrev = M_FIRE;
 static uint8_t g_autoBlock = 0;

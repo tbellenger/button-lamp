@@ -408,6 +408,10 @@ static void mdnsServicePoll(uint32_t now, const uint8_t ipb[4], const char* cons
     if (pkt <= 0) break;
     int want = pkt;
     if (want > (int)sizeof g_mdnsPkt) want = (int)sizeof g_mdnsPkt;
+    // WiFiUDP::_read() ignores this length and asks the ESP for up to
+    // 1460 bytes. The socket id is private, so this path cannot use the
+    // 64-byte AT read. mDNS datagrams are smaller than the 512-byte UART
+    // ring, which is why this is left on the library read.
     int got = g_mdnsUdp->read(g_mdnsPkt, (size_t)want);
     if (pkt > want) {
       uint8_t dump[32];
