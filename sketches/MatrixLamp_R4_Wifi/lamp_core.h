@@ -43,6 +43,8 @@ const char* lamp_fx_mode_name(uint8_t mode);
 int lamp_fx_mode_from_name(const char* s);
 // Packed radar frames (128 bytes each, north up). count 0 clears the loop.
 void lamp_fx_radar_set(const uint8_t* packed, uint8_t count);
+// The 26-frame store. It aliases the other presets' scratch RAM.
+uint8_t* lamp_fx_radar_bytes();
 void lamp_fx_balls_add();
 void lamp_fx_balls_remove();
 void lamp_fx_balls_set(uint8_t n);

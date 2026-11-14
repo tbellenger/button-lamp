@@ -37,10 +37,10 @@ static const uint8_t RF_IDLE = 0;
 static const uint8_t RF_HDR = 1;
 static const uint8_t RF_BODY = 2;
 
-static AtClient& radarCli() {
-  static AtClient c;
-  return c;
-}
+// The page client. A second AtClient would new a 1024-byte RX fifo and
+// leave the stack with a few hundred bytes, which is how radar playback
+// hard-faulted with no reboot. The fetch only runs while HTTP is idle.
+static AtClient& radarCli() { return g_client; }
 
 static uint8_t g_rPhase = RF_IDLE;
 static uint8_t g_rArm = 0;
@@ -49,7 +49,6 @@ static char g_rHdr[256];
 static uint16_t g_rHdrN = 0;
 static uint16_t g_rNeed = 0;
 static uint16_t g_rFill = 0;
-static uint8_t g_rShow[RADAR_FRAMES_MAX * RADAR_FRAME_BYTES];
 
 // Staging reuses the HTTP and OTA scratch buffers. radarPoll only runs
 // while the server is idle and no update is in progress, so those arrays
@@ -81,6 +80,10 @@ static uint8_t g_rRain = 0;
 static uint8_t g_autoRadar = 0;
 
 static uint8_t radarFrameCount() { return g_rCount; }
+static uint8_t radarPlayIndex() {
+  if (g_rCount <= 1) return 0;
+  return radarFrameIndex(millis(), g_rCount);
+}
 static uint8_t radarFresh() { return g_rFresh; }
 static uint8_t radarRain() { return (g_rFresh && (g_rFlags & 1u)) ? 1 : 0; }
 
@@ -95,7 +98,7 @@ static void radarLog(const __FlashStringHelper* s) {
 static void radarShowCommit(uint8_t n) {
   g_rCount = n;
   if (!n) lamp_fx_radar_set(0, 0);
-  else lamp_fx_radar_set(g_rShow, n);
+  else lamp_fx_radar_set(lamp_fx_radar_bytes(), n);
 }
 
 static void radarStop() {
@@ -110,7 +113,7 @@ static void radarStop() {
   g_rPhase = RF_IDLE;
 }
 
-// Failure leaves g_rShow alone. The loop on the panel stays up.
+// Failure leaves the frames already on the panel alone.
 static void radarFail(const __FlashStringHelper* why) {
   if (g_rPhase != RF_IDLE) radarStop();
   g_rFill = 0;
@@ -183,6 +186,7 @@ static bool radarReadSome(uint8_t* buf, int cap, uint32_t deadline, int* nout) {
     int avail = radarCli().available();
     modem.timeout(MODEM_CMD_BUDGET_MS);
     if (avail <= 0) {
+      wdtPet();
       delay(15);
       continue;
     }
@@ -245,7 +249,7 @@ static void radarCommitStage() {
     radarFail(F("bad"));
     return;
   }
-  radarScratchCopy(g_rShow, RADAR_HEAD_BYTES,
+  radarScratchCopy(lamp_fx_radar_bytes(), RADAR_HEAD_BYTES,
                    (uint16_t)((uint16_t)info.frames * RADAR_FRAME_BYTES));
   radarStop();
   g_rFlags = info.flags;

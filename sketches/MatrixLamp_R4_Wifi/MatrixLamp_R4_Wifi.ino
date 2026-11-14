@@ -59,9 +59,9 @@
    OTAUpdate's non-blocking startDownload. There is no local upload.
 
    Core 1.6.0, NeoPixel 1.15.5, OTAUpdate from that core, no secrets.h:
-   122636 B flash (46% of the 262144 boards.txt figure), 20936 B globals
-   (63% of 32768), 11832 B left for locals. The .bin is 122644 B and the
-   .ota is 98758 B. The linker image max is 245760 B (256 KB minus the
+   123520 B flash (47% of the 262144 boards.txt figure), 18456 B globals
+   (56% of 32768), 14312 B left for locals. The .bin is 123528 B and the
+   .ota is 99579 B. The linker image max is 245760 B (256 KB minus the
    16 KB bootloader). NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -69,6 +69,7 @@
 #include <WiFiS3.h>
 #include <Modem.h>
 #include <Adafruit_NeoPixel.h>
+#include <WDT.h>
 #include <stdio.h>
 #include <string.h>
 #include "Arduino_LED_Matrix.h"
@@ -255,6 +256,11 @@ static int g_scrollX = -MATRIX_W;
 static uint32_t g_scrollLast = 0;
 static char g_ipText[16] = "";
 static int g_ipCols = 0;
+static uint32_t g_lastShowMs = 0;
+static uint32_t g_lastWebMs = 0;
+static uint8_t g_wdtOn = 0;
+
+static void wdtPet();
 
 #include "radar_client.h"
 
@@ -444,6 +450,7 @@ static void matrixResume() {
 static void panelShow() {
   matrixPause();
   g_panel.show();
+  g_lastShowMs = millis();
   matrixResume();
 }
 
@@ -1337,6 +1344,7 @@ static void webSetup() {
 }
 
 static void webPoll(uint32_t now) {
+  g_lastWebMs = now;
   if (g_wifi == WIFI_OFF) return;
   if (g_http == PH_READ) { httpRead(now); return; }
   if (g_http == PH_WRITE) { httpWrite(); return; }
@@ -1436,6 +1444,15 @@ void setup() {
   matrixBegin();
   g_scrollTrack = false;
   lamp_fx_mark_dirty();
+  // A hard fault with the watchdog off freezes the panel, the page, and
+  // serial together. 70 s is longer than one modem command (the OTA start
+  // waits up to 60 s) and shorter than staying dead.
+  g_wdtOn = WDT.begin(70000) ? 1 : 0;
+  Serial.println(g_wdtOn ? F("WDT 70s") : F("WDT off"));
+}
+
+static void wdtPet() {
+  if (g_wdtOn) WDT.refresh();
 }
 
 extern "C" void* sbrk(int);
@@ -1458,6 +1475,14 @@ static void heartbeat(uint32_t now) {
   Serial.print(lamp_fx_mode_name(g_mode));
   Serial.print(F(" radar "));
   Serial.print(g_rPhase);
+  Serial.print(F(" rframe "));
+  Serial.print(radarPlayIndex());
+  Serial.print('/');
+  Serial.print(radarFrameCount());
+  Serial.print(F(" show "));
+  Serial.print(g_lastShowMs ? (uint32_t)(now - g_lastShowMs) : 0);
+  Serial.print(F(" web "));
+  Serial.print(g_lastWebMs ? (uint32_t)(now - g_lastWebMs) : 0);
   Serial.print(F(" auto "));
   Serial.print(g_autoRadar);
   Serial.print(F(" gh "));
@@ -1466,6 +1491,7 @@ static void heartbeat(uint32_t now) {
 
 void loop() {
   uint32_t now = millis();
+  wdtPet();
   heartbeat(now);
   if (g_rebootAfter && (int32_t)(now - g_rebootAt) >= 0) rebootNow();
   // Paint before any radar AT command. A connect still blocks once it

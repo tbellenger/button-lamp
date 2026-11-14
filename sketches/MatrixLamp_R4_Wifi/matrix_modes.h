@@ -35,6 +35,7 @@
 #include "lamp_ids.h"
 #include "lamp_core.h"
 #include "radar_format.h"
+#include "mode_ram.h"
 
 struct ModeIn {
   uint8_t mode;
@@ -155,8 +156,8 @@ static void modesMetaSet(uint8_t n) {
 }
 static uint8_t modesMetaCount() { return g_metaN; }
 
-static uint8_t g_dye[256];
-static uint8_t g_dyeH[256];
+static uint8_t (&g_dye)[256] = g_modeRam.fx.dye;
+static uint8_t (&g_dyeH)[256] = g_modeRam.fx.dyeH;
 static float g_fluidT = 0.0f;
 static uint8_t g_fluidTick = 0;
 
@@ -179,8 +180,8 @@ static void fluidInject(int cx, int cy, uint8_t hue, uint8_t amt) {
 
 // Radius (1/16 px) and angle (0..255 = one turn) for each LED, in logical
 // picture space. panelIndex applies PANEL_ROTATE when the pixel is sent.
-static uint8_t g_polDist[256];
-static uint8_t g_polAng[256];
+static uint8_t (&g_polDist)[256] = g_modeRam.fx.polDist;
+static uint8_t (&g_polAng)[256] = g_modeRam.fx.polAng;
 
 static void geomBoot() {
   for (int y = 0; y < 16; y++) {
@@ -215,7 +216,7 @@ struct RainDrop {
   uint8_t counter;
 };
 static RainDrop g_rain[RAIN_COLS];
-static uint8_t g_rainRgb[256 * 3];
+static uint8_t (&g_rainRgb)[256 * 3] = g_modeRam.fx.rainRgb;
 static uint32_t g_rainRng = 0x6D617472u;
 static uint16_t g_rainAcc = 0;
 
@@ -503,10 +504,23 @@ static const float SP_R0 = 0.35f;
 static const float SP_R1 = 9.50f;
 // Gaussian table below is exp(-d^2 / (2 * 1.22^2)).
 // Centreline in 1/16 px. The Gaussian of d^2 is a 64-step table.
-static int16_t g_spX[SP_N];
-static int16_t g_spY[SP_N];
-static uint8_t g_spU[SP_N];
+static_assert(SP_N == 96, "spiral cache overlay is 96 points");
+static int16_t (&g_spX)[SP_N] = g_modeRam.fx.spX;
+static int16_t (&g_spY)[SP_N] = g_modeRam.fx.spY;
+static uint8_t (&g_spU)[SP_N] = g_modeRam.fx.spU;
 static uint32_t g_spNow = 0xffffffffu;
+
+// Radar frames reuse this scratch. Coming back rebuilds the tables.
+static void modesAfterRadar() {
+  g_spNow = 0xffffffffu;
+  geomBoot();
+  memset(g_dye, 0, sizeof g_dye);
+  memset(g_dyeH, 0, sizeof g_dyeH);
+  fluidInject(4, 5, 200, 220);
+  fluidInject(11, 10, 30, 200);
+  fluidInject(8, 3, 140, 160);
+  rainBoot();
+}
 static const uint8_t kGauss[64] = {
   255,239,230,220,211,202,194,186,178,171,164,157,151,145,139,133,
   128,122,117,112,108,103, 99, 95, 91, 87, 84, 80, 77, 74, 71, 68,
@@ -777,19 +791,26 @@ static void paintRadarHome(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
 static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
+  if ((unsigned)x >= 16u || (unsigned)y >= 16u) return;
   uint8_t n = g_radarN;
   uint8_t idx = 0;
   uint8_t level = 0;
-  if (n && g_radarBits && (unsigned)x < 16u && (unsigned)y < 16u) {
+  if (!n || !g_radarBits) {
+    // Waiting on the fetch. A dim checker replaces the previous preset
+    // so a frozen old frame is not what the panel keeps showing.
+    if (((x + y) & 3) == 0) *b = 36;
+    else *b = 8;
+  } else {
     idx = radarFrameIndex(now, n);
+    if (idx >= n) idx = (uint8_t)(n - 1u);
     const uint8_t* frame = g_radarBits + (uint16_t)idx * RADAR_FRAME_BYTES;
     level = radarLevelAt(frame, x, y);
     if (level > 15) level = 15;
+    uint8_t applied = lamp_fx_applied(fader);
+    *r = offChannel(kRadarRgb[level][0], applied);
+    *g = offChannel(kRadarRgb[level][1], applied);
+    *b = offChannel(kRadarRgb[level][2], applied);
   }
-  uint8_t applied = lamp_fx_applied(fader);
-  *r = offChannel(kRadarRgb[level][0], applied);
-  *g = offChannel(kRadarRgb[level][1], applied);
-  *b = offChannel(kRadarRgb[level][2], applied);
   uint8_t bar = radarBarLength(n ? idx : 0, n);
   if (y == 15 && (unsigned)x < bar) paintDimWhite(fader, r, g, b);
   if (x == 7 && y == 7) paintRadarHome(fader, r, g, b);
