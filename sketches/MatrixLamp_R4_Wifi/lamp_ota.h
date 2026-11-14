@@ -30,7 +30,15 @@ static const uint32_t SKETCH_MAX_BYTES = 262144u - 16384u;
 // WiFiS3 Modem::write still formats that line into a 128-byte tx_buff
 // (MAX_BUFF_SIZE). OTAUpdate::startDownload therefore chops the URL and
 // returns Error::Modem (-26) without the bridge ever seeing the request.
-// The sketch writes the line to Serial2 itself.
+// The sketch writes the line to Serial2 itself. UART::availableForWrite
+// is the Print default and always returns 0, so the writer must not wait
+// on it. Bridge 0.6.0 chAT accepts 1024 bytes and does not quote the URL.
+// Arduino_ESP32_OTA 0.3.1 then calls HttpClient::get(path()) and drops the
+// query string, so a signed release-asset URL cannot succeed on this
+// bridge. Set OTA_DIRECT_URL to a 200 response with no query instead.
+#ifndef OTA_DIRECT_URL
+#define OTA_DIRECT_URL ""
+#endif
 static const size_t OTA_AT_LINE_MAX = 1024;
 
 static const char SETUP_PAGE[] =
@@ -665,40 +673,50 @@ static bool otaAtLineFits(const char* url) {
   return n < OTA_AT_LINE_MAX;
 }
 
+static void otaLogRaw(const uint8_t* b, int n) {
+  Serial.print(F("OTA raw "));
+  Serial.print(n);
+  Serial.print(' ');
+  int show = n;
+  if (show > 64) show = 64;
+  for (int i = 0; i < show; i++) {
+    char c = (char)b[i];
+    if (c >= 32 && c < 127) Serial.write(c);
+    else {
+      Serial.print('\\');
+      if (b[i] < 16) Serial.print('0');
+      Serial.print(b[i], HEX);
+    }
+  }
+  Serial.println();
+}
+
+// UART::write(uint8_t) blocks until the byte is in the shifter. A short
+// pause every 32 bytes lets the ESP32's UART fifo drain into the 1024-byte
+// chAT buffer. availableForWrite() is not implemented on this UART.
 static bool otaUartWrite(const uint8_t* p, size_t n) {
-  size_t off = 0;
-  uint32_t idle = millis();
-  while (off < n) {
-    wdtPet();
-    if ((uint32_t)(millis() - idle) > 2000u) return false;
-    int room = Serial2.availableForWrite();
-    if (room <= 0) {
-      delay(1);
-      continue;
+  for (size_t i = 0; i < n; i++) {
+    if ((i & 31u) == 0) {
+      wdtPet();
+      delay(4);
     }
-    size_t take = n - off;
-    if (take > (size_t)room) take = (size_t)room;
-    if (take > 32u) take = 32u;
-    size_t wrote = Serial2.write(p + off, take);
-    if (wrote == 0) {
-      delay(1);
-      continue;
-    }
-    off += wrote;
-    idle = millis();
+    if (Serial2.write(p[i]) != 1) return false;
   }
   return true;
 }
 
-// startDownload's reply is +OTADOWNLOADSTART:<content-length> then OK.
-// A negative number is an Arduino_ESP32_OTA::Error. No reply is the same
-// -26 the library returns when modem.write fails.
+// startDownload's reply is +OTADOWNLOADSTART: <content-length> then OK.
+// A negative number is an Arduino_ESP32_OTA::Error (-14 is a non-200).
+// No reply is the same -26 the library returns when modem.write fails.
 static int otaReadStartSize(uint32_t waitMs) {
+  uint8_t raw[80];
+  int rawN = 0;
   char win[64];
   uint8_t n = 0;
   win[0] = 0;
   const char* key = "+OTADOWNLOADSTART:";
   uint32_t start = millis();
+  int result = (int)OTAUpdate::Error::Modem;
   while ((uint32_t)(millis() - start) < waitMs) {
     wdtPet();
     if (Serial2.available() <= 0) {
@@ -706,6 +724,7 @@ static int otaReadStartSize(uint32_t waitMs) {
       continue;
     }
     char c = (char)Serial2.read();
+    if (rawN < (int)sizeof raw) raw[rawN++] = (uint8_t)c;
     if (n + 1 >= sizeof win) {
       memmove(win, win + 1, sizeof win - 2);
       n = (uint8_t)(sizeof win - 2);
@@ -718,9 +737,11 @@ static int otaReadStartSize(uint32_t waitMs) {
     if (!nl) continue;
     p += strlen(key);
     while (*p == ' ' || *p == '\t') p++;
-    return atoi(p);
+    result = atoi(p);
+    break;
   }
-  return (int)OTAUpdate::Error::Modem;
+  otaLogRaw(raw, rawN);
+  return result;
 }
 
 static int otaStartDownload(const char* url) {
@@ -890,22 +911,29 @@ static void otaRunInstall() {
     snprintf(msg, sizeof msg, "Update available v%s", remote);
     otaSet("download", msg);
   }
-  if (!ghResolveAsset() || !g_json[0]) {
+  const char* dl = g_json;
+  if (OTA_DIRECT_URL[0]) {
+    dl = OTA_DIRECT_URL;
+    Serial.println(F("OTA direct"));
+  } else if (!ghResolveAsset() || !g_json[0]) {
     if (!g_otaMsg[0]) otaSet("error", "download http");
     Serial.print(F("OTA error "));
     Serial.println(g_otaMsg);
     otaIdle("error", g_otaMsg);
     return;
   }
-  if (!otaAtLineFits(g_json)) {
+  if (!otaAtLineFits(dl)) {
     Serial.println(F("OTA error url too long"));
     otaIdle("error", "url too long");
     return;
   }
   Serial.print(F("OTA url "));
-  Serial.print(g_ghHost);
-  Serial.print(' ');
-  Serial.println((unsigned)strlen(g_json));
+  if (OTA_DIRECT_URL[0]) Serial.print(F("direct "));
+  else {
+    Serial.print(g_ghHost);
+    Serial.print(' ');
+  }
+  Serial.println((unsigned)strlen(dl));
   int begun = g_otaUpd.begin(OTA_SPIFFS_NAME);
   modem.timeout(MODEM_CMD_BUDGET_MS);
   if (begun != OTAUpdate::OTA_ERROR_NONE) {
@@ -921,7 +949,7 @@ static void otaRunInstall() {
     otaBridgeRecover();
     return;
   }
-  int sz = otaStartDownload(g_json);
+  int sz = otaStartDownload(dl);
   otaModemRest();
   if (sz <= 0) {
     otaFailCode("download failed", sz);
