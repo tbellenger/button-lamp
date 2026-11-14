@@ -59,9 +59,9 @@
    OTAUpdate's non-blocking startDownload. There is no local upload.
 
    Core 1.6.0, NeoPixel 1.15.5, OTAUpdate from that core, no secrets.h:
-   124240 B flash (47% of the 262144 boards.txt figure), 18008 B globals
-   (54% of 32768), 14760 B left for locals. The .bin is 124248 B and the
-   .ota is 100188 B. The linker image max is 245760 B (256 KB minus the
+   124520 B flash (47% of the 262144 boards.txt figure), 18008 B globals
+   (54% of 32768), 14760 B left for locals. The .bin is 124528 B and the
+   .ota is 100421 B. The linker image max is 245760 B (256 KB minus the
    16 KB bootloader). NeoPixel then mallocs 768 B for 256 LEDs.
 */
 

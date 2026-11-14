@@ -19,10 +19,13 @@
 //              Speed is that scroll. Flicker stays on.
 //   off        black, except logical (0, 15): raw yellow (6, 6, 0).
 //              Static. Speed is ignored. Brightness cannot round it off.
-//   radar      live NEXRAD frames. North is up in this picture. Speed
-//              is ignored. A mid-grey pixel marks home at (7, 7),
-//              drawn last, on top of the rain.
-//              The bottom row is a frame-progress bar.
+//   radar      live NEXRAD frames. North is up. The file's x = 0 is
+//              west, but this housing shows logical x = 0 on the right
+//              (the Lightning mask was mirrored for the same reason).
+//              Paint reads file column 15-x. Home in the file is (7, 7);
+//              on the picture that is (8, 7). Speed is ignored.
+//              The bottom row is a frame-progress bar, filling from the
+//              left as Tom sees it.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music.
@@ -824,7 +827,8 @@ static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
     idx = radarFrameIndex(now, n);
     if (idx >= n) idx = (uint8_t)(n - 1u);
     const uint8_t* frame = g_radarBits + (uint16_t)idx * RADAR_FRAME_BYTES;
-    level = radarLevelAt(frame, x, y);
+    // Logical x = 0 is the viewer's right. File x = 0 is west.
+    level = radarLevelAt(frame, 15 - x, y);
     if (level > 15) level = 15;
     uint8_t applied = lamp_fx_applied(fader);
     *r = offChannel(kRadarRgb[level][0], applied);
@@ -832,8 +836,9 @@ static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
     *b = offChannel(kRadarRgb[level][2], applied);
   }
   uint8_t bar = radarBarLength(n ? idx : 0, n);
-  if (y == 15 && (unsigned)x < bar) paintDimWhite(fader, r, g, b);
-  if (x == 7 && y == 7) paintRadarHome(fader, r, g, b);
+  // Grow from the viewer's left, which is logical x = 15.
+  if (y == 15 && bar && (unsigned)x >= (unsigned)(16 - bar)) paintDimWhite(fader, r, g, b);
+  if (x == 8 && y == 7) paintRadarHome(fader, r, g, b);
 }
 
 static void paintOff(int x, int y, uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {

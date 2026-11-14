@@ -27,6 +27,10 @@ static const uint32_t SKETCH_MAX_BYTES = 262144u - 16384u;
 // AT+OTADOWNLOADSTART=<url>,/update.bin\r\n has to fit, and a comma in the
 // URL would split the arguments. A live release-asset Location in
 // November 2026 was 933 bytes (967 with the command), under this cap.
+// WiFiS3 Modem::write still formats that line into a 128-byte tx_buff
+// (MAX_BUFF_SIZE). OTAUpdate::startDownload therefore chops the URL and
+// returns Error::Modem (-26) without the bridge ever seeing the request.
+// The sketch writes the line to Serial2 itself.
 static const size_t OTA_AT_LINE_MAX = 1024;
 
 static const char SETUP_PAGE[] =
@@ -53,6 +57,8 @@ static uint32_t g_otaStallAt = 0;
 static void wifiResetModem();
 static void wifiDrop(uint32_t now);
 static void wifiBegin();
+static void serial2Drain(uint32_t budgetMs);
+static void wdtPet();
 
 static void otaSet(const char* st, const char* msg) {
   g_otaState = st;
@@ -659,6 +665,81 @@ static bool otaAtLineFits(const char* url) {
   return n < OTA_AT_LINE_MAX;
 }
 
+static bool otaUartWrite(const uint8_t* p, size_t n) {
+  size_t off = 0;
+  uint32_t idle = millis();
+  while (off < n) {
+    wdtPet();
+    if ((uint32_t)(millis() - idle) > 2000u) return false;
+    int room = Serial2.availableForWrite();
+    if (room <= 0) {
+      delay(1);
+      continue;
+    }
+    size_t take = n - off;
+    if (take > (size_t)room) take = (size_t)room;
+    if (take > 32u) take = 32u;
+    size_t wrote = Serial2.write(p + off, take);
+    if (wrote == 0) {
+      delay(1);
+      continue;
+    }
+    off += wrote;
+    idle = millis();
+  }
+  return true;
+}
+
+// startDownload's reply is +OTADOWNLOADSTART:<content-length> then OK.
+// A negative number is an Arduino_ESP32_OTA::Error. No reply is the same
+// -26 the library returns when modem.write fails.
+static int otaReadStartSize(uint32_t waitMs) {
+  char win[64];
+  uint8_t n = 0;
+  win[0] = 0;
+  const char* key = "+OTADOWNLOADSTART:";
+  uint32_t start = millis();
+  while ((uint32_t)(millis() - start) < waitMs) {
+    wdtPet();
+    if (Serial2.available() <= 0) {
+      delay(2);
+      continue;
+    }
+    char c = (char)Serial2.read();
+    if (n + 1 >= sizeof win) {
+      memmove(win, win + 1, sizeof win - 2);
+      n = (uint8_t)(sizeof win - 2);
+    }
+    win[n++] = c;
+    win[n] = 0;
+    char* p = strstr(win, key);
+    if (!p) continue;
+    char* nl = strchr(p, '\n');
+    if (!nl) continue;
+    p += strlen(key);
+    while (*p == ' ' || *p == '\t') p++;
+    return atoi(p);
+  }
+  return (int)OTAUpdate::Error::Modem;
+}
+
+static int otaStartDownload(const char* url) {
+  size_t line = strlen("AT+OTADOWNLOADSTART=") + strlen(url) + strlen(",/update.bin\r\n");
+  Serial.print(F("OTA at "));
+  Serial.println((unsigned)line);
+  serial2Drain(40);
+  if (!otaUartWrite((const uint8_t*)"AT+OTADOWNLOADSTART=", strlen("AT+OTADOWNLOADSTART=")) ||
+      !otaUartWrite((const uint8_t*)url, strlen(url)) ||
+      !otaUartWrite((const uint8_t*)",/update.bin\r\n", strlen(",/update.bin\r\n"))) {
+    Serial.println(F("OTA at write"));
+    return (int)OTAUpdate::Error::Modem;
+  }
+  // The bridge connects and reads the HTTP headers before it answers.
+  int sz = otaReadStartSize(60000);
+  serial2Drain(80);
+  return sz;
+}
+
 // Header-only. Stop on the first host that is not github.com: that Location
 // is the signed release-asset URL, which answers 200. OTAUpdate's
 // startDownload treats any other status as an error.
@@ -840,7 +921,7 @@ static void otaRunInstall() {
     otaBridgeRecover();
     return;
   }
-  int sz = g_otaUpd.startDownload(g_json, OTA_SPIFFS_NAME);
+  int sz = otaStartDownload(g_json);
   otaModemRest();
   if (sz <= 0) {
     otaFailCode("download failed", sz);
