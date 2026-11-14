@@ -499,8 +499,8 @@ struct GhHead {
   uint8_t loc;
 };
 
-static WiFiSSLClient& ghClient() {
-  static WiFiSSLClient c;
+static AtSslClient& ghClient() {
+  static AtSslClient c;
   return c;
 }
 
@@ -516,7 +516,7 @@ static bool ghSend(WiFiSSLClient& c, const char* s) {
   return true;
 }
 
-static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
+static int ghReadResponse(AtSslClient& c, GhHead* h,
                           int (*onHead)(GhHead*), int (*onBody)(const uint8_t*, int)) {
   h->code = 0;
   h->length = -1;
@@ -539,10 +539,10 @@ static int ghReadResponse(WiFiSSLClient& c, GhHead* h,
       delay(5);
       continue;
     }
-    uint8_t buf[128];
+    uint8_t buf[AT_READ_MAX];
     int a = c.available();
-    if (a > (int)sizeof buf) a = (int)sizeof buf;
-    int n = c.read(buf, (size_t)a);
+    if (a > (int)AT_READ_MAX) a = (int)AT_READ_MAX;
+    int n = c.readAt(buf, (size_t)a);
     if (n <= 0) continue;
     idle = millis();
     int i = 0;
@@ -639,7 +639,7 @@ static bool ghTakeLocation() {
 static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const uint8_t*, int), GhHead* h) {
   strncpy(g_ghPath, path, sizeof g_ghPath - 1);
   g_ghPath[sizeof g_ghPath - 1] = 0;
-  WiFiSSLClient& c = ghClient();
+  AtSslClient& c = ghClient();
   c.stop();
   // Wait out the TLS handshake. Cutting modem.timeout short of the ESP
   // command desyncs the bridge and the lamp stops answering.

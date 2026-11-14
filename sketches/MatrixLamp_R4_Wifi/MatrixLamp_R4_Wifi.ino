@@ -58,8 +58,8 @@
    ArduinoOTA InternalStorage. There is no local .bin upload.
 
    Core 1.6.0, NeoPixel 1.15.5, ArduinoOTA 1.1.1, no secrets.h:
-   121116 B flash (46% of 262144), 22240 B globals (67% of 32768),
-   10528 B left for locals. The .bin is 121124 B. The GitHub image
+   122220 B flash (46% of 262144), 22244 B globals (67% of 32768),
+   10524 B left for locals. The .bin is 122228 B. The GitHub image
    must be at most 122880 B. NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -196,9 +196,11 @@ static uint8_t g_fader = 50;
 static uint8_t g_speed = 50;
 static uint8_t g_prefsDirty = 0;
 
+#include "at_read.h"
+
 static uint8_t g_wifi = WIFI_OFF;
 static WiFiServer g_server(80);
-static WiFiClient g_client;
+static AtClient g_client;
 static uint8_t g_http = PH_IDLE;
 static char g_req[1024];
 static uint16_t g_reqLen = 0;
@@ -308,7 +310,7 @@ button:disabled{opacity:.35}
 <span id=bcnt>3 of 8</span>
 <button type=button id=badd>+ Ball</button>
 </div>
-<label><input id=ar type=checkbox checked> Auto radar</label>
+<label><input id=ar type=checkbox> Auto radar</label>
 <details><summary>Update</summary>
 <p class=sub>On Spiral, Speed shifts the colour. On Matrix, Speed is the fall. On Radar and Off, Speed does nothing. Updates come from GitHub.</p>
 <div class=row>
@@ -844,12 +846,14 @@ static void flushPrefs() {
 
 #include "lamp_ota.h"
 
+static void serial2Drain(uint32_t budgetMs);
+
 // AT+RESET is ESP.restart() and does not send OK. The RA4M1 then resets
 // itself. SOFTRESETWIFI is not used here: it leaves the default SoftAP up.
 static void rebootNow() {
   g_rebootAfter = 0;
   Serial2.begin(115200);
-  while (Serial2.available() > 0) Serial2.read();
+  serial2Drain(80);
   Serial2.print(F("AT+RESET\r\n"));
   delay(30);
   NVIC_SystemReset();
@@ -927,11 +931,11 @@ static void httpHandle() {
 static void httpRead(uint32_t now) {
   int avail = g_client.available();
   if (avail > 0) {
-    if (avail > HTTP_READ_MAX) avail = HTTP_READ_MAX;
+    if (avail > (int)AT_READ_MAX) avail = (int)AT_READ_MAX;
     int room = (int)sizeof g_req - 1 - (int)g_reqLen;
     if (avail > room) avail = room;
     if (avail > 0) {
-      int n = g_client.read((uint8_t*)g_req + g_reqLen, (size_t)avail);
+      int n = g_client.readAt((uint8_t*)g_req + g_reqLen, (size_t)avail);
       if (n > 0) {
         g_reqLen = (uint16_t)(g_reqLen + n);
         g_req[g_reqLen] = 0;
@@ -1039,8 +1043,16 @@ static void waitAnim(uint32_t ms) {
   }
 }
 
-static void serial2Drain() {
-  while (Serial2.available() > 0) Serial2.read();
+// The ESP32-S3 boot banner keeps the UART FIFO non-empty. An unbounded drain
+// never returns, which is the hang after "WiFi modem restart".
+static void serial2Drain(uint32_t budgetMs) {
+  uint32_t t = millis();
+  uint16_t n = 0;
+  while ((uint32_t)(millis() - t) < budgetMs && n < 400) {
+    if (Serial2.available() <= 0) return;
+    Serial2.read();
+    n++;
+  }
 }
 
 // True when needle shows up on the AT UART. Painting is allowed only
@@ -1074,17 +1086,19 @@ static bool serial2Find(const char* needle, uint32_t waitMs) {
 // restart does not return. modem.begin() must not run afterwards: it
 // would send SOFTRESETWIFI and bring the SoftAP back.
 static bool wifiEspRestart() {
+  uint32_t start = millis();
   Serial2.begin(115200);
-  serial2Drain();
+  serial2Drain(200);
   Serial2.print(F("AT+RESET\r\n"));
   waitAnim(700);
-  serial2Drain();
+  serial2Drain(200);
   for (uint8_t i = 0; i < 10; i++) {
-    serial2Drain();
+    if ((uint32_t)(millis() - start) > 3000) return false;
+    serial2Drain(80);
     Serial2.print(F("AT+FWVERSION?\r\n"));
     if (serial2Find("+FWVERSION:", 350)) {
       serial2Find("OK", 300);
-      serial2Drain();
+      serial2Drain(80);
       modem.beginned = true;
       modem.timeout(MODEM_CMD_BUDGET_MS);
       return true;
@@ -1384,7 +1398,7 @@ static void webPoll(uint32_t now) {
 }
 
 static void loadPrefs() {
-  uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0, autoR = 1;
+  uint8_t mode = M_FIRE, fader = 50, speed = 50, balls = 0, autoR = 0;
   uint16_t port = 0;
   char host[40];
   char path[32];
@@ -1396,7 +1410,8 @@ static void loadPrefs() {
   if (fader <= 100) g_fader = fader;
   if (speed <= 100) g_speed = speed;
   if (balls >= META_MIN && balls <= META_MAX) lamp_fx_balls_set(balls);
-  g_autoRadar = autoR ? 1 : 0;
+  // 2 is an explicit page toggle. 1 is the old implicit default and stays off.
+  g_autoRadar = (autoR == 2) ? 1 : 0;
   Serial.print(F("Prefs "));
   Serial.print(lamp_fx_mode_name(g_mode));
   Serial.print(F(" bri "));
@@ -1439,8 +1454,35 @@ void setup() {
   lamp_fx_mark_dirty();
 }
 
+extern "C" void* sbrk(int);
+
+static int freeHeapBytes() {
+  char stack;
+  char* heap = (char*)sbrk(0);
+  if (heap == (char*)-1) return -1;
+  return (int)(&stack - heap);
+}
+
+static void heartbeat(uint32_t now) {
+  static uint32_t at = 0;
+  if (at && (uint32_t)(now - at) < 2000) return;
+  at = now;
+  Serial.print(now);
+  Serial.print(F(" beat free "));
+  Serial.print(freeHeapBytes());
+  Serial.print(F(" mode "));
+  Serial.print(lamp_fx_mode_name(g_mode));
+  Serial.print(F(" radar "));
+  Serial.print(g_rPhase);
+  Serial.print(F(" auto "));
+  Serial.print(g_autoRadar);
+  Serial.print(F(" gh "));
+  Serial.println(g_otaState);
+}
+
 void loop() {
   uint32_t now = millis();
+  heartbeat(now);
   if (g_rebootAfter && (int32_t)(now - g_rebootAt) >= 0) rebootNow();
   // Paint before any radar AT command. A connect still blocks once it
   // starts, but the scroll has already moved this iteration, and the

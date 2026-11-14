@@ -200,7 +200,7 @@ static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* ba
   dfRead(LAMP_PREFS_ADDR, &p, sizeof p);
   if (hostN) host[0] = 0;
   if (pathN) path[0] = 0;
-  *autoRadar = 1;
+  *autoRadar = 0;
   *port = 0;
   if (p.magic == LAMP_PREFS_MAGIC &&
       p.crc == lampCrc32(&p, offsetof(LampPrefs, crc)) &&
@@ -209,7 +209,7 @@ static bool prefsLoad(uint8_t* mode, uint8_t* fader, uint8_t* speed, uint8_t* ba
     *fader = p.fader;
     *speed = p.speed;
     *balls = p.balls;
-    *autoRadar = p.autoRadar ? 1 : 0;
+    *autoRadar = p.autoRadar;
     *port = p.radarPort;
     if (host && hostN) {
       strncpy(host, p.host, hostN - 1);
@@ -241,7 +241,8 @@ static bool prefsSave(uint8_t mode, uint8_t fader, uint8_t speed, uint8_t balls,
   p.fader = fader;
   p.speed = speed;
   p.balls = balls;
-  p.autoRadar = autoRadar ? 1 : 0;
+  // 0 off, 2 explicit on. Never store 1: that was the old implicit default.
+  p.autoRadar = autoRadar ? 2 : 0;
   p.radarPort = port;
   if (host) strncpy(p.host, host, sizeof p.host - 1);
   if (path) strncpy(p.path, path, sizeof p.path - 1);
