@@ -9,6 +9,13 @@ on:
       - "tools/ota_image.py"
       - "tools/ota/**"
       - ".github/workflows/matrixlamp-build.yml"
+  pull_request:
+    paths:
+      - "sketches/MatrixLamp_R4_Wifi/**"
+      - "sketches/common/**"
+      - "tools/ota_image.py"
+      - "tools/ota/**"
+      - ".github/workflows/matrixlamp-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -107,6 +114,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub releases
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
