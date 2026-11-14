@@ -21,8 +21,9 @@
 // The lamp does not speak TLS.
 //
 // Playback (not in the file): about 4 frames/s, then the newest frame is
-// held for 1 s. Home is logical cell (7, 7). The firmware applies the
-// panel rotation; this file is north-up.
+// held for 1 s. Home is cell (7, 7). This file is north-up and west at
+// x = 0. The seated panel mirrors logical x, so the firmware draws that
+// cell at picture column 8.
 #pragma once
 
 #include <stdint.h>
