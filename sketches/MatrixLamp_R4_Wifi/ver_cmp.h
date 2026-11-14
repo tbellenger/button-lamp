@@ -162,6 +162,10 @@ int main() {
   if (fwShouldInstall("f8347da-22", "f8347da-23") != 1) return 18;
   if (fwShouldInstall("f8347da-23", "f8347da-22") != 0) return 19;
   if (fwShouldInstall("local", "f8347da-22") != 1) return 20;
+  if (fwVersionCmp("8c451aa-40", "abcdef0-41-r2") <= 0) return 21;
+  if (fwVersionCmp("abcdef0-41-r2", "abcdef0-41-r2") != 0) return 22;
+  if (fwShouldInstall("8c451aa-40", "abcdef0-41-r2") != 1) return 23;
+  if (fwShouldInstall("abcdef0-41-r2", "abcdef0-41-r2") != 0) return 24;
   printf("ok\n");
   return 0;
 }

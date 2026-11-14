@@ -59,9 +59,9 @@
    OTAUpdate's non-blocking startDownload. There is no local upload.
 
    Core 1.6.0, NeoPixel 1.15.5, OTAUpdate from that core, no secrets.h:
-   123520 B flash (47% of the 262144 boards.txt figure), 18456 B globals
-   (56% of 32768), 14312 B left for locals. The .bin is 123528 B and the
-   .ota is 99579 B. The linker image max is 245760 B (256 KB minus the
+   124240 B flash (47% of the 262144 boards.txt figure), 18008 B globals
+   (54% of 32768), 14760 B left for locals. The .bin is 124248 B and the
+   .ota is 100188 B. The linker image max is 245760 B (256 KB minus the
    16 KB bootloader). NeoPixel then mallocs 768 B for 256 LEDs.
 */
 
@@ -79,7 +79,7 @@
 #include "fw_version.h"
 #endif
 #ifndef FW_VERSION
-#define FW_VERSION "local"
+#define FW_VERSION "local-r2"
 #endif
 
 #if __has_include("secrets.h")
@@ -232,8 +232,6 @@ static char g_ghFile[40];
 static long g_ghSize = 0;
 static char g_ghHost[64];
 static char g_ghPath[1400];
-static char g_manifest[480];
-static int g_manifestN = 0;
 static uint8_t g_ip[4] = {0, 0, 0, 0};
 static int16_t g_rssi = 0;
 static uint32_t g_lastStatus = 0;

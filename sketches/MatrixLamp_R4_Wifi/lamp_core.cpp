@@ -100,6 +100,9 @@ static void write_visual(int lx, int ly, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 static uint32_t period_ms() {
+  // Matrix rain steps a fraction of a pixel per show. The other presets
+  // keep the slower speed-linked period.
+  if (g_fxMode == M_MATRIX) return 33u;
   uint32_t period = 20u + (uint32_t)(100 - g_fxSpeed) * 130u / 100u;
   if (period < 16u) period = 16u;
   return period;

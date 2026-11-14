@@ -271,7 +271,42 @@ struct GhHead {
   long length;
   uint8_t chunked;
   uint8_t loc;
+  char status[64];
+  char ctype[32];
+  int got;
+  int seen;
+  int phase;
 };
+
+// The manifest is parsed from g_json. That buffer is free here: the page
+// response has already been sent, and the signed download URL is written
+// into it only after the fields are copied out. The old g_manifest[480]
+// rejected the live file (Content-Length 512) in manifestHead, which
+// ghOnce reported as "github read failed" just after the release-assets
+// connect. 8c451aa still has that 480-byte cap, so the published
+// manifest stays under 480 bytes as well.
+static int g_manifestN = 0;
+
+static void ghNote(const GhHead* h, const char* why) {
+  Serial.print(F("OTA http "));
+  Serial.print(why);
+  Serial.print(F(" phase "));
+  Serial.print(h->phase);
+  Serial.print(F(" code "));
+  Serial.print(h->code);
+  Serial.print(F(" len "));
+  Serial.print(h->length);
+  Serial.print(F(" chunk "));
+  Serial.print((int)h->chunked);
+  Serial.print(F(" got "));
+  Serial.print(h->got);
+  Serial.print(F(" seen "));
+  Serial.print(h->seen);
+  Serial.print(F(" stat "));
+  Serial.print(h->status[0] ? h->status : "-");
+  Serial.print(F(" type "));
+  Serial.println(h->ctype[0] ? h->ctype : "-");
+}
 
 static AtSslClient& ghClient() {
   static AtSslClient c;
@@ -299,6 +334,11 @@ static int ghReadResponse(AtSslClient& c, GhHead* h, int (*onHead)(GhHead*),
   h->length = -1;
   h->chunked = 0;
   h->loc = 0;
+  h->status[0] = 0;
+  h->ctype[0] = 0;
+  h->got = 0;
+  h->seen = 0;
+  h->phase = 0;
   g_ghPath[0] = 0;
   char line[96];
   int ln = 0;
@@ -319,6 +359,7 @@ static int ghReadResponse(AtSslClient& c, GhHead* h, int (*onHead)(GhHead*),
     int n = c.readAt(buf, (size_t)a);
     if (n <= 0) continue;
     idle = millis();
+    h->seen += n;
     int i = 0;
     if (phase == 0) {
       for (; i < n; i++) {
@@ -333,19 +374,42 @@ static int ghReadResponse(AtSslClient& c, GhHead* h, int (*onHead)(GhHead*),
           }
           if (ln == 0) {
             phase = 1;
-            if (onHead && !onHead(h)) return 0;
+            h->phase = 1;
+            if (onHead && !onHead(h)) {
+              ghNote(h, "head");
+              return 0;
+            }
             if (headersOnly) return 1;
-            if (h->chunked && h->length < 0) return 0;
+            if (h->chunked && h->length < 0) {
+              ghNote(h, "chunked");
+              otaSet("error", "chunked");
+              return 0;
+            }
             if (h->code >= 300 && h->code < 400) return 1;
             if (h->length == 0) return 1;
             i++;
             break;
           }
           if (h->code == 0) {
+            size_t si = 0;
+            while (line[si] && si + 1 < sizeof h->status) {
+              h->status[si] = line[si];
+              si++;
+            }
+            h->status[si] = 0;
             const char* sp = strchr(line, ' ');
             if (sp) h->code = atoi(sp + 1);
           } else if (ciStarts(line, "Content-Length:")) {
             h->length = strtol(line + 15, 0, 10);
+          } else if (ciStarts(line, "Content-Type:")) {
+            const char* v = line + 13;
+            while (*v == ' ' || *v == '\t') v++;
+            size_t ti = 0;
+            while (v[ti] && v[ti] != ';' && ti + 1 < sizeof h->ctype) {
+              h->ctype[ti] = v[ti];
+              ti++;
+            }
+            h->ctype[ti] = 0;
           } else if (ciStarts(line, "Transfer-Encoding:") && strstr(line, "chunked")) {
             h->chunked = 1;
           }
@@ -372,13 +436,20 @@ static int ghReadResponse(AtSslClient& c, GhHead* h, int (*onHead)(GhHead*),
       int bn = n - i;
       if (h->length >= 0 && got + bn > h->length) bn = (int)(h->length - got);
       if (bn > 0) {
-        if (onBody && !onBody(buf + i, bn)) return 0;
+        if (onBody && !onBody(buf + i, bn)) {
+          h->got = (int)got;
+          ghNote(h, "body");
+          return 0;
+        }
         got += bn;
+        h->got = (int)got;
       }
     }
   }
+  h->phase = phase;
+  h->got = (int)got;
   if (phase == 1 && h->length >= 0 && got >= h->length) return 1;
-  Serial.println(F("OTA body timeout"));
+  ghNote(h, "timeout");
   return 2;
 }
 
@@ -436,7 +507,13 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
               ghSend(c, " HTTP/1.0\r\nHost: ") && ghSend(c, g_ghHost) &&
               ghSend(c, "\r\nUser-Agent: MatrixLamp\r\nConnection: close\r\n\r\n");
   modem.timeout(8000);
-  int rd = sent ? ghReadResponse(c, h, onHead, onBody, headersOnly) : 0;
+  int rd = 0;
+  if (!sent) {
+    Serial.print(F("OTA http fail send path "));
+    Serial.println((unsigned)strlen(g_ghPath));
+  } else {
+    rd = ghReadResponse(c, h, onHead, onBody, headersOnly);
+  }
   modem.timeout(MODEM_CMD_BUDGET_MS);
   c.stop();
   if (rd == 2) {
@@ -447,6 +524,7 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
     if (!g_otaMsg[0]) otaSet("error", "github read failed");
     return false;
   }
+  ghNote(h, "ok");
   if (!headersOnly && h->chunked) {
     otaSet("error", "chunked");
     return false;
@@ -488,16 +566,22 @@ static bool jsonString(const char* j, const char* key, char* out, size_t n) {
 }
 
 static int manifestBody(const uint8_t* p, int n) {
-  if (g_manifestN + n >= (int)sizeof g_manifest) return 0;
-  memcpy(g_manifest + g_manifestN, p, (size_t)n);
+  if (g_manifestN + n >= (int)sizeof g_json) {
+    otaSet("error", "manifest too big");
+    return 0;
+  }
+  memcpy(g_json + g_manifestN, p, (size_t)n);
   g_manifestN += n;
-  g_manifest[g_manifestN] = 0;
+  g_json[g_manifestN] = 0;
   return 1;
 }
 
 static int manifestHead(GhHead* h) {
   if (h->code != 200) return 1;
-  if (h->length < 2 || h->length >= (long)sizeof g_manifest) return 0;
+  if (h->length < 2 || h->length >= (long)sizeof g_json) {
+    otaSet("error", "manifest too big");
+    return 0;
+  }
   return 1;
 }
 
@@ -515,7 +599,7 @@ static bool fileNameOk(const char* s) {
 static bool ghFetchManifest() {
   strncpy(g_ghHost, "github.com", sizeof g_ghHost);
   g_manifestN = 0;
-  g_manifest[0] = 0;
+  g_json[0] = 0;
   g_otaMsg[0] = 0;
   for (int hop = 0; hop < 4; hop++) {
     char pathBuf[1400];
@@ -532,17 +616,17 @@ static bool ghFetchManifest() {
       g_ghVer[0] = 0;
       g_ghFile[0] = 0;
       g_ghSha[0] = 0;
-      g_ghSize = jsonLong(g_manifest, "size");
-      if (!jsonString(g_manifest, "version", g_ghVer, sizeof g_ghVer)) {
+      g_ghSize = jsonLong(g_json, "size");
+      if (!jsonString(g_json, "version", g_ghVer, sizeof g_ghVer)) {
         otaSet("error", "bad manifest");
         return false;
       }
-      jsonString(g_manifest, "sha", g_ghSha, sizeof g_ghSha);
+      jsonString(g_json, "sha", g_ghSha, sizeof g_ghSha);
       if (g_ghSize < 4096 || (uint32_t)g_ghSize > SKETCH_MAX_BYTES) {
         otaSet("error", "bad manifest");
         return false;
       }
-      if (!jsonString(g_manifest, "ota", g_ghFile, sizeof g_ghFile) || !fileNameOk(g_ghFile)) {
+      if (!jsonString(g_json, "ota", g_ghFile, sizeof g_ghFile) || !fileNameOk(g_ghFile)) {
         strncpy(g_ghFile, GH_OTA_NAME, sizeof g_ghFile - 1);
         g_ghFile[sizeof g_ghFile - 1] = 0;
       }

@@ -46,7 +46,10 @@ jobs:
         id: ver
         run: |
           SHORT=$(git rev-parse --short=7 HEAD)
-          echo "version=${SHORT}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # -r2 marks the smooth-rain firmware so it cannot match the
+          # 8c451aa release already on the lamp. Install update compares
+          # this string to FW_VERSION.
+          echo "version=${SHORT}-${{ github.run_number }}-r2" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Compile
@@ -85,7 +88,11 @@ jobs:
           export SIZE SHA CRC OTASIZE OTASHA MAX
           python3 - <<'PY'
           import json, os
-          json.dump({
+          # Compact. Firmware 8c451aa copies the body into a 480-byte
+          # buffer and rejects Content-Length >= 480, which is what the
+          # pretty-printed 512-byte manifest did. Stay under that so the
+          # lamp already in the field can install this release.
+          raw = json.dumps({
             "name": "MatrixLamp_R4_Wifi",
             "version": os.environ["VERSION"],
             "sha": os.environ["GITSHA"],
@@ -99,8 +106,11 @@ jobs:
             "fqbn": "arduino:renesas_uno:unor4wifi",
             "sketchMax": int(os.environ["MAX"]),
             "otaMagic": "0x23411002"
-          }, open("dist/manifest.json", "w"), indent=2)
-          open("dist/manifest.json", "a").write("\n")
+          }, separators=(",", ":"))
+          if len(raw) >= 480:
+            raise SystemExit("manifest.json is %d bytes; 8c451aa allows at most 479" % len(raw))
+          open("dist/manifest.json", "w").write(raw)
+          print("manifest.json", len(raw), "bytes")
           PY
           echo "version ${{ steps.ver.outputs.version }}  bin $SIZE  ota $OTASIZE  crc32 $CRC"
 
