@@ -1,13 +1,33 @@
-// WiFi OTA for the Uno R4 WiFi.
-// The image is staged with ArduinoOTA's InternalStorage (Renesas code flash).
-// The IDE network port is not started (NO_OTA_NETWORK): this sketch already
-// has an HTTP server and its own mDNS responder.
+// GitHub OTA for the Uno R4 WiFi, through the core's OTAUpdate library.
+// The ESP32-S3 stages the image (bridge firmware 0.6.0, Arduino_ESP32_OTA).
+// There is no ArduinoOTA port, no password, and no local upload.
+//
+// Install update checks manifest.json on the matrixlamp-latest release.
+// The same normalized version is "Up to date". A newer version resolves
+// GitHub's 302 (OTAUpdate does not follow redirects; the AT line is the
+// final https URL) and calls startDownload. loop() polls progress.
+// verify() then update("/update.bin") hands the file to BOSSA, which
+// resets the RA4M1 only. setup() then restarts the ESP32.
 #pragma once
 
+#include <OTAUpdate.h>
 #include <WiFiSSLClient.h>
 #include <string.h>
 #include <stdlib.h>
+#include "at_read.h"
+#include "ota_ca.h"
 #include "ver_cmp.h"
+
+// Core 1.6.0 memory_regions.ld: FLASH_LENGTH 0x40000, FLASH_IMAGE_START 0x4000.
+// The linker length is that difference. boards.txt upload.maximum_size is
+// the whole 256 KB, which includes the 16 KB bootloader.
+static const uint32_t SKETCH_MAX_BYTES = 262144u - 16384u;
+
+// chAT's command buffer on bridge 0.6.0 is 1024 bytes (SudoMaker/chAT).
+// AT+OTADOWNLOADSTART=<url>,/update.bin\r\n has to fit, and a comma in the
+// URL would split the arguments. A live release-asset Location in
+// November 2026 was 933 bytes (967 with the command), under this cap.
+static const size_t OTA_AT_LINE_MAX = 1024;
 
 static const char SETUP_PAGE[] =
   "<!DOCTYPE html><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
@@ -20,10 +40,19 @@ static const char SETUP_PAGE[] =
 
 static const char GH_MANIFEST[] =
   "/tbellenger/button-lamp/releases/download/matrixlamp-latest/manifest.json";
+static const char GH_OTA_NAME[] = "MatrixLamp_R4_Wifi.ino.ota";
+static const char OTA_SPIFFS_NAME[] = "/update.bin";
 
-static void otaFinishUpload();
+static OTAUpdate g_otaUpd;
+static uint8_t g_otaPhase = 0;
+static int g_otaExpect = 0;
+static int g_otaProg = 0;
+static uint32_t g_otaPollAt = 0;
+static uint32_t g_otaStallAt = 0;
 
-extern "C" uint8_t __ROM_Start;
+static void wifiResetModem();
+static void wifiDrop(uint32_t now);
+static void wifiBegin();
 
 static void otaSet(const char* st, const char* msg) {
   g_otaState = st;
@@ -38,27 +67,16 @@ static void otaReply(int code, const char* reason, const char* msg) {
   httpBegin(code, reason, "text/plain; charset=utf-8", msg, (uint16_t)strlen(msg));
 }
 
-static void otaSolid(uint8_t r, uint8_t g, uint8_t b) {
-  uint32_t c = g_panel.Color(r, g, b);
-  for (int i = 0; i < PANEL_N; i++) g_panel.setPixelColor((uint16_t)i, c);
-  g_panel.show();
+static void otaModemRest() {
+  WiFi.setTimeout(0);
+  modem.timeout(MODEM_CMD_BUDGET_MS);
 }
 
-static void otaPaint(int pct) {
-  if (pct < 0) pct = 0;
-  if (pct > 100) pct = 100;
-  if (pct == g_otaPaint) return;
-  g_otaPaint = pct;
-  g_otaPct = pct;
-  // A single pixel is invisible through the diffuser. 0% is one full row.
-  int lit = (PANEL_N * pct) / 100;
-  if (lit < PANEL_W) lit = PANEL_W;
-  if (pct >= 100) lit = PANEL_N;
-  g_panel.clear();
-  for (int i = 0; i < lit; i++) {
-    g_panel.setPixelColor(panelIndex(i % PANEL_W, i / PANEL_W), g_panel.Color(255, 80, 0));
-  }
-  g_panel.show();
+static void otaIdle(const char* st, const char* msg) {
+  g_otaPhase = 0;
+  g_otaActive = 0;
+  otaModemRest();
+  if (st) otaSet(st, msg);
 }
 
 static bool ciEq(const char* a, const char* b, size_t n) {
@@ -116,252 +134,6 @@ static long headerLong(const char* name) {
   char buf[16];
   if (!headerValue(name, buf, sizeof buf)) return -1;
   return strtol(buf, 0, 10);
-}
-
-static bool imageOk() {
-  if (g_otaHeadN < 8 || g_otaGot != g_otaLen || g_otaFail) return false;
-  if (g_otaHead[0] == 0x7f && g_otaHead[1] == 'E') return false;
-  uint32_t sp = 0;
-  uint32_t rh = 0;
-  memcpy(&sp, g_otaHead, 4);
-  memcpy(&rh, g_otaHead + 4, 4);
-  uint32_t start = (uint32_t)&__ROM_Start;
-  bool spOk = (sp & 3u) == 0 && sp >= 0x20000100u && sp <= 0x20008000u;
-  uint32_t reset = rh & ~1u;
-  bool rhOk = (rh & 1u) != 0 && reset >= start && reset < start + g_otaLen;
-  return spOk && rhOk;
-}
-
-static void otaCloseStorage() {
-  if (!g_otaOpened) return;
-  InternalStorage.close();
-  g_otaOpened = 0;
-}
-
-static void otaResumeLamp() {
-  g_otaActive = 0;
-  g_otaPaint = -1;
-  matrixResume();
-  lamp_fx_mark_dirty();
-}
-
-static void crcBegin() { g_crcState = 0xffffffffu; }
-
-static void crcAdd(const uint8_t* p, uint32_t n) {
-  for (uint32_t i = 0; i < n; i++) {
-    g_crcState ^= p[i];
-    for (int b = 0; b < 8; b++) {
-      uint32_t mask = (uint32_t)-(int32_t)(g_crcState & 1u);
-      g_crcState = (g_crcState >> 1) ^ (0xEDB88320u & mask);
-    }
-  }
-}
-
-static uint32_t crcEnd() { return ~g_crcState; }
-
-static int hexNib(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-static bool parseHex32(const char* s, uint32_t* out) {
-  if (!s) return false;
-  uint32_t v = 0;
-  for (int i = 0; i < 8; i++) {
-    int n = hexNib(s[i]);
-    if (n < 0) return false;
-    v = (v << 4) | (uint32_t)n;
-  }
-  if (s[8] != 0) return false;
-  *out = v;
-  return true;
-}
-
-static void otaConsume(const uint8_t* p, uint32_t n) {
-  if (!n || g_otaFail) return;
-  crcAdd(p, n);
-  for (uint32_t i = 0; i < n; i++) {
-    if (g_otaHeadN < 8) g_otaHead[g_otaHeadN++] = p[i];
-    if (InternalStorage.write(p[i]) != 1) {
-      g_otaFail = 1;
-      return;
-    }
-    g_otaGot++;
-  }
-  int pct = g_otaLen ? (int)((g_otaGot * 100ul) / g_otaLen) : 0;
-  otaPaint(pct);
-}
-
-static void otaFail(const char* msg) {
-  otaCloseStorage();
-  Serial.print(F("OTA rejected: "));
-  Serial.println(msg);
-  otaSet("error", msg);
-  otaSolid(180, 0, 0);
-  delay(1000);
-  otaResumeLamp();
-  otaReply(400, "Bad Request", msg);
-}
-
-// ArduinoOTA 1.1.1 apply() erases (pageAlignedLength / pageSize) + 1 blocks.
-// pageAlignedLength is already a whole number of 2 KB blocks, so the extra
-// block is the first block of the staged image. Do not call apply().
-// r_flash_lp_cf_erase and r_flash_lp_cf_write are the copies ArduinoOTA
-// builds into .code_in_ram. The core's own copies are not, because code
-// flash programming is compiled out of libfsp.a.
-extern "C" fsp_err_t r_flash_lp_cf_erase(flash_lp_instance_ctrl_t* p_ctrl,
-                                        uint32_t block_address,
-                                        uint32_t num_blocks,
-                                        uint32_t block_size);
-extern "C" fsp_err_t r_flash_lp_cf_write(flash_lp_instance_ctrl_t* p_ctrl,
-                                        uint32_t src,
-                                        uint32_t dest,
-                                        uint32_t num_bytes);
-
-// The whole copy has to run from RAM. Erasing the sketch deletes the
-// caller, and a return from r_flash_lp_cf_erase fetches 0xFF and hangs
-// (the panel stays white, the colour painted just before the erase).
-// No libc: memcpy and division live in the sketch and may already be gone.
-// The vector table is block 0 and is written last. If the body copy fails,
-// block 0 is erased so the bootloader sees a blank stack pointer and waits
-// for USB instead of jumping into a half-written image.
-#define OTA_IN_RAM __attribute__((noinline, used, section(".code_in_ram"))) \
-  __attribute__((optimize("no-tree-loop-distribute-patterns")))
-
-extern "C" {
-// NVIC_SystemReset() lives in the sketch, inside block 0. Calling it after
-// that block is erased jumps to 0xFF. Write AIRCR from this RAM function.
-OTA_IN_RAM
-static void otaAirCrReset(void) __attribute__((noreturn));
-OTA_IN_RAM
-static void otaAirCrReset(void) {
-  __asm volatile("dsb sy" ::: "memory");
-  volatile uint32_t* aircr = (volatile uint32_t*)0xE000ED0Cu;
-  uint32_t v = *aircr;
-  *aircr = (0x05FAu << 16) | (v & 0x700u) | 4u;
-  __asm volatile("dsb sy" ::: "memory");
-  while (1) {
-    __asm volatile("nop");
-  }
-}
-
-OTA_IN_RAM
-static void otaCopyAndReset(flash_lp_instance_ctrl_t* ctrl,
-                            uint32_t dest, uint32_t src, uint32_t pages) {
-  const uint32_t block = 2048u;
-  const uint32_t chunk = 128u;
-  fsp_err_t rv = FSP_SUCCESS;
-  if (pages > 1u) {
-    rv = r_flash_lp_cf_erase(ctrl, dest + block, pages - 1u, block);
-    uint32_t off = block;
-    uint32_t end = pages << 11;
-    while (rv == FSP_SUCCESS && off < end) {
-      uint8_t buf[128];
-      volatile uint8_t* d = buf;
-      const volatile uint8_t* s = (const volatile uint8_t*)(src + off);
-      uint32_t i = 0;
-      while (i < chunk) {
-        d[i] = s[i];
-        i++;
-      }
-      rv = r_flash_lp_cf_write(ctrl, (uint32_t)buf, dest + off, chunk);
-      off += chunk;
-    }
-  }
-  if (rv != FSP_SUCCESS) {
-    r_flash_lp_cf_erase(ctrl, dest, 1u, block);
-    otaAirCrReset();
-  }
-  rv = r_flash_lp_cf_erase(ctrl, dest, 1u, block);
-  uint32_t off = 0;
-  while (rv == FSP_SUCCESS && off < block) {
-    uint8_t buf[128];
-    volatile uint8_t* d = buf;
-    const volatile uint8_t* s = (const volatile uint8_t*)(src + off);
-    uint32_t i = 0;
-    while (i < chunk) {
-      d[i] = s[i];
-      i++;
-    }
-    rv = r_flash_lp_cf_write(ctrl, (uint32_t)buf, dest + off, chunk);
-    off += chunk;
-  }
-  otaAirCrReset();
-}
-}
-
-static bool otaCommit() {
-  // loop() will not save prefs while an upload or a GitHub job is in
-  // flight, and the AIRCR reset below does not come back to loop().
-  // Write the live preset first so the new image restores it.
-  flushPrefs();
-  uint32_t start = (uint32_t)&__ROM_Start;
-  uint32_t maxSketch = (262144u - start) / 2u;
-  maxSketch &= ~2047u;
-  uint32_t storage = start + maxSketch;
-  // Ceil to a 2 KB block. (len / 2048) + 1 erases one block past an
-  // exact multiple, and at 122880 bytes that block is the staged vector table.
-  uint32_t pages = (g_otaLen + 2047u) >> 11;
-  uint32_t bytes = pages << 11;
-  if ((start & 2047u) != 0 || g_otaLen < 4096 || pages < 2 || bytes > maxSketch) {
-    Serial.println(F("OTA size"));
-    return false;
-  }
-  crcBegin();
-  crcAdd((const uint8_t*)storage, g_otaLen);
-  uint32_t staged = crcEnd();
-  if (staged != g_crcGot) {
-    Serial.print(F("OTA staged crc "));
-    Serial.println(staged, HEX);
-    return false;
-  }
-  Serial.print(F("OTA apply "));
-  Serial.println(pages);
-  otaSolid(255, 255, 255);
-  flash_lp_instance_ctrl_t ctrl;
-  flash_cfg_t cfg;
-  memset(&ctrl, 0, sizeof ctrl);
-  memset(&cfg, 0, sizeof cfg);
-  cfg.data_flash_bgo = false;
-  cfg.ipl = BSP_IRQ_DISABLED;
-  cfg.irq = FSP_INVALID_VECTOR;
-  cfg.err_ipl = BSP_IRQ_DISABLED;
-  cfg.err_irq = FSP_INVALID_VECTOR;
-  if (R_FLASH_LP_Open(&ctrl, &cfg) != FSP_SUCCESS) {
-    Serial.println(F("OTA flash open"));
-    return false;
-  }
-  __disable_irq();
-  otaCopyAndReset(&ctrl, start, storage, pages);
-  return false;
-}
-
-// The file picker posts the raw .bin (XHR send(file), not multipart).
-// iOS will not send a body this large until it sees 100 Continue.
-// Erase the staging half. Code-flash erase runs with interrupts off. Call it
-// only when no socket read is in progress (before the GitHub asset
-// connection is opened).
-static bool otaOpenStorage(uint32_t len) {
-  long cap = InternalStorage.maxSize();
-  if (len < 4096 || (long)len > cap) {
-    otaSet("error", "image too large");
-    return false;
-  }
-  g_otaLen = len;
-  g_otaGot = 0;
-  g_otaFail = 0;
-  g_otaHeadN = 0;
-  g_otaPaint = -1;
-  otaPaint(0);
-  crcBegin();
-  if (!InternalStorage.open((int)len)) {
-    otaSet("error", "flash open failed");
-    return false;
-  }
-  g_otaOpened = 1;
-  return true;
 }
 
 static void urlDecode(char* s) {
@@ -432,25 +204,27 @@ static void setupSave() {
   otaReply(200, "OK", "Saved. Restarting.\n");
 }
 
-static void otaQueueGithub(uint8_t job) {
+static void otaQueueInstall() {
   if (g_setupAp) {
     otaReply(409, "Conflict", "join the home wifi first\n");
     return;
   }
-  g_ghJob = job;
-  otaSet(job == 1 ? "check" : "download", "starting");
-  otaReply(200, "OK", job == 1 ? "ok check\n" : "ok apply\n");
+  if (g_otaPhase || g_otaActive || g_ghPend || g_ghJob) {
+    otaReply(409, "Conflict", "update already running\n");
+    return;
+  }
+  g_ghJob = 1;
+  otaSet("check", "checking");
+  otaReply(200, "OK", "ok install\n");
 }
 
-// Returns 0 while the body is still arriving, 1 when a response was queued.
 static int otaDispatchPost(uint32_t now) {
   char path[48];
   if (!reqPath(path, sizeof path)) {
     otaReply(400, "Bad Request", "path\n");
     return 1;
   }
-  bool small = strcmp(path, "/setup") == 0 || strcmp(path, "/api/ota/check") == 0 ||
-               strcmp(path, "/api/ota/apply") == 0;
+  bool small = strcmp(path, "/setup") == 0 || strcmp(path, "/api/ota/install") == 0;
   if (!small) {
     otaReply(404, "Not Found", "not found\n");
     return 1;
@@ -472,8 +246,7 @@ static int otaDispatchPost(uint32_t now) {
     return 0;
   }
   if (strcmp(path, "/setup") == 0) setupSave();
-  else if (strcmp(path, "/api/ota/check") == 0) otaQueueGithub(1);
-  else otaQueueGithub(2);
+  else otaQueueInstall();
   return 1;
 }
 
@@ -488,6 +261,7 @@ static void startSetupAp() {
   g_server.begin();
   g_serverUp = 1;
   g_wifi = WIFI_ONLINE;
+  Serial.println(F("server started"));
   Serial.print(F("Open http://"));
   Serial.println(ip);
 }
@@ -516,8 +290,11 @@ static bool ghSend(WiFiSSLClient& c, const char* s) {
   return true;
 }
 
-static int ghReadResponse(AtSslClient& c, GhHead* h,
-                          int (*onHead)(GhHead*), int (*onBody)(const uint8_t*, int)) {
+// headersOnly stops once the status and headers are known. A 302 still
+// returns at the end of Location so the Content-Security-Policy is never
+// pulled across the 512-byte Serial2 ring. Reads are AT_READ_MAX (64).
+static int ghReadResponse(AtSslClient& c, GhHead* h, int (*onHead)(GhHead*),
+                          int (*onBody)(const uint8_t*, int), uint8_t headersOnly) {
   h->code = 0;
   h->length = -1;
   h->chunked = 0;
@@ -530,9 +307,6 @@ static int ghReadResponse(AtSslClient& c, GhHead* h,
   int phase = 0;
   long got = 0;
   uint32_t idle = millis();
-  // Return 1 when the body is complete, 2 when the socket stalls.
-  // WiFiSSLClient::connected() stays true after GitHub closes, and available()
-  // blocks inside a modem command, so do not wait on EOF past Content-Length.
   while ((uint32_t)(millis() - idle) < 8000) {
     if (phase == 1 && h->length >= 0 && got >= h->length) return 1;
     if (c.available() <= 0) {
@@ -555,17 +329,12 @@ static int ghReadResponse(AtSslClient& c, GhHead* h,
           if (cap) {
             g_ghPath[locN] = 0;
             cap = 0;
-            // GitHub's 302 puts the signed URL here, then a ~4 KB
-            // Content-Security-Policy. The manifest body is on the next
-            // host. Stop once Location is complete so that header is never
-            // read. Waiting for the blank line stalls the modem, the loop
-            // never returns, and the phone only sees a closed socket.
             if (h->code >= 300 && h->code < 400 && h->loc) return 1;
           }
           if (ln == 0) {
             phase = 1;
             if (onHead && !onHead(h)) return 0;
-            // A real length wins. Chunked with no length cannot be stored safely.
+            if (headersOnly) return 1;
             if (h->chunked && h->length < 0) return 0;
             if (h->code >= 300 && h->code < 400) return 1;
             if (h->length == 0) return 1;
@@ -636,13 +405,12 @@ static bool ghTakeLocation() {
   return false;
 }
 
-static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const uint8_t*, int), GhHead* h) {
+static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const uint8_t*, int),
+                   GhHead* h, uint8_t headersOnly) {
   strncpy(g_ghPath, path, sizeof g_ghPath - 1);
   g_ghPath[sizeof g_ghPath - 1] = 0;
   AtSslClient& c = ghClient();
   c.stop();
-  // Wait out the TLS handshake. Cutting modem.timeout short of the ESP
-  // command desyncs the bridge and the lamp stops answering.
   uint32_t t0 = millis();
   Serial.print(t0);
   Serial.print(F(" GitHub TLS b "));
@@ -668,7 +436,7 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
               ghSend(c, " HTTP/1.0\r\nHost: ") && ghSend(c, g_ghHost) &&
               ghSend(c, "\r\nUser-Agent: MatrixLamp\r\nConnection: close\r\n\r\n");
   modem.timeout(8000);
-  int rd = sent ? ghReadResponse(c, h, onHead, onBody) : 0;
+  int rd = sent ? ghReadResponse(c, h, onHead, onBody, headersOnly) : 0;
   modem.timeout(MODEM_CMD_BUDGET_MS);
   c.stop();
   if (rd == 2) {
@@ -679,7 +447,7 @@ static bool ghOnce(const char* path, int (*onHead)(GhHead*), int (*onBody)(const
     if (!g_otaMsg[0]) otaSet("error", "github read failed");
     return false;
   }
-  if (h->chunked) {
+  if (!headersOnly && h->chunked) {
     otaSet("error", "chunked");
     return false;
   }
@@ -733,24 +501,15 @@ static int manifestHead(GhHead* h) {
   return 1;
 }
 
-// manifest.json "version" only. Not the release notes, not the tag.
-static void otaNoteRelease() {
-  char local[28];
-  char remote[28];
-  fwVersionNorm(FW_VERSION, local, sizeof local);
-  fwVersionNorm(g_ghVer, remote, sizeof remote);
-  int cmp = fwVersionCmp(FW_VERSION, g_ghVer);
-  g_ghNewer = cmp > 0 ? 1 : 0;
-  char msg[40];
-  if (g_ghNewer) snprintf(msg, sizeof msg, "Update available v%s", remote);
-  else snprintf(msg, sizeof msg, "Up to date (v%s)", local[0] ? local : remote);
-  otaSet("checked", msg);
-  Serial.print(F("GitHub firmware "));
-  Serial.print(g_ghVer);
-  Serial.print(F(" running "));
-  Serial.print(FW_VERSION);
-  Serial.print(F(" cmp "));
-  Serial.println(cmp);
+static bool fileNameOk(const char* s) {
+  if (!s || !s[0]) return false;
+  for (const char* p = s; *p; p++) {
+    char c = *p;
+    bool okc = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+    if (!okc) return false;
+  }
+  return true;
 }
 
 static bool ghFetchManifest() {
@@ -759,60 +518,34 @@ static bool ghFetchManifest() {
   g_manifest[0] = 0;
   g_otaMsg[0] = 0;
   for (int hop = 0; hop < 4; hop++) {
-    GhHead h;
-    const char* path = (hop == 0) ? GH_MANIFEST : g_ghPath;
-    // On hop 0 the path is the constant. ghOnce copies it.
-    // On later hops g_ghPath already holds the redirect path, but ghOnce
-    // also copies its path argument into g_ghPath. Pass the constant only
-    // for hop 0; afterwards the location parser has filled g_ghPath, so
-    // copy it aside first.
     char pathBuf[1400];
     if (hop == 0) {
-      strncpy(pathBuf, path, sizeof pathBuf - 1);
+      strncpy(pathBuf, GH_MANIFEST, sizeof pathBuf - 1);
       pathBuf[sizeof pathBuf - 1] = 0;
     } else {
       memcpy(pathBuf, g_ghPath, sizeof pathBuf);
     }
-    if (!ghOnce(pathBuf, manifestHead, manifestBody, &h)) return false;
+    GhHead h;
+    if (!ghOnce(pathBuf, manifestHead, manifestBody, &h, 0)) return false;
     if (h.code == 200) {
       g_ghNewer = 0;
       g_ghVer[0] = 0;
       g_ghFile[0] = 0;
       g_ghSha[0] = 0;
-      g_ghHave = 0;
       g_ghSize = jsonLong(g_manifest, "size");
       if (!jsonString(g_manifest, "version", g_ghVer, sizeof g_ghVer)) {
         otaSet("error", "bad manifest");
         return false;
       }
       jsonString(g_manifest, "sha", g_ghSha, sizeof g_ghSha);
-      if (g_ghSize < 4096) {
+      if (g_ghSize < 4096 || (uint32_t)g_ghSize > SKETCH_MAX_BYTES) {
         otaSet("error", "bad manifest");
         return false;
       }
-      if (g_ghSize > (long)InternalStorage.maxSize()) {
-        otaSet("error", "too big");
-        return false;
+      if (!jsonString(g_manifest, "ota", g_ghFile, sizeof g_ghFile) || !fileNameOk(g_ghFile)) {
+        strncpy(g_ghFile, GH_OTA_NAME, sizeof g_ghFile - 1);
+        g_ghFile[sizeof g_ghFile - 1] = 0;
       }
-      char crcHex[12];
-      if (!jsonString(g_manifest, "crc32", crcHex, sizeof crcHex) || !parseHex32(crcHex, &g_ghCrc)) {
-        otaSet("error", "bad manifest");
-        return false;
-      }
-      g_ghHave = 1;
-      if (!jsonString(g_manifest, "file", g_ghFile, sizeof g_ghFile)) {
-        strncpy(g_ghFile, "MatrixLamp_R4_Wifi.ino.bin", sizeof g_ghFile - 1);
-      }
-      for (char* s = g_ghFile; *s; s++) {
-        char c = *s;
-        bool okc = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                   (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
-        if (!okc) {
-          otaSet("error", "bad manifest");
-          return false;
-        }
-      }
-      otaNoteRelease();
       return true;
     }
     if (h.code >= 300 && h.code < 400 && h.loc && ghTakeLocation()) continue;
@@ -823,70 +556,48 @@ static bool ghFetchManifest() {
   return false;
 }
 
-static int binHead(GhHead* h) {
-  if (h->code != 200) return 1;
-  // Staging was erased before this socket opened. Erasing here, while the
-  // asset bytes are already on the UART, kills the modem.
-  if (!g_otaOpened || h->length != (long)g_otaLen) {
-    otaSet("error", "size mismatch");
-    return 0;
-  }
-  return 1;
+static bool otaUrlFromParts() {
+  size_t hn = strlen(g_ghHost);
+  size_t pn = strlen(g_ghPath);
+  if (!hn || g_ghPath[0] != '/') return false;
+  // g_json is free: this runs from loop with no HTTP response in flight.
+  // The signed URL has to live until startDownload copies it to the ESP32.
+  if (8 + hn + pn + 1 > sizeof g_json) return false;
+  memcpy(g_json, "https://", 8);
+  memcpy(g_json + 8, g_ghHost, hn);
+  memcpy(g_json + 8 + hn, g_ghPath, pn + 1);
+  return true;
 }
 
-static int binBody(const uint8_t* p, int n) {
-  if (g_otaFail || !g_otaOpened) return 0;
-  if ((uint32_t)n > g_otaLen - g_otaGot) n = (int)(g_otaLen - g_otaGot);
-  otaConsume(p, (uint32_t)n);
-  return g_otaFail ? 0 : 1;
+static bool otaAtLineFits(const char* url) {
+  if (!url || strchr(url, ',')) return false;
+  size_t n = strlen("AT+OTADOWNLOADSTART=") + strlen(url) + strlen(",/update.bin\r\n");
+  return n < OTA_AT_LINE_MAX;
 }
 
-static bool ghFetchBin() {
-  strncpy(g_ghHost, "github.com", sizeof g_ghHost);
-  snprintf(g_ghPath, sizeof g_ghPath,
+// Header-only. Stop on the first host that is not github.com: that Location
+// is the signed release-asset URL, which answers 200. OTAUpdate's
+// startDownload treats any other status as an error.
+static bool ghResolveAsset() {
+  char rel[96];
+  snprintf(rel, sizeof rel,
            "/tbellenger/button-lamp/releases/download/matrixlamp-latest/%s", g_ghFile);
-  g_otaMsg[0] = 0;
-  // Modem is idle: the manifest socket is already closed. Erase now, then
-  // open the asset connection and only write.
-  if (!otaOpenStorage((uint32_t)g_ghSize)) return false;
+  strncpy(g_ghHost, "github.com", sizeof g_ghHost);
   for (int hop = 0; hop < 4; hop++) {
     char pathBuf[1400];
-    memcpy(pathBuf, g_ghPath, sizeof pathBuf);
-    GhHead h;
-    if (!ghOnce(pathBuf, binHead, binBody, &h)) return false;
-    if (h.code == 200) {
-      if (g_otaGot != g_otaLen) {
-        otaSet("error", "incomplete");
-        return false;
-      }
-      uint32_t sum = crcEnd();
-      g_crcGot = sum;
-      otaCloseStorage();
-      if (!imageOk()) {
-        otaSet("error", "bad image");
-        Serial.println(F("OTA bad image"));
-        otaSolid(180, 0, 0);
-        delay(1000);
-        return false;
-      }
-      if (sum != g_ghCrc) {
-        otaSet("error", "bad crc");
-        Serial.print(F("OTA bad crc "));
-        Serial.println(sum, HEX);
-        otaSolid(180, 0, 0);
-        delay(1000);
-        return false;
-      }
-      otaSet("applying", "rebooting");
-      if (!otaCommit()) {
-        otaSet("error", "apply failed");
-        otaSolid(180, 0, 0);
-        delay(1000);
-        return false;
-      }
-      return false;
+    if (hop == 0) {
+      strncpy(pathBuf, rel, sizeof pathBuf - 1);
+      pathBuf[sizeof pathBuf - 1] = 0;
+    } else {
+      memcpy(pathBuf, g_ghPath, sizeof pathBuf);
     }
-    if (h.code >= 300 && h.code < 400 && h.loc && ghTakeLocation()) continue;
+    GhHead h;
+    if (!ghOnce(pathBuf, 0, 0, &h, 1)) return false;
+    if (h.code >= 300 && h.code < 400 && h.loc && ghTakeLocation()) {
+      if (strcmp(g_ghHost, "github.com") != 0) return otaUrlFromParts();
+      continue;
+    }
+    if (h.code == 200) return otaUrlFromParts();
     otaSet("error", "download http");
     return false;
   }
@@ -894,41 +605,186 @@ static bool ghFetchBin() {
   return false;
 }
 
-static void githubRun(uint8_t job) {
-  matrixPause();
-  g_otaActive = 1;
-  g_otaPaint = -1;
-  otaPaint(0);
-  modem.timeout(20000);
-  WiFi.setTimeout(20000);
-  bool ok = false;
-  if (job == 1) ok = ghFetchManifest();
-  else {
-    otaSet("download", "github");
-    if (!g_ghFile[0] || !g_ghHave || g_ghSize < 4096) ok = ghFetchManifest();
-    else ok = true;
-    if (ok && fwVersionCmp(FW_VERSION, g_ghVer) <= 0) {
-      otaNoteRelease();
-      ok = false;
-    } else if (ok) {
-      ok = ghFetchBin();
-    }
-  }
-  WiFi.setTimeout(0);
+static void otaFailPrinted(const char* msg) {
+  Serial.print(F("OTA error "));
+  Serial.println(msg);
+  otaIdle("error", msg);
+}
+
+static void otaFailCode(const char* msg, int code) {
+  Serial.print(F("OTA error "));
+  Serial.print(msg);
+  Serial.print(' ');
+  Serial.println(code);
+  otaIdle("error", msg);
+}
+
+static void otaBridgeRecover() {
+  // verify/update can leave the UART in the BOSSA session. AT+RESET is
+  // the same recovery boot uses. The page comes back on the station IP.
+  Serial.println(F("OTA bridge recover"));
+  g_otaActive = 0;
+  g_otaPhase = 0;
+  wifiResetModem();
+  wifiDrop(millis());
+  if (!g_setupAp && g_creds.ssid[0]) wifiBegin();
+}
+
+static void otaFinishDownload() {
+  g_otaPhase = 0;
+  g_otaPct = 100;
+  Serial.println(F("OTA verify"));
+  otaSet("applying", "verify");
+  int v = g_otaUpd.verify();
   modem.timeout(MODEM_CMD_BUDGET_MS);
-  otaCloseStorage();
-  if (!ok) {
-    if (strcmp(g_otaState, "checked") != 0) {
-      if (!g_otaMsg[0]) otaSet("error", "github");
-      else if (strcmp(g_otaState, "error") != 0) otaSet("error", g_otaMsg);
-      otaSolid(180, 0, 0);
-      delay(1200);
-    }
-    Serial.print(F("GitHub: "));
-    Serial.println(g_otaMsg);
-    otaResumeLamp();
+  if (v != OTAUpdate::OTA_ERROR_NONE) {
+    otaFailCode("verify failed", v);
+    otaBridgeRecover();
     return;
   }
-  // apply() resets on success. Reaching here means the check finished.
-  otaResumeLamp();
+  if (!savePrefs()) Serial.println(F("Prefs save failed"));
+  Serial.println(F("OTA update"));
+  otaSet("applying", "rebooting");
+  int u = g_otaUpd.update(OTA_SPIFFS_NAME);
+  // A successful update resets the RA4M1 from the ESP32 and does not return.
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  otaFailCode("update failed", u);
+  otaBridgeRecover();
+}
+
+static void otaPoll(uint32_t now) {
+  if (g_otaPhase != 1) return;
+  if ((uint32_t)(now - g_otaPollAt) < 400) return;
+  g_otaPollAt = now;
+  if (g_http != PH_IDLE) return;
+  int p = g_otaUpd.downloadProgress();
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  if (p == -26) return;
+  if (p < 0) {
+    otaFailCode("download failed", p);
+    otaBridgeRecover();
+    return;
+  }
+  if (p != g_otaProg) {
+    g_otaProg = p;
+    g_otaStallAt = now;
+    int pct = g_otaExpect > 0 ? (int)(((long)p * 100L) / g_otaExpect) : 0;
+    if (pct < 0) pct = 0;
+    if (pct > 99) pct = 99;
+    if (pct != g_otaPct) {
+      g_otaPct = pct;
+      Serial.print(F("OTA progress "));
+      Serial.print(p);
+      Serial.print('/');
+      Serial.println(g_otaExpect);
+    }
+  } else if ((uint32_t)(now - g_otaStallAt) > 30000u) {
+    otaFailPrinted("stalled");
+    otaBridgeRecover();
+    return;
+  }
+  if (g_otaExpect > 0 && p >= g_otaExpect) otaFinishDownload();
+}
+
+static void otaRunInstall() {
+  g_otaActive = 1;
+  g_otaPhase = 0;
+  otaSet("check", "checking");
+  Serial.println(F("OTA check"));
+  modem.timeout(20000);
+  WiFi.setTimeout(20000);
+  if (!ghFetchManifest()) {
+    if (!g_otaMsg[0]) otaSet("error", "github");
+    Serial.print(F("OTA error "));
+    Serial.println(g_otaMsg);
+    otaIdle("error", g_otaMsg);
+    return;
+  }
+  char local[28];
+  char remote[28];
+  fwVersionNorm(FW_VERSION, local, sizeof local);
+  fwVersionNorm(g_ghVer, remote, sizeof remote);
+  int cmp = fwVersionCmp(FW_VERSION, g_ghVer);
+  Serial.print(F("OTA version "));
+  Serial.print(g_ghVer);
+  Serial.print(F(" running "));
+  Serial.print(FW_VERSION);
+  Serial.print(F(" cmp "));
+  Serial.println(cmp);
+  if (!fwShouldInstall(FW_VERSION, g_ghVer)) {
+    char msg[40];
+    snprintf(msg, sizeof msg, "Up to date (v%s)", local[0] ? local : remote);
+    g_ghNewer = 0;
+    Serial.println(F("OTA up to date"));
+    otaIdle("checked", msg);
+    return;
+  }
+  g_ghNewer = 1;
+  {
+    char msg[40];
+    snprintf(msg, sizeof msg, "Update available v%s", remote);
+    otaSet("download", msg);
+  }
+  if (!ghResolveAsset() || !g_json[0]) {
+    if (!g_otaMsg[0]) otaSet("error", "download http");
+    Serial.print(F("OTA error "));
+    Serial.println(g_otaMsg);
+    otaIdle("error", g_otaMsg);
+    return;
+  }
+  if (!otaAtLineFits(g_json)) {
+    Serial.println(F("OTA error url too long"));
+    otaIdle("error", "url too long");
+    return;
+  }
+  Serial.print(F("OTA url "));
+  Serial.print(g_ghHost);
+  Serial.print(' ');
+  Serial.println((unsigned)strlen(g_json));
+  int begun = g_otaUpd.begin(OTA_SPIFFS_NAME);
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  if (begun != OTAUpdate::OTA_ERROR_NONE) {
+    otaFailCode("begin failed", begun);
+    otaBridgeRecover();
+    return;
+  }
+  Serial.println(F("OTA begin"));
+  int cert = g_otaUpd.setCACert(OTA_CA_PEM);
+  modem.timeout(MODEM_CMD_BUDGET_MS);
+  if (cert != OTAUpdate::OTA_ERROR_NONE) {
+    otaFailCode("cert failed", cert);
+    otaBridgeRecover();
+    return;
+  }
+  int sz = g_otaUpd.startDownload(g_json, OTA_SPIFFS_NAME);
+  otaModemRest();
+  if (sz <= 0) {
+    otaFailCode("download failed", sz);
+    otaBridgeRecover();
+    return;
+  }
+  if (sz > 400000) {
+    otaFailPrinted("too big");
+    otaBridgeRecover();
+    return;
+  }
+  g_otaExpect = sz;
+  g_otaProg = -1;
+  g_otaPct = 0;
+  g_otaPhase = 1;
+  g_otaPollAt = millis();
+  g_otaStallAt = millis();
+  g_otaActive = 1;
+  Serial.print(F("OTA download "));
+  Serial.println(sz);
+}
+
+static void otaService(uint32_t now) {
+  if (g_otaPhase == 1) {
+    otaPoll(now);
+    return;
+  }
+  if (!g_ghPend || g_http != PH_IDLE) return;
+  g_ghPend = 0;
+  otaRunInstall();
 }

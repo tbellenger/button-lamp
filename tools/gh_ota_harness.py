@@ -19,7 +19,8 @@ BIN_URL = (
     "matrixlamp-latest/MatrixLamp_R4_Wifi.ino.bin"
 )
 PATH_MAX = 1400
-OTA_MAX = 122880
+# Linker image max: FLASH_LENGTH 0x40000 minus FLASH_IMAGE_START 0x4000.
+OTA_MAX = 245760
 
 
 def curl(url, extra):

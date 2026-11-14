@@ -7,7 +7,7 @@
 #   tools/upload_matrixlamp.sh --monitor
 # --monitor opens the serial monitor at 115200 (the sketch's Serial.begin)
 # after a successful USB upload. Ctrl-C closes it.
-# Firmware updates after the first USB flash come from the lamp's GitHub button.
+# Firmware updates after the first USB flash use Install update on the lamp page.
 
 set -u
 
@@ -63,7 +63,7 @@ if ! command -v arduino-cli >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Checking the Uno R4 WiFi core, Adafruit NeoPixel, and ArduinoOTA..."
+echo "Checking the Uno R4 WiFi core and Adafruit NeoPixel..."
 if ! arduino-cli core update-index; then
   echo "WARNING: could not refresh the board index. Continuing if the core is already installed."
 fi
@@ -74,10 +74,6 @@ if ! arduino-cli core install arduino:renesas_uno; then
 fi
 if ! arduino-cli lib install "Adafruit NeoPixel"; then
   echo "Could not install the Adafruit NeoPixel library (1.12 or newer)."
-  exit 1
-fi
-if ! arduino-cli lib install "ArduinoOTA"; then
-  echo "Could not install the ArduinoOTA library (JAndrassy, 1.1.0 or newer)."
   exit 1
 fi
 
