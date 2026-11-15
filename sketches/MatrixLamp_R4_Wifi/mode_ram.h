@@ -1,9 +1,12 @@
 // One scratch region for the presets that are not on screen together.
 // Radar frames are 26 * 128 bytes, already nibble-packed; the renderer
 // decodes a pixel when it is drawn. Fire heat, fluid, the matrix rain
-// field, the polar tables, and the spiral cache occupy the same bytes.
-// Visiting radar and coming back rebuilds those tables. The web buffers
-// stay separate so a page fetch during playback does not wipe the frames.
+// field, the polar tables, and the spiral cache occupy the same bytes
+// and are shorter than the frame store, so they overwrite the early
+// frames and leave the tail. A stale frame count would play that mix:
+// scratch bytes as radar colours, then a few leftover radar frames.
+// Writing the scratch drops the count to 0. The web buffers stay
+// separate so a page fetch during playback does not wipe the frames.
 #pragma once
 
 #include "radar_format.h"

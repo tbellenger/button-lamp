@@ -42,9 +42,16 @@ uint8_t lamp_fx_scale(uint8_t channel, uint8_t applied);
 const char* lamp_fx_mode_name(uint8_t mode);
 int lamp_fx_mode_from_name(const char* s);
 // Packed radar frames (128 bytes each, north up). count 0 clears the loop.
+// Call only after every frame in the set is already in the store.
 void lamp_fx_radar_set(const uint8_t* packed, uint8_t count);
 // The 26-frame store. It aliases the other presets' scratch RAM.
+// Writers of that scratch invalidate the published loop.
 uint8_t* lamp_fx_radar_bytes();
+// Frames safe to play. 0 until a complete download is published, and 0
+// again after another preset writes the shared scratch.
+uint8_t lamp_fx_radar_count();
+// 1 the first time it is called after a playable set was discarded.
+uint8_t lamp_fx_radar_take_drop();
 void lamp_fx_balls_add();
 void lamp_fx_balls_remove();
 void lamp_fx_balls_set(uint8_t n);
