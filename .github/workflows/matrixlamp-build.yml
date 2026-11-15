@@ -137,7 +137,7 @@ jobs:
           TITLE="Matrix Lamp ${VERSION}"
           NOTES="Uno R4 WiFi firmware ${VERSION}.
           The lamp reads manifest.json version ${VERSION} (FW_VERSION in the .bin).
-          Install update downloads MatrixLamp_R4_Wifi.ino.ota (magic 0x23411002).
+          Install update downloads http://api.drunkwallaby.com/ota/matrix/latest.ota (magic 0x23411002).
           WiFi credentials are not in this file."
           if gh release view matrixlamp-latest >/dev/null 2>&1; then
             gh release view matrixlamp-latest --json assets --jq '.assets[].name' | while IFS= read -r asset; do
@@ -162,3 +162,42 @@ jobs:
             --title "$TITLE" \
             --notes "$NOTES" \
             --target "${{ github.sha }}"
+
+      - name: Copy firmware to the VPS
+        if: github.event_name != 'pull_request'
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          missing=
+          [ -n "$VPS_HOST" ] || missing="$missing VPS_HOST"
+          [ -n "$VPS_USER" ] || missing="$missing VPS_USER"
+          [ -n "$VPS_SSH_KEY" ] || missing="$missing VPS_SSH_KEY"
+          [ -n "$VPS_KNOWN_HOSTS" ] || missing="$missing VPS_KNOWN_HOSTS"
+          if [ -n "$missing" ]; then
+            echo "::warning::VPS deploy secrets are absent ($missing). Skipping the copy to api.drunkwallaby.com."
+            exit 0
+          fi
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_deploy"
+          chmod 600 "$HOME/.ssh/id_deploy"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+          SSH=(ssh -i "$HOME/.ssh/id_deploy"
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+            -o IdentitiesOnly=yes)
+          SCP=(scp -O -i "$HOME/.ssh/id_deploy"
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+            -o IdentitiesOnly=yes)
+          DEST="$VPS_USER@$VPS_HOST:/var/www/ota/matrix"
+          "${SCP[@]}" dist/MatrixLamp_R4_Wifi.ino.ota "$DEST/latest.ota.partial"
+          "${SCP[@]}" dist/manifest.json "$DEST/latest.json.partial"
+          "${SSH[@]}" "$VPS_USER@$VPS_HOST" \
+            "mv -f /var/www/ota/matrix/latest.ota.partial /var/www/ota/matrix/latest.ota && mv -f /var/www/ota/matrix/latest.json.partial /var/www/ota/matrix/latest.json"
+          echo "copied latest.ota and latest.json to $VPS_HOST:/var/www/ota/matrix"

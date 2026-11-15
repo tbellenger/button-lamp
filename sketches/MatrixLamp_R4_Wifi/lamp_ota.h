@@ -35,9 +35,10 @@ static const uint32_t SKETCH_MAX_BYTES = 262144u - 16384u;
 // on it. Bridge 0.6.0 chAT accepts 1024 bytes and does not quote the URL.
 // Arduino_ESP32_OTA 0.3.1 then calls HttpClient::get(path()) and drops the
 // query string, so a signed release-asset URL cannot succeed on this
-// bridge. Set OTA_DIRECT_URL to a 200 response with no query instead.
+// bridge. The download is a plain HTTP file with no query. secrets.h
+// may #define OTA_DIRECT_URL before this header to replace it.
 #ifndef OTA_DIRECT_URL
-#define OTA_DIRECT_URL ""
+#define OTA_DIRECT_URL "http://api.drunkwallaby.com/ota/matrix/latest.ota"
 #endif
 static const size_t OTA_AT_LINE_MAX = 1024;
 
