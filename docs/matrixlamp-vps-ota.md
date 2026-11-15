@@ -22,9 +22,12 @@ The workflow uploads `latest.ota.partial` and `latest.json.partial`, then rename
 Run these on the VPS as root. They do not change Caddy until the snippet below is added by hand.
 
 ```sh
-useradd --system --create-home --shell /usr/sbin/nologin matrixota
+useradd --system --create-home --shell /bin/sh matrixota
+passwd -l matrixota
 install -d -o matrixota -g caddy -m 755 /var/www/ota /var/www/ota/matrix
 ```
+
+sshd runs the key's forced command through the account's login shell. `/usr/sbin/nologin` refuses that connection. `/bin/sh` is the shell, and `passwd -l` locks the password so there is no password login. The key's `command=` and `restrict` are what limit the account.
 
 `caddy` is the user the Caddy service runs as. If `id caddy` fails, use the user from `ps -o user= -C caddy`. Parents of `/var/www/ota` must be traversable by that user (`755` is enough). The firmware is public, so the files can be mode `644`.
 
