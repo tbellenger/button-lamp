@@ -8,3 +8,9 @@
 
 #define WIFI_SSID "your-ssid"
 #define WIFI_PASS "your-password"
+
+// Optional override. CI builds have no secrets.h and download
+// http://api.drunkwallaby.com/ota/matrix/latest.ota . Uncomment to send
+// the bridge somewhere else. The URL must answer 200 with Content-Length
+// and no query string.
+// #define OTA_DIRECT_URL "http://api.drunkwallaby.com/ota/matrix/latest.ota"
