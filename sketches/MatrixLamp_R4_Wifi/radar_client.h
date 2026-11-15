@@ -4,10 +4,14 @@
 //
 // The picture may pause while a refresh is in flight. The fetch is one
 // blocking exchange: a connect timeout long enough that the ESP finishes
-// the AT command, then 64-byte reads into a staging buffer. The panel keeps
-// the previous frames if the new body is short, late, or not a radar file.
-// It does not run while an OTA download owns the bridge, and it does not
-// start while the web server is mid-request.
+// the AT command, then 64-byte reads into a staging buffer. The new loop
+// is published only after the whole body has been checked and copied.
+// The panel keeps the previous frames if they are still that complete
+// download and the new body is short, late, or not a radar file. If a
+// preset has since written the shared scratch, that loop is gone and the
+// panel stays on the home dot until a later body commits. The fetch does
+// not run while an OTA download owns the bridge, and it does not start
+// while the web server is mid-request.
 // WiFiClient::read() is not used. A read larger than 64 bytes overflows
 // the 512-byte Serial2 ring.
 //
@@ -69,7 +73,6 @@ static uint8_t* radarScratch(uint16_t off) {
 static void radarScratchCopy(uint8_t* dst, uint16_t off, uint16_t n) {
   for (uint16_t i = 0; i < n; i++) dst[i] = *radarScratch((uint16_t)(off + i));
 }
-static uint8_t g_rCount = 0;
 static uint8_t g_rFlags = 0;
 static int8_t g_rMax = 0;
 static uint32_t g_rUnix = 0;
@@ -79,10 +82,11 @@ static uint8_t g_rRain = 0;
 // 0 off. 1 means the page toggle is on (prefs store that as 2).
 static uint8_t g_autoRadar = 0;
 
-static uint8_t radarFrameCount() { return g_rCount; }
+static uint8_t radarFrameCount() { return lamp_fx_radar_count(); }
 static uint8_t radarPlayIndex() {
-  if (g_rCount <= 1) return 0;
-  return radarFrameIndex(millis(), g_rCount);
+  uint8_t n = radarFrameCount();
+  if (n <= 1) return 0;
+  return radarFrameIndex(millis(), n);
 }
 static uint8_t radarFresh() { return g_rFresh; }
 static uint8_t radarRain() { return (g_rFresh && (g_rFlags & 1u)) ? 1 : 0; }
@@ -96,7 +100,8 @@ static void radarLog(const __FlashStringHelper* s) {
 }
 
 static void radarShowCommit(uint8_t n) {
-  g_rCount = n;
+  // n is the frame count of a body that is already in the store, or 0
+  // when that body has no frames. Bytes past the copy are not played.
   if (!n) lamp_fx_radar_set(0, 0);
   else lamp_fx_radar_set(lamp_fx_radar_bytes(), n);
 }
@@ -249,6 +254,9 @@ static void radarCommitStage() {
     radarFail(F("bad"));
     return;
   }
+  // The copy lands in the shared store before the count changes. A loop
+  // that is still valid keeps its old count until this returns; a loop
+  // that was invalidated stays at 0, so the in-progress bytes are not drawn.
   radarScratchCopy(lamp_fx_radar_bytes(), RADAR_HEAD_BYTES,
                    (uint16_t)((uint16_t)info.frames * RADAR_FRAME_BYTES));
   radarStop();
@@ -337,12 +345,22 @@ static void radarPoll(uint32_t now) {
   if (!g_rArm) {
     g_rArm = 1;
     g_rNext = now + RADAR_FIRST_MS;
+    // The first wait after WiFi is up still applies. Consuming the drop
+    // here keeps that 20 s; it is not also an immediate fetch.
+    (void)lamp_fx_radar_take_drop();
     radarLog(F("radar wait 20s"));
     return;
   }
   if (g_rFresh && g_rGotMs && (uint32_t)(now - g_rGotMs) > RADAR_STALE_MS) {
     g_rFresh = 0;
     radarOnSample(1, 0, 0);
+  }
+  // Radar is on screen and the loop was thrown away by another preset.
+  // Do not sit on the home dot until the old 5-minute success interval.
+  // A failed fetch still uses RADAR_POLL_FAIL_MS: the drop is consumed
+  // once, before that backoff is armed.
+  if (g_mode == M_RADAR && !lamp_fx_radar_count() && lamp_fx_radar_take_drop()) {
+    if ((int32_t)(g_rNext - now) > 0) g_rNext = now;
   }
   if ((int32_t)(now - g_rNext) < 0) return;
   g_rNext = now + RADAR_POLL_FAIL_MS;

@@ -26,6 +26,10 @@
 //              on the picture that is (8, 7). Speed is ignored.
 //              The bottom row is a frame-progress bar, filling from the
 //              left as Tom sees it.
+//              The loop lives in the shared scratch. It is drawn only
+//              after a complete download, and only while that scratch
+//              has not been reused. Otherwise the picture is black
+//              except the grey home dot.
 //
 // Removed with the old control panel: jumbo, classic, the four waves,
 // secret, lava, music.
@@ -39,6 +43,10 @@
 #include "lamp_core.h"
 #include "radar_format.h"
 #include "mode_ram.h"
+
+// Defined with the radar loop. Every writer of g_modeRam.fx calls it
+// before storing, so a radar count cannot outlive the bytes it names.
+static void modesScratchUse();
 
 struct ModeIn {
   uint8_t mode;
@@ -165,6 +173,7 @@ static float g_fluidT = 0.0f;
 static uint8_t g_fluidTick = 0;
 
 static void fluidInject(int cx, int cy, uint8_t hue, uint8_t amt) {
+  modesScratchUse();
   for (int y = cy - 2; y <= cy + 2; y++) {
     for (int x = cx - 2; x <= cx + 2; x++) {
       if (x < 0 || y < 0 || x > 15 || y > 15) continue;
@@ -187,6 +196,7 @@ static uint8_t (&g_polDist)[256] = g_modeRam.fx.polDist;
 static uint8_t (&g_polAng)[256] = g_modeRam.fx.polAng;
 
 static void geomBoot() {
+  modesScratchUse();
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
       float dx = (float)x - 7.5f;
@@ -293,12 +303,14 @@ static void rainFade(uint32_t dt) {
 }
 
 static void rainBoot() {
+  modesScratchUse();
   g_rainRng ^= 0xA5A5u;
   memset(g_rainRgb, 0, sizeof g_rainRgb);
   for (uint8_t x = 0; x < RAIN_COLS; x++) rainSpawn(x, 1);
 }
 
 static void rainStep(uint8_t speed, uint32_t dt, uint32_t period) {
+  modesScratchUse();
   (void)period;
   if (dt < 1u) dt = 1u;
   if (dt > 100u) dt = 100u;
@@ -425,6 +437,7 @@ static void fluidSample(float x, float y, int* ink, int* hue) {
 }
 
 static void fluidStep(uint8_t speed, float timeScale) {
+  modesScratchUse();
   float scale = (0.35f + (float)speed * 0.013f) * timeScale;
   g_fluidT += 0.06f * scale;
   uint8_t nd[256];
@@ -553,6 +566,7 @@ static const uint8_t kGauss[64] = {
 
 static void spiralPrep(uint32_t now) {
   if (g_spNow == now) return;
+  modesScratchUse();
   g_spNow = now;
   float theta = SP_TURNS * 6.2831853f;
   float spin = (float)(now % 9000u) * (6.2831853f / 9000.0f);
@@ -788,12 +802,68 @@ static const uint8_t kRadarRgb[16][3] = {
 };
 
 static const uint8_t* g_radarBits = 0;
+// Low 7 bits: how many leading frames belong to one finished download.
+// 0 means do not read the store (boot, a preset reused it, or the publish
+// has not happened). A refresh copies the new body first and only then
+// changes the count, so a still-intact loop keeps playing through the
+// transfer. A partial body is never given a count. Count fits in 7 bits
+// (RADAR_FRAMES_MAX is 26).
+// Bit 7: a published loop was discarded. The sketch consumes it once.
+// Sharing the existing byte avoids a new BSS object and its alignment pad.
 static uint8_t g_radarN = 0;
+static const uint8_t RADAR_DROP_BIT = 0x80;
+static_assert(RADAR_FRAMES_MAX < 128, "frame count shares a byte with the drop flag");
+
+static uint8_t radarCountOf() { return (uint8_t)(g_radarN & (uint8_t)~RADAR_DROP_BIT); }
+
+static void radarStoreCount(uint8_t n) {
+  g_radarN = (uint8_t)((g_radarN & RADAR_DROP_BIT) | (n & (uint8_t)~RADAR_DROP_BIT));
+}
+
+static void radarStoreDrop(uint8_t on) {
+  if (on) g_radarN = (uint8_t)(g_radarN | RADAR_DROP_BIT);
+  else g_radarN = (uint8_t)(g_radarN & (uint8_t)~RADAR_DROP_BIT);
+}
+
+static void modesRadarClear() {
+  g_radarBits = 0;
+  radarStoreCount(0);
+}
+
+static void modesScratchUse() {
+  if (!radarCountOf() && !g_radarBits) return;
+  modesRadarClear();
+  radarStoreDrop(1);
+}
 
 static void modesRadarSet(const uint8_t* bits, uint8_t n) {
   if (n > RADAR_FRAMES_MAX) n = RADAR_FRAMES_MAX;
-  g_radarBits = (n && bits) ? bits : 0;
-  g_radarN = g_radarBits ? n : 0;
+  if (!n || !bits) {
+    modesRadarClear();
+    radarStoreDrop(0);
+    return;
+  }
+  g_radarBits = bits;
+  radarStoreCount(n);
+  radarStoreDrop(0);
+}
+
+// Entering radar. Keep a loop only when the last publish is still the
+// bytes in the store. Otherwise drop it and zero the store so a stale
+// count cannot paint preset data.
+static void modesRadarEnter() {
+  if (radarCountOf() && g_radarBits) return;
+  modesRadarClear();
+  radarStoreDrop(1);
+  memset(g_modeRam.radar, 0, sizeof g_modeRam.radar);
+}
+
+static uint8_t modesRadarCount() { return radarCountOf(); }
+
+static uint8_t modesRadarTakeDrop() {
+  uint8_t d = (g_radarN & RADAR_DROP_BIT) ? 1 : 0;
+  radarStoreDrop(0);
+  return d;
 }
 
 static void paintDimWhite(uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
@@ -815,29 +885,25 @@ static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
                        uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
   if ((unsigned)x >= 16u || (unsigned)y >= 16u) return;
-  uint8_t n = g_radarN;
-  uint8_t idx = 0;
-  uint8_t level = 0;
-  if (!n || !g_radarBits) {
-    // Waiting on the fetch. A dim checker replaces the previous preset
-    // so a frozen old frame is not what the panel keeps showing.
-    if (((x + y) & 3) == 0) *b = 36;
-    else *b = 8;
-  } else {
-    idx = radarFrameIndex(now, n);
+  uint8_t n = radarCountOf();
+  // No complete loop yet. The home dot is drawn below. The progress bar
+  // and the echo colours stay off, including while a download is in flight
+  // and including when the store still holds another preset.
+  if (n && g_radarBits) {
+    uint8_t idx = radarFrameIndex(now, n);
     if (idx >= n) idx = (uint8_t)(n - 1u);
     const uint8_t* frame = g_radarBits + (uint16_t)idx * RADAR_FRAME_BYTES;
     // Logical x = 0 is the viewer's right. File x = 0 is west.
-    level = radarLevelAt(frame, 15 - x, y);
+    uint8_t level = radarLevelAt(frame, 15 - x, y);
     if (level > 15) level = 15;
     uint8_t applied = lamp_fx_applied(fader);
     *r = offChannel(kRadarRgb[level][0], applied);
     *g = offChannel(kRadarRgb[level][1], applied);
     *b = offChannel(kRadarRgb[level][2], applied);
+    uint8_t bar = radarBarLength(idx, n);
+    // Grow from the viewer's left, which is logical x = 15.
+    if (y == 15 && bar && (unsigned)x >= (unsigned)(16 - bar)) paintDimWhite(fader, r, g, b);
   }
-  uint8_t bar = radarBarLength(n ? idx : 0, n);
-  // Grow from the viewer's left, which is logical x = 15.
-  if (y == 15 && bar && (unsigned)x >= (unsigned)(16 - bar)) paintDimWhite(fader, r, g, b);
   if (x == 8 && y == 7) paintRadarHome(fader, r, g, b);
 }
 

@@ -135,6 +135,7 @@ void lamp_fx_init() {
   modesBoot();
   matrixFireReset();
   matrixFireSetIntensity(50);
+  modesScratchUse();
   memset(g_heat, 0, sizeof g_heat);
   for (uint8_t i = 0; i < 40; i++) matrixFireStep(g_heat);
   memset(g_rgb, 0, sizeof g_rgb);
@@ -150,7 +151,9 @@ void lamp_fx_configure(uint8_t mode, uint8_t speed, uint8_t fader) {
   if (mode != g_fxMode) {
     uint8_t prev = g_fxMode;
     if (prev == M_RADAR && mode != M_RADAR) modesAfterRadar();
+    if (mode == M_RADAR && prev != M_RADAR) modesRadarEnter();
     if (mode == M_FIRE && prev == M_RADAR) {
+      modesScratchUse();
       matrixFireReset();
       matrixFireSetIntensity(50);
       memset(g_heat, 0, sizeof g_heat);
@@ -174,6 +177,7 @@ int lamp_fx_render(uint32_t now) {
   g_fxStarted = 1;
   g_fxDirty = 0;
   if (g_fxMode == M_FIRE) {
+    modesScratchUse();
     matrixFireSetIntensity(50);
     uint32_t steps = elapsed / period;
     if (steps < 1u) steps = 1u;
@@ -211,6 +215,8 @@ void lamp_fx_radar_set(const uint8_t* packed, uint8_t count) {
   g_fxDirty = 1;
 }
 uint8_t* lamp_fx_radar_bytes() { return g_modeRam.radar; }
+uint8_t lamp_fx_radar_count() { return modesRadarCount(); }
+uint8_t lamp_fx_radar_take_drop() { return modesRadarTakeDrop(); }
 void lamp_fx_balls_add() { modesMetaAdd(); }
 void lamp_fx_balls_remove() { modesMetaRemove(); }
 void lamp_fx_balls_set(uint8_t n) { modesMetaSet(n); }
