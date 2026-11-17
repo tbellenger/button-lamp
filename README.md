@@ -289,7 +289,7 @@ g++ -std=c++17 -DMDNS_TEST -x c++ sketches/common/mdns_responder.h -o /tmp/mdns_
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi sketches/MatrixLamp_R4_Wifi
 ```
 
-Core 1.6.0, Adafruit NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 124160 B flash (47% of the 262144 `boards.txt` figure), 18008 B globals (54% of 32768), 14760 B left for locals. The exported `.bin` is 124168 B. The `.ota` is 100223 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. One `WiFiClient` RX fifo (1024 B) is shared by the page and the radar fetch. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. The 3328 B of nibble-packed radar frames share RAM with the other presets' scratch, so they are not a second buffer. A refresh is staged in the HTTP and OTA scratch buffers, which are free while that fetch runs, so a failed download leaves the previous frames on the panel.
+Core 1.6.0, Adafruit NeoPixel 1.15.5, `OTAUpdate` from that core, no `secrets.h`: 124808 B flash (47% of the 262144 `boards.txt` figure), 18024 B globals (55% of 32768), 14744 B left for locals. The exported `.bin` is 124816 B. The `.ota` is 100893 B. NeoPixel then mallocs 768 B (`256 * 3`) on the heap. The HTTP request buffer is 1024 B. The mDNS packet buffer is 512 B. One `WiFiClient` RX fifo (1024 B) is shared by the page and the radar fetch. The mDNS `WiFiUDP` (about 1.5 KB) is malloc'd while WiFi is up. The 3328 B of nibble-packed radar frames share RAM with the other presets' scratch, so they are not a second buffer. A refresh is staged in the HTTP and OTA scratch buffers, which are free while that fetch runs, so a failed download leaves the previous frames on the panel.
 
 #### WiFi firmware update
 
@@ -323,7 +323,7 @@ Names are `SpiralLamp_<Board>_<FeatureTags>`. Feature tags stay in this order: *
 | `SpiralLamp_R3_FireTrail` | Uno R3 | 160 | yes | yes | no | no | Base plus the lava fire tail. |
 | `SpiralLamp_R4_FireTrail` | Uno R4 WiFi | 160 | yes | yes | no | no | Same lamp as R3 FireTrail. Radio unused. Boot line still says `R4 v0`. |
 | `SpiralLamp_R4_FireTrail_WiFi_MIDI` | Uno R4 WiFi | 160 (320 compiles) | yes | yes | yes | yes | Page on port 80, Music mode on UDP 5004. mDNS `spirallamp.local` and `spiral-lamp.local`. |
-| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Phone page only: brightness, speed, and presets including radar. Auto radar switches to the live NEXRAD loop while rain is near home. Off is black except a dim yellow pixel at logical (0, 15). Firmware updates are GitHub releases only, after one USB flash. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
+| `MatrixLamp_R4_Wifi` | Uno R4 WiFi | 16×16 WS2812B on D6 | yes | yes | yes | no | Phone page only: brightness, speed, and presets including radar. Auto radar switches to the live NEXRAD loop while rain is near home. Off breathes one dim yellow pixel (raw 6, 6, 0), starting at logical (0, 15) and moving to a new LED after each fade. Firmware updates are GitHub releases only, after one USB flash. mDNS `matrixlamp.local` and `matrix-lamp.local`. |
 
 ## Layout
 

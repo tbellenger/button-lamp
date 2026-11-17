@@ -12,8 +12,9 @@
    green head (80, 255, 80), a short pure-green tail, and a field that
    fades to black.
    Speed is how fast those drops fall.
-   Off is black except one dim yellow pixel at logical (0, 15),
-   the bottom-left of the lamp. Speed does not move it.
+   Off is one dim yellow pixel, raw (6, 6, 0). It starts at logical
+   (0, 15), the bottom-left of the lamp, fades out, then a new pixel
+   fades in. Speed does not move it.
    See matrix_modes.h for how each one sits on the grid.
    The board's 12x8 red matrix only scrolls the WiFi IP (or a waiting
    mark until DHCP has a real address). There is no frame upload and no

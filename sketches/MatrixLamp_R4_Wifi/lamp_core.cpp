@@ -100,9 +100,12 @@ static void write_visual(int lx, int ly, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 static uint32_t period_ms() {
-  // Matrix rain steps a fraction of a pixel per show. The other presets
-  // keep the slower speed-linked period.
+  // Matrix rain steps a fraction of a pixel per show. Off dithers one
+  // LED between black and its peak; OFF_FRAME_MS matches the fastest
+  // speed-linked period below (speed 100 is 20 ms), so the page, OTA,
+  // and radar keep the same gap they already have at full speed.
   if (g_fxMode == M_MATRIX) return 33u;
+  if (g_fxMode == M_OFF) return OFF_FRAME_MS;
   uint32_t period = 20u + (uint32_t)(100 - g_fxSpeed) * 130u / 100u;
   if (period < 16u) period = 16u;
   return period;
