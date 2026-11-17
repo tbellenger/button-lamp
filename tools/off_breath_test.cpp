@@ -3,7 +3,8 @@
 // /tmp/off_breath_test
 //
 // Timing in matrix_modes.h: fade up 3500, hold 1000, fade down 3500,
-// dark 1000, frame 20. Peak raw yellow is (6, 6, 0).
+// dark 1000, frame 20. Each fade is three steady thirds: off, dim red,
+// peak yellow. Peak raw is (6, 6, 0). Dim is the red channel only.
 #include "lamp_core.h"
 
 #include <stdio.h>
@@ -35,6 +36,7 @@ struct Hit {
   int x, y;
   int lx, ly;
   uint8_t r, g, b;
+  uint8_t kind; // 0 black, 1 dim red, 2 peak yellow
 };
 
 static bool logicalOf(int vx, int vy, int* lx, int* ly) {
@@ -51,7 +53,7 @@ static bool logicalOf(int vx, int vy, int* lx, int* ly) {
   return found == 1;
 }
 
-// n == 1 means one pixel at today's peak. Anything else bumps n.
+// n == 1 means one legal pixel: dim red or peak yellow, never brighter.
 static Hit scan(uint8_t fader) {
   Hit h;
   memset(&h, 0, sizeof h);
@@ -70,9 +72,12 @@ static Hit scan(uint8_t fader) {
       h.r = p[0];
       h.g = p[1];
       h.b = p[2];
-      if (p[2] != 0 || p[0] != p[1]) h.n += 100;
-      if (p[0] != peak) h.n += 1000;
+      int dim = (p[0] == peak && p[1] == 0 && p[2] == 0);
+      int full = (p[0] == peak && p[1] == peak && p[2] == 0);
+      if (!dim && !full) h.n += 1000;
       if (lamp_fx_scale(p[0], applied) > shownPeak) h.n += 10000;
+      if (lamp_fx_scale(p[1], applied) > shownPeak) h.n += 10000;
+      h.kind = full ? 2 : (dim ? 1 : 0);
     }
   }
   if (h.n == 1 && !logicalOf(h.x, h.y, &h.lx, &h.ly)) h.n += 50;
@@ -83,8 +88,9 @@ static const uint32_t T_END = 108000;
 
 struct Sample {
   uint8_t n;
+  uint8_t kind;
   int8_t lx, ly;
-  uint8_t r;
+  uint8_t r, g;
 };
 
 static Sample g_fr[T_END / 20 + 1];
@@ -97,22 +103,30 @@ static void record(uint8_t speed, uint8_t fader) {
     Hit h = scan(fader);
     Sample* s = &g_fr[t / 20u];
     s->n = (uint8_t)(h.n > 255 ? 255 : h.n);
+    s->kind = h.kind;
     s->lx = (int8_t)h.lx;
     s->ly = (int8_t)h.ly;
     s->r = h.r;
+    s->g = h.g;
   }
 }
 
 static const Sample* at(uint32_t t) { return &g_fr[t / 20u]; }
 
-static int onPerMil(uint32_t a, uint32_t b) {
-  int on = 0;
-  int frames = 0;
+// 0 when every frame in [a, b) is the same steady colour on one pixel.
+static int steady(uint32_t a, uint32_t b, uint8_t kind) {
+  int bad = 0;
+  const Sample* first = at(a);
   for (uint32_t t = a; t < b; t += 20u) {
-    frames++;
-    if (at(t)->n == 1) on++;
+    const Sample* s = at(t);
+    if (kind == 0) {
+      if (s->n != 0) bad++;
+      continue;
+    }
+    if (s->n != 1 || s->kind != kind) bad++;
+    if (s->lx != first->lx || s->ly != first->ly) bad++;
   }
-  return frames ? (on * 1000) / frames : -1;
+  return bad;
 }
 
 static uint32_t runHash(uint8_t speed, uint8_t fader, int* bad) {
@@ -127,10 +141,13 @@ static uint32_t runHash(uint8_t speed, uint8_t fader, int* bad) {
     acc *= 16777619u;
     acc ^= (uint32_t)(h.ly + 29);
     acc *= 16777619u;
-    acc ^= (uint32_t)(h.n == 1 ? 1u : 0u);
+    acc ^= h.kind;
     acc *= 16777619u;
     if (h.n != 0 && h.n != 1) (*bad)++;
-    if (h.n == 1 && (h.r != peak || h.g != peak || h.b != 0)) (*bad)++;
+    if (h.n == 1 && h.kind == 0) (*bad)++;
+    if (h.n == 1 && (h.r != peak || h.b != 0)) (*bad)++;
+    if (h.n == 1 && h.kind == 2 && h.g != peak) (*bad)++;
+    if (h.n == 1 && h.kind == 1 && h.g != 0) (*bad)++;
   }
   return acc;
 }
@@ -147,28 +164,32 @@ int main() {
 
   record(50, fader);
   const Sample* s0 = at(0);
-  expect(s0->n == 1 && s0->lx == 0 && s0->ly == 15 && s0->r == peak,
+  expect(s0->n == 1 && s0->kind == 2 && s0->lx == 0 && s0->ly == 15 && s0->r == peak &&
+             s0->g == peak,
          "starts at logical (0, 15) at the old peak");
 
   int bad = 0;
   for (uint32_t t = 0; t <= T_END; t += 20u) {
     if (at(t)->n != 0 && at(t)->n != 1) bad++;
   }
-  expect(bad == 0, "every frame is black or one peak pixel");
+  expect(bad == 0, "every frame is black, dim red, or peak yellow");
 
-  expect(onPerMil(3800, 4200) == 0, "middle of the first dark gap is black");
-  expect(onPerMil(8300, 8700) == 1000, "middle of the first hold is solid");
+  expect(steady(80, 1000, 2) == 0, "fade down starts on steady peak yellow");
+  expect(at(80)->lx == 0 && at(80)->ly == 15, "the first step is still the home pixel");
+  expect(steady(1400, 2100, 1) == 0, "fade down middle is steady dim red");
+  expect(at(1400)->lx == 0 && at(1400)->ly == 15 && at(1400)->g == 0,
+         "dim red is the home pixel with green off");
+  expect(steady(2600, 3400, 0) == 0, "fade down ends off, with no blinks");
+  expect(steady(3700, 4400, 0) == 0, "the dark gap stays off");
+  expect(steady(4700, 5400, 0) == 0, "fade up starts off");
+  expect(steady(5900, 6600, 1) == 0, "fade up middle is steady dim red");
+  expect(steady(7200, 7900, 2) == 0, "fade up ends on steady peak yellow");
+  expect(steady(8200, 8900, 2) == 0, "the hold is steady peak yellow");
   const Sample* hold = at(8500);
-  expect(hold->n == 1 && !(hold->lx == 0 && hold->ly == 15),
+  expect(hold->n == 1 && hold->kind == 2 && !(hold->lx == 0 && hold->ly == 15),
          "first new pixel is not the home pixel");
-
-  int earlyDown = onPerMil(200, 600);
-  int lateDown = onPerMil(2800, 3200);
-  int earlyUp = onPerMil(4700, 5100);
-  int lateUp = onPerMil(7400, 7800);
-  printf("duty down %d -> %d, up %d -> %d (per 1000)\n", earlyDown, lateDown, earlyUp, lateUp);
-  expect(earlyDown > 800 && lateDown < 250 && earlyDown > lateDown, "fade down eases off");
-  expect(earlyUp < 250 && lateUp > 800 && lateUp > earlyUp, "fade up eases on");
+  expect(at(5900)->lx == hold->lx && at(5900)->ly == hold->ly,
+         "dim and peak of one breath are the same LED");
 
   int prev = 15 * 16;
   int distinct = 1;
@@ -192,7 +213,8 @@ int main() {
     }
     for (uint32_t u = t - 200u; u <= t + 200u; u += 20u) {
       const Sample* w = at(u);
-      if (w->n != 1 || w->lx != s->lx || w->ly != s->ly || w->r != peak) holdBad++;
+      if (w->n != 1 || w->kind != 2 || w->lx != s->lx || w->ly != s->ly || w->g != peak)
+        holdBad++;
     }
     prev = id;
   }
@@ -231,7 +253,8 @@ int main() {
   lamp_fx_configure(M_OFF, 50, fader);
   lamp_fx_render(5000);
   Hit back = scan(fader);
-  expect(back.n == 1 && back.lx == 0 && back.ly == 15 && back.r == peak,
+  expect(back.n == 1 && back.kind == 2 && back.lx == 0 && back.ly == 15 && back.r == peak &&
+             back.g == peak,
          "re-entering off restarts at the home peak");
 
   if (g_fails) {

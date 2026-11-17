@@ -17,9 +17,9 @@
 //   lightning  jagged bolt, logical picture space. Outline plus a
 //              darker same-hue fill. A looping ramp scrolls along it.
 //              Speed is that scroll. Flicker stays on.
-//   off        one dim yellow pixel, raw (6, 6, 0). It starts at logical
-//              (0, 15) and breathes: fade down, dark, then a new pixel
-//              fades up, holds, and fades down. Speed is ignored.
+//   off        one dim pixel, raw (6, 6, 0) at the peak. It starts at
+//              logical (0, 15). The breath is three steady steps, no
+//              dither: peak yellow, dim red, off. Speed is ignored.
 //              The peak is the old static pixel. It never goes brighter.
 //   radar      live NEXRAD frames. North is up. The file's x = 0 is
 //              west, but this housing shows logical x = 0 on the right
@@ -852,18 +852,21 @@ static void paintRadar(int x, int y, uint32_t now, uint8_t fader,
   if (x == 8 && y == 7) paintRadarHome(fader, r, g, b);
 }
 
-// One breathing pixel. The colour and the peak are the old static Off
-// pixel: raw yellow (6, 6, 0), raised by offChannel so show() keeps it.
-// Logical (0, 15) is the bottom row, left column of the picture.
-// write_visual() rotates that (FX_ROTATE 3) and showFrame() applies the
-// serpentine map, so a random logical cell is any physical LED. This
-// does not index the strip itself.
+// One breathing pixel. The peak is the old static Off pixel: raw yellow
+// (6, 6, 0), raised by offChannel so show() keeps it. Logical (0, 15)
+// is the bottom row, left column of the picture. write_visual() rotates
+// that (FX_ROTATE 3) and showFrame() applies the serpentine map, so a
+// random logical cell is any physical LED. This does not index the strip.
 //
-// show() has no level between 0 and that floor, and the next level up
-// is brighter than today. The fade is temporal dither between black and
-// the floor. The duty is a raised cosine (sin^2 of a quarter turn, read
-// from kSinQ): slowest at black and at the peak, which is where a step
-// would show. The 20 ms tick is OFF_FRAME_MS. Speed is not read.
+// show() has no level between 0 and that floor, and the next level up is
+// brighter than today. Pulsing the floor on and off is a 100% modulation
+// of a single count. At 50 Hz that blinked. At the ~120 Hz a 256-LED
+// strip can be rewritten, mid-duty is still a ~60 Hz blink, and show()
+// holds interrupts off for the whole 7.7 ms, which starves the UART.
+// The fade is therefore three steady colours, each held for a third of
+// the 3.5 s: peak yellow (shown 1,1,0), dim red (shown 1,0,0), and off.
+// The red channel uses the same floor as the peak, so it cannot show
+// brighter than today's yellow. Speed is not read.
 static const uint16_t OFF_FADE_UP_MS = 3500;
 static const uint16_t OFF_HOLD_MS = 1000;
 static const uint16_t OFF_FADE_DOWN_MS = 3500;
@@ -876,13 +879,16 @@ static const uint8_t OFF_UP = 0;
 static const uint8_t OFF_HOLD = 1;
 static const uint8_t OFF_DOWN = 2;
 static const uint8_t OFF_DARK = 3;
-static const uint32_t OFF_LEVEL = 65536u;
+// 0 black, 1 dim red (R only), 2 peak yellow (R and G).
+static const uint8_t OFF_LIT_OFF = 0;
+static const uint8_t OFF_LIT_DIM = 1;
+static const uint8_t OFF_LIT_PEAK = 2;
 
 static uint32_t g_offRng = 1;
 static uint32_t g_offT0 = 0;
 static uint8_t g_offPix = OFF_HOME;
 static uint8_t g_offPhase = OFF_DOWN;
-static uint8_t g_offOn = 0;
+static uint8_t g_offLit = OFF_LIT_OFF;
 
 static uint16_t offDur(uint8_t phase) {
   if (phase == OFF_UP) return OFF_FADE_UP_MS;
@@ -898,36 +904,25 @@ static uint8_t offPick(uint8_t prev) {
   return n;
 }
 
-// 0 at the start of a fade, OFF_LEVEL at the end. Raised cosine.
-static uint32_t offEase(uint32_t elapsed, uint32_t dur) {
-  if (dur == 0 || elapsed >= dur) return OFF_LEVEL;
-  uint32_t span = (uint32_t)(((uint64_t)elapsed << 16) * 128u / dur);
-  uint32_t i = span >> 16;
-  uint32_t f = span & 65535u;
-  if (i >= 128u) return OFF_LEVEL;
-  int32_t s0 = kSinQ[(i + 64u) & 255u];
-  int32_t s1 = kSinQ[(i + 65u) & 255u];
-  int32_t s = s0 + (int32_t)(((s1 - s0) * (int32_t)f) >> 16);
-  if (s > 127) s = 127;
-  if (s < -127) s = -127;
-  uint32_t duty = (uint32_t)(127 - s) * 65536u / 254u;
-  if (duty > OFF_LEVEL) return OFF_LEVEL;
-  return duty;
-}
-
-static uint32_t offLevel(uint32_t elapsed) {
-  if (g_offPhase == OFF_HOLD) return OFF_LEVEL;
-  if (g_offPhase == OFF_DARK) return 0;
-  uint32_t e = offEase(elapsed, offDur(g_offPhase));
-  if (g_offPhase == OFF_DOWN) return OFF_LEVEL - e;
-  return e;
+// Thirds of a fade. Up rises off -> dim -> peak. Down falls the other way.
+static uint8_t offShade(uint32_t elapsed) {
+  if (g_offPhase == OFF_HOLD) return OFF_LIT_PEAK;
+  if (g_offPhase == OFF_DARK) return OFF_LIT_OFF;
+  uint32_t dur = offDur(g_offPhase);
+  uint32_t t1 = dur / 3u;
+  uint32_t t2 = (dur * 2u) / 3u;
+  uint8_t band = 0;
+  if (elapsed >= t2) band = 2;
+  else if (elapsed >= t1) band = 1;
+  if (g_offPhase == OFF_UP) return band;
+  return (uint8_t)(OFF_LIT_PEAK - band);
 }
 
 static void offEnter(uint32_t now) {
   g_offPix = OFF_HOME;
   g_offPhase = OFF_DOWN;
   g_offT0 = now;
-  g_offOn = 1;
+  g_offLit = OFF_LIT_PEAK;
 }
 
 static void offStep(uint32_t now) {
@@ -939,10 +934,7 @@ static void offStep(uint32_t now) {
     if (g_offPhase == OFF_DARK) g_offPix = offPick(g_offPix);
     g_offPhase = (uint8_t)((g_offPhase + 1u) & 3u);
   }
-  uint32_t level = offLevel(now - g_offT0);
-  // Idempotent in a 20 ms slot, so a dirty redraw does not double-step.
-  uint32_t frac = ((now / OFF_FRAME_MS) * 2654435769u) >> 16;
-  g_offOn = (frac < level) ? 1 : 0;
+  g_offLit = offShade(now - g_offT0);
 }
 
 static void offBoot() {
@@ -950,7 +942,7 @@ static void offBoot() {
   g_offPix = OFF_HOME;
   g_offPhase = OFF_DOWN;
   g_offT0 = 0;
-  g_offOn = 0;
+  g_offLit = OFF_LIT_OFF;
 #if defined(ARDUINO)
   uint32_t s = (uint32_t)micros();
   // A0 and A1 are free on this lamp (no pots). A stuck pin still leaves
@@ -966,11 +958,12 @@ static void offBoot() {
 
 static void paintOff(int x, int y, uint8_t fader, uint8_t* r, uint8_t* g, uint8_t* b) {
   *r = *g = *b = 0;
-  if (!g_offOn) return;
+  if (g_offLit == OFF_LIT_OFF) return;
   if (x != (int)(g_offPix & 15u) || y != (int)(g_offPix >> 4)) return;
   uint8_t applied = lamp_fx_applied(fader);
-  *r = offChannel(OFF_PEAK_R, applied);
-  *g = offChannel(OFF_PEAK_G, applied);
+  uint8_t c = offChannel(OFF_PEAK_R, applied);
+  *r = c;
+  if (g_offLit == OFF_LIT_PEAK) *g = offChannel(OFF_PEAK_G, applied);
 }
 
 static void paintLightning(int x, int y, uint32_t now, uint8_t speed,

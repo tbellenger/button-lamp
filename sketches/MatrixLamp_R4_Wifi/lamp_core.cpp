@@ -100,10 +100,11 @@ static void write_visual(int lx, int ly, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 static uint32_t period_ms() {
-  // Matrix rain steps a fraction of a pixel per show. Off dithers one
-  // LED between black and its peak; OFF_FRAME_MS matches the fastest
-  // speed-linked period below (speed 100 is 20 ms), so the page, OTA,
-  // and radar keep the same gap they already have at full speed.
+  // Matrix rain steps a fraction of a pixel per show. Off holds a
+  // steady colour for about a second at a time. OFF_FRAME_MS only
+  // places the step edge; it is the same 20 ms the speed slider
+  // already uses at 100, so the page, OTA, and radar are not asked
+  // to share the CPU with a faster show.
   if (g_fxMode == M_MATRIX) return 33u;
   if (g_fxMode == M_OFF) return OFF_FRAME_MS;
   uint32_t period = 20u + (uint32_t)(100 - g_fxSpeed) * 130u / 100u;
