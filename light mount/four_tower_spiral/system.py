@@ -1,12 +1,14 @@
 """Four-tower spiral mount.
 
-A ring bolts to the deck. Four towers stand at 0, 90, 180 and 270 degrees.
-Each tower is printed on its side, so the clip C lies in the layer plane.
-A cap drops onto the four tops and holds that radius.
+A ring bolts to the deck. Four towers stand on the diagonals, 45 degrees
+off the axes, so the front pair sits at the corners instead of one tower
+blocking the view from the buttons. Each tower is printed on its side, so
+the clip C lies in the layer plane. A cap drops onto the four tops and
+holds that radius.
 
-The helix starts at the 90 degree tower (the back, +Y). That is 20 degrees
-past the light-cable hole, going counterclockwise and up. The other towers
-pick up the same helix a quarter turn later.
+The helix starts on tower 1, the back-left tower. It climbs counterclockwise
+and up. The other towers pick up the same helix a quarter turn later.
+Mounting holes and the cable window stay put: +Y is still the back.
 
 Lengths are millimetres. Fits are design allowances, not measured.
 """
@@ -37,10 +39,13 @@ JOINT_CLEAR = 0.2
 # Recessed digit. Shallow so it does not eat the rib or the ring.
 MARK_DEPTH = 0.6
 MARK_FONT = 5.0
-# 0 = +X (right), 1 = +Y (back), 2 = -X, 3 = -Y (front).
+# Index 0 was on +X. The whole set is turned 45° counterclockwise so tower 2
+# (yellow, number 2) and tower 3 (green, number 3) land on the front corners.
+# +Y stays the back, toward the cable window. -Y is the front, toward the buttons.
 TOWER_NAMES = ("0", "90", "180", "270")
-# Lowest clip is on the back tower. Cable hole is about 20 degrees before it.
-THETA0 = math.pi / 2.0
+TOWER_PHASE = math.pi / 4.0
+# Lowest clip is on tower 1. Same helix, shifted with the towers.
+THETA0 = math.pi / 2.0 + TOWER_PHASE
 R_PIN = 22.0
 R_OUT = 64.0
 R_IN = 8.0
@@ -237,8 +242,8 @@ def deck():
 
 
 def tower_angle(index):
-    """World angle of tower index. 0 is +X, 1 is +Y (back)."""
-    return index * math.pi / 2.0
+    """World angle of tower index, 45° off the axes. 0° is +X, 90° is +Y (back)."""
+    return index * math.pi / 2.0 + TOWER_PHASE
 
 
 def stations_for(spec, index):
@@ -281,21 +286,24 @@ def helix_point(spec, theta):
 def arm_profile(spec):
     """Print-+Z top of the spoke. X is radial, Z is print-up.
 
-    The top is one straight slope from the clip's exterior height down to the
-    far face of the rib. The underside is the bed.
+    Across the rib the top stays at the rib height, so the root does not
+    stand proud of the 6 × 3.2 mm section. Outside the outer face the top
+    rises in one slope to the clip.
     """
     half = spec.clip_arm / 2.0
     x_far = -spec.rib_radial / 2.0
     x_face = spec.rib_radial / 2.0
     x_hi = spec.tube_x - math.sqrt(spec.ro * spec.ro - half * half)
     x_end = spec.tube_x - spec.rb - 0.4
-    span = x_hi - x_far
+    span = x_hi - x_face
     drop = spec.clip_width - spec.rib_tangential
 
     def z_at(x):
+        if x <= x_face:
+            return spec.rib_tangential
         if x >= x_hi:
             return spec.clip_width
-        return spec.rib_tangential + drop * (x - x_far) / span
+        return spec.rib_tangential + drop * (x - x_face) / span
 
     return SimpleNamespace(
         half=half,
@@ -334,7 +342,7 @@ def _bore_void(spec, cy):
 
 
 # Helix order, counterclockwise and up. 1 is the lowest clip.
-# Index 0 is +X, 1 is +Y (back), 2 is -X, 3 is -Y (front).
+# After the 45° turn: 1 back-left, 2 front-left, 3 front-right, 4 back-right.
 TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 
@@ -356,23 +364,22 @@ def _slab(face, z0, height):
 def _arm_wedge(spec, y):
     """Spoke from the rib to the clip, in the print frame.
 
-    The plan is a rectangle clip_arm long along the tower. In print +Z the top
-    is one slope from the clip's exterior height down to the far face of the
-    rib, across the whole radial width. The underside stays on the bed. The
-    helix tilts the bore inside the clip; it does not change these two exterior
-    heights.
+    The plan is a rectangle clip_arm long along the tower. Across the rib the
+    top stays at the rib height, so the root is inside the 6 × 3.2 mm section.
+    Outside the outer face the top rises to the clip. The underside stays on
+    the bed. The 45° gussets sit inside the rib and are clipped to it.
     """
     half = spec.clip_arm / 2.0
     if half >= spec.ro - 0.4:
         reject("clip_arm is wide enough to reach through the clip wall", param="clip_arm")
-    # Far face of the rib, away from the clip. The slope meets the rib height here.
-    x_far = -spec.rib_radial / 2.0
-    # X where the whole spoke has crossed into the clip.
-    x_hi = spec.tube_x - math.sqrt(spec.ro * spec.ro - half * half)
-    x_end = spec.tube_x - spec.rb - 0.4
-    z_lo = spec.rib_tangential
-    z_hi = spec.clip_width
-    if x_far + 2.0 >= x_hi or x_hi + 0.4 >= x_end:
+    profile = arm_profile(spec)
+    x_far = profile.x_far
+    x_face = profile.x_face
+    x_hi = profile.x_hi
+    x_end = profile.x_end
+    z_lo = profile.z_lo
+    z_hi = profile.z_hi
+    if x_face + 1.0 >= x_hi or x_hi + 0.4 >= x_end:
         reject("the spoke ramp has no room between the rib and the bore", param="clip_arm")
     # Sketch: X is radial, Y stands in for print +Z. Extrude the spoke thickness,
     # then Rot(90) about X lays that thickness along the tower and the sketch Y up.
@@ -382,6 +389,7 @@ def _arm_wedge(spec, y):
             (x_end, 0.0),
             (x_end, z_hi),
             (x_hi, z_hi),
+            (x_face, z_lo),
             (x_far, z_lo),
         ]
     )
@@ -392,51 +400,49 @@ def _arm_wedge(spec, y):
     return body
 
 
-def _ramp_cutter(spec, y):
-    """Everything above the spoke slope, across the spoke and both gussets."""
-    profile = arm_profile(spec)
-    face = Polygon(
-        [
-            (profile.x_far, profile.z_lo),
-            (profile.x_hi, profile.z_hi),
-            (profile.x_hi, profile.z_hi + 2.0),
-            (profile.x_far, profile.z_hi + 2.0),
-        ]
-    )
-    # A millimetre past each gusset toe, so the cut is not a coincident face.
+def _rib_envelope(spec, y):
+    """The rib's 6 × 3.2 mm cross-section, long enough to cover this join.
+
+    A hair larger than the rib so the gusset's face on the boundary is included,
+    and still short of sticking past the real faces once the hair is inside.
+    """
     reach = spec.clip_arm + 2.0 * spec.arm_bevel + 2.0
-    top = y + spec.clip_arm / 2.0 + spec.arm_bevel + 1.0
-    return Pos(0, top, 0) * Rot(90, 0, 0) * extrude(face, reach)
+    face = Pos(0, y) * Rectangle(spec.rib_radial, reach)
+    return _slab(face, spec.bed_z, spec.rib_tangential)
 
 
 def _gussets(spec, y):
-    """45° gussets in the print plan, one each side of the spoke, top on the ramp.
+    """45° gussets inside the rib, one each side of the spoke.
 
-    The leg is arm_bevel, which is half the spoke. The top is cut to the same
-    print-+Z slope as the spoke, so the gusset does not stand above it.
+    The leg is arm_bevel, half the spoke. Both triangles lie in the rib's
+    radial width and only as tall as the rib. The intersection with the rib
+    envelope drops anything that would pass a side face.
     """
     half = spec.clip_arm / 2.0
     bevel = spec.arm_bevel
-    x_face = spec.rib_radial / 2.0
-    x_knee = x_face + bevel
-    if x_knee > arm_profile(spec).x_hi - 0.4:
-        reject("arm_bevel reaches the clip before the spoke does", param="clip_arm")
+    x_out = spec.rib_radial / 2.0
+    x_in = x_out - bevel
+    if x_in <= -x_out + 0.4:
+        reject("arm_bevel is deeper than the rib", param="clip_arm")
     lower = Polygon(
         [
-            (x_face, y - half),
-            (x_face, y - half - bevel),
-            (x_knee, y - half),
+            (x_out, y - half),
+            (x_in, y - half),
+            (x_out, y - half - bevel),
         ]
     )
     upper = Polygon(
         [
-            (x_face, y + half),
-            (x_knee, y + half),
-            (x_face, y + half + bevel),
+            (x_out, y + half),
+            (x_in, y + half),
+            (x_out, y + half + bevel),
         ]
     )
-    solid = _slab(lower + upper, spec.bed_z, spec.clip_width)
-    return solid - _ramp_cutter(spec, y)
+    solid = _slab(lower + upper, spec.bed_z, spec.rib_tangential)
+    clipped = solid & _rib_envelope(spec, y)
+    if len(clipped.solids()) < 1:
+        reject("the gussets fell outside the rib", param="clip_arm")
+    return clipped
 
 
 def build_tower(spec, index):

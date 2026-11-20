@@ -2,7 +2,7 @@
 
 A separate way to hold the 13 mm silicone tube. It does not replace the cross mount in [`../spiral_tube_mount/`](../spiral_tube_mount/).
 
-The base is only a ring: the existing M3 bolts, a clear path for the light cable, and four slots. Four towers stand at 0°, 90°, 180° and 270°. Clips on the towers follow one helix. A cap drops onto the four tops and holds them on their circle.
+The base is only a ring: the existing M3 bolts, a clear path for the light cable, and four slots. Four towers stand on the diagonals, 45° off the axes. Clips on the towers follow one helix. A cap drops onto the four tops and holds them on their circle.
 
 The four feet are the same shape. The towers differ only in clip height and in a recessed number. Tom dry-fits them, then glues. The numbers are the placement guide.
 
@@ -17,7 +17,7 @@ What sets it:
 - **3.2 mm tangential** is the width you see edge-on through the coil. It is eight perimeters on a 0.4 mm nozzle, solid, on the 3 mm wall floor. Thinner than 2.4 mm is a ribbon that splits when the tube is pushed into the clip.
 - **6.0 mm radial** is the depth that takes the uncoil bend. That bend is in the layer plane, because the tower prints on its side. Six millimetres is enough to read as a beam over the span from the ring to the cap, and still much smaller than the 13 mm gap between turns. It is not derived from a tube force.
 - The **foot is the same rib**, carried 4.5 mm down through the ring. There is no pad under it.
-- Each **clip is 10 mm** along the tube, standing off one face of the rib. It was 14 mm, which read as a block next to the 3.2 mm rib. In the plan of the print the spoke is 4.29 mm along the tower, with a 2.15 mm 45° gusset on each side where it meets the rib. In print-up, its top slopes from that 10 mm clip down to the 3.2 mm rib.
+- Each **clip is 10 mm** along the tube, standing off one face of the rib. It was 14 mm, which read as a block next to the 3.2 mm rib. In the plan of the print the spoke is 4.29 mm along the tower, with a 2.15 mm 45° gusset on each side, inside the rib. In print-up the root stays at 3.2 mm, and the top slopes up to 10 mm only after it has left the rib.
 
 If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth where the coil pushes out, and it barely changes the view. Raise `rib_tangential` only if the rib twists. Raise `clip_arm` if a spoke at the clip root bends. All three are sliders. The slot and the cap pocket follow the rib, plus `joint_clear`.
 
@@ -25,19 +25,18 @@ If a trial print flexes, raise `rib_radial` first (6, then 8). That adds depth w
 
 The tower lies on its side. +X is radial, out toward the tube. +Y runs along the tower. +Z is print-up, and it is only 3.2 mm on the rib and 10 mm on the clip.
 
-The spoke's outline along the tower is 4.29 mm. A 45° gusset, 2.15 mm on each leg, fills each elbow where that spoke meets the outer face of the rib. The spoke runs from the far face of the rib to 0.4 mm short of the bore. The tube centre stays at X = 21.5. The mouth stays 11.5 mm. Away from that band the rib is still 6.0 by 3.2.
+The spoke's outline along the tower is 4.29 mm. A 45° gusset, 2.15 mm on each leg, sits inside the rib on each side of the spoke. It does not cross a rib face. The spoke runs from the far face of the rib to 0.4 mm short of the bore. The tube centre stays at X = 21.5. The mouth stays 11.5 mm. Away from that band the rib is still 6.0 by 3.2.
 
-The top is one slope. It crosses the whole rib, and the gussets, and meets the far face, the face away from the clip.
+Across the rib the top stays at 3.2 mm, the same as the rib. The slope starts at the outer face and rises to the clip.
 
 | | Print +Z |
 |---|---|
-| Far face of the rib, X = −3.0 | 3.2 mm, flush with the rib top. |
-| Clip-facing face of the rib, X = +3.0 | 5.81 mm, partway up the same slope |
+| Far face through the outer face, X = −3.0 to +3.0 | 3.2 mm, flush with the rib. Nothing stands past the side faces. |
 | Where the whole 4.29 mm of the spoke has entered the clip, X = 12.66 | 10.0 mm, the clip's exterior top |
 | From there to X = 14.4 | stays at 10.0 mm, inside the clip wall and short of the bore |
-| Underside | on the bed, Z = 0, the whole way, including across the rib |
+| Underside | on the bed, Z = 0, the whole way |
 
-The drop is 6.8 mm over 15.66 mm of radial travel, 23.5° from the bed. Every station has the same two exterior heights. The helix tilts the bore inside the clip, and that does not lower the tower-side wall: the clip solid's top is 10.0 mm there, and the rib top is 3.2 mm.
+The drop outside the rib is 6.8 mm over 9.66 mm, 35.1° from the bed. The gussets are the same 3.2 mm tall as the rib, and they stop at the outer face.
 
 The wedge is solid down to the bed, so the slope is a top surface, not a shelf. This is not a measured strength change.
 
@@ -54,9 +53,10 @@ Clips printed upright, with the layer lines running along the tube, broke across
 | Turns | 3.516. One turn of this helix is 274.55 mm along the tube. |
 | Coil height | 91.4 mm of rise, entry to the cut end |
 | Pitch | 26 mm, exactly twice the tube OD. Clear gap between turns is 13 mm. A quarter turn rises 6.5 mm. |
-| Towers | 0° (+X, right), 90° (+Y, back), 180° (−X), 270° (−Y, front) |
-| Where the helix starts | **Number 1**, the 90° tower. Lowest clip. |
-| Lead-in | The cable hole is at (+11.71, +32.24), about 70° from +X. The first clip is at 90°, so the tube climbs about 20° from the hole to that clip, counterclockwise. |
+| Towers | 45° off the axes. See the layout below. |
+| Where the helix starts | **Number 1**, back-left. Lowest clip. |
+| Front | −Y. That is the button side: the sloped control face of the box. +Y is the back, where the cable window is. |
+| Lead-in | The cable hole stays at (+11.71, +32.24), about 70° from +X. The first clip is at 135°, so the tube climbs about 65° from the hole to that clip, counterclockwise. |
 
 `pitch` and `tube_length` are the two knobs. They live in `measurements.toml` and as parameters on every part. Gap is `pitch - tube_od`. Stations are a quarter turn apart, on the four towers.
 
@@ -66,14 +66,16 @@ That length is 15 clip stations (k = 0…14). Station 15 would be a quarter turn
 
 The number is helix order, counterclockwise and up. The same digit is recessed into the tower and into the ring beside that tower's slot.
 
+The four towers are turned 45° counterclockwise from the axes. Yellow and green are the front pair, at the corners, so the view from the buttons looks between them. The bolt holes and the cable window did not move.
+
 World Z is the clip centre above the deck. The ring top is at 4.5 mm, and the first centre is 16 mm above that.
 
-| Number | Tower | Place | Clips | Stations | World Z (mm) |
-|---|---|---|---|---|---|
-| 1 | `tower_90` | 90°, back, +Y | 4, including the lowest | 0, 4, 8, 12 | 20.5, 46.5, 72.5, 98.5 |
-| 2 | `tower_180` | 180°, −X | 4 | 1, 5, 9, 13 | 27.0, 53.0, 79.0, 105.0 |
-| 3 | `tower_270` | 270°, front, −Y | 4, including the highest and the cut end | 2, 6, 10, 14 | 33.5, 59.5, 85.5, 111.5 |
-| 4 | `tower_0` | 0°, right, +X | 3 | 3, 7, 11 | 40.0, 66.0, 92.0 |
+| Number | Colour in the renders | File | Place, looking from the buttons | Clips | Stations | World Z (mm) |
+|---|---|---|---|---|---|---|
+| 1 | blue | `tower_90` | back-left, 135° | 4, including the lowest | 0, 4, 8, 12 | 20.5, 46.5, 72.5, 98.5 |
+| 2 | yellow | `tower_180` | front-left, 225° | 4 | 1, 5, 9, 13 | 27.0, 53.0, 79.0, 105.0 |
+| 3 | green | `tower_270` | front-right, 315° | 4, including the cut end | 2, 6, 10, 14 | 33.5, 59.5, 85.5, 111.5 |
+| 4 | orange | `tower_0` | back-right, 45° | 3 | 3, 7, 11 | 40.0, 66.0, 92.0 |
 
 15 clips in all. `tube_length` and `extra_stations` change the count and the tower height together. The four towers, the cap, and the ring have to use the same values.
 
@@ -126,8 +128,8 @@ Nothing here has been printed. Print the coupon, snap the link, and set the tab 
 
 ## Assembly
 
-1. Bolt the ring down. Number 1 is at the back, next to the cable window. Then 2, 3, and 4 going counterclockwise as you look down.
-2. Drop each tower into the slot with the same number. The lowest clip on number 1 faces out, toward the back of the lamp.
+1. Bolt the ring down. +Y, the cable window, points at the back of the box. Number 1 is back-left. Then 2, 3, and 4 going counterclockwise as you look down. Yellow 2 and green 3 are the front corners, toward the buttons.
+2. Drop each tower into the slot with the same number. The lowest clip on number 1 faces out, toward the back-left.
 3. Dry-fit the cap. It is inboard of the tube.
 4. Either snap the tube in from the outside, starting at the lowest clip and winding counterclockwise, or snap the tube first and drop the cap on from above. The cap does not have to pass the tube.
 5. Glue the feet and the cap once the coil sits where you want it.
@@ -140,14 +142,16 @@ Reprint the base, all four towers, and the cap. The previous set is the 23 mm pi
 
 ## Cable
 
-The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are Ø15. The nearest slot is number 1, and it clears that window. USB, the DC jack, and the button holes are not part of this mount.
+The ring leaves a Ø19 window at (+11.71, +32.24). The deck and the backer are Ø15. The nearest slot is number 4, back-right, and it clears that window. USB, the DC jack, and the button holes are not part of this mount.
 
 ## Files
 
 | File | |
 |---|---|
 | `stl/`, `3mf/` | The seven parts |
-| `render/four_tower_front.png` | Through the front, far coil visible |
+| `render/four_tower_front.png` | Through the front, between the yellow and green towers |
+| `render/four_tower_top.png` | Looking down. The arrow marks the button side |
+| `render/four_tower_arm_join.png` | The arm root, flush with the rib |
 | `render/four_tower_side.png` | Through the side |
 | `render/exploded.png` | Ring, towers, cap |
 | `render/four_tower_joint.png` | Number 1's tab over its slot |

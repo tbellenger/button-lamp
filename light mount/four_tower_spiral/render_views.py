@@ -153,15 +153,24 @@ def joint_closeup():
     """Tab lifted out of its slot, with the recessed 1 on the rib and on the ring."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 1000))
     pl.set_background("white")
-    base = to_poly(build_base(SPEC, Holes)).clip_box((-24, 22, 10, 46, -1, 8), invert=False)
-    tower = to_poly(place_tower(build_tower(SPEC, 1), tower_angle(1)))
+    ang = tower_angle(1)
+    radial = np.array([math.cos(ang), math.sin(ang), 0.0])
+    centre = R_PIN * radial
+    pad = 26.0
+    base = to_poly(build_base(SPEC, Holes)).clip_box(
+        (centre[0] - pad, centre[0] + pad, centre[1] - pad, centre[1] + pad, -1, 8),
+        invert=False,
+    )
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
     tower.translate((0, 0, 18.0), inplace=True)
-    # Keep the foot and the recessed digit. The first clip starts above this box.
-    tower = tower.clip_box((-4, 14, 14, 30, 10, 40), invert=False)
+    tower = tower.clip_box(
+        (centre[0] - pad, centre[0] + pad, centre[1] - pad, centre[1] + pad, 8, 46),
+        invert=False,
+    )
     add_solid(pl, base, COLORS["base"])
     add_solid(pl, tower, COLORS[1])
-    # From the numbered face, so the tab sits over the slot and both 1s face the camera.
-    shot(pl, (2.0, 27.0, 16.0), (1.15, 0.45, 0.55), 78, zoom=1.15)
+    focus = np.array([centre[0], centre[1], 16.0])
+    shot(pl, focus, (radial[0] * 1.2, radial[1] * 1.2, 0.55), 78, zoom=1.15)
     save(pl, "four_tower_joint.png")
 
 
@@ -181,11 +190,11 @@ def arm_ramp_views():
     pl.camera.position = (14, y - 80, profile.z_hi * 0.45)
     pl.camera.up = (0, 0, 1)
     pl.camera.parallel_scale = 14
-    pl.add_text("print cross-section, +Z up. Low end is the far rib face, X=-3", position="upper_edge", font_size=11, color="black")
+    pl.add_text("print cross-section, +Z up. Ramp starts at the outer rib face", position="upper_edge", font_size=11, color="black")
     pl.add_point_labels(
-        [[profile.x_far, y, profile.z_lo + 0.45], [profile.x_hi, y, profile.z_hi + 0.45]],
+        [[profile.x_face, y, profile.z_lo + 0.45], [profile.x_hi, y, profile.z_hi + 0.45]],
         [
-            f"far edge  X={profile.x_far:.0f}   Z={profile.z_lo:.1f}",
+            f"rib face  X={profile.x_face:.0f}   Z={profile.z_lo:.1f}",
             f"clip  X={profile.x_hi:.2f}   Z={profile.z_hi:.0f}",
         ],
         font_size=14,
@@ -203,6 +212,43 @@ def arm_ramp_views():
     add_solid(pl, chunk, COLORS[1])
     shot(pl, (14, y, 6), (0.35, -1.15, 0.7), 48, up=(0, 0, 1), zoom=1.2)
     save(pl, "four_tower_arm_ramp_far_oblique.png")
+
+
+def arm_join_closeup():
+    """Print-pose close-up of the arm root. The gussets stay inside the rib."""
+    y = clip_y(SPEC, 0)
+    mesh = to_poly(build_tower(SPEC, 1))
+    chunk = mesh.clip_box((-8, 18, y - 9, y + 9, -1, 12), invert=False)
+    pl = pv.Plotter(off_screen=True, window_size=(1100, 800))
+    pl.set_background("white")
+    add_solid(pl, chunk, COLORS[1])
+    shot(pl, (3.0, y, 3.2), (0.15, -1.2, 0.85), 42, up=(0, 0, 1), zoom=1.25)
+    save(pl, "four_tower_arm_join.png")
+
+
+def layout_top():
+    """Looking down. The arrow points at the control-box front, the button side."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 1200))
+    pl.set_background("white")
+    for key, mesh in placed(0.0):
+        add_solid(pl, mesh, COLORS["base"] if key == "base" else COLORS["cap"] if key == "cap" else COLORS[key])
+    arrow = pv.Arrow(start=(0, -48, 6), direction=(0, -1, 0), scale=28, tip_length=0.35, tip_radius=0.12, shaft_radius=0.04)
+    pl.add_mesh(arrow, color="#b3392b")
+    labels = {0: "4 orange\nback-right", 1: "1 blue\nback-left", 2: "2 yellow\nfront-left", 3: "3 green\nfront-right"}
+    pts, texts = [], []
+    for index in range(4):
+        ang = tower_angle(index)
+        pts.append((78 * math.cos(ang), 78 * math.sin(ang), 30))
+        texts.append(labels[index])
+    pts.append((28, -62, 12))
+    texts.append("FRONT — buttons")
+    pl.add_point_labels(
+        pts, texts, font_size=16, text_color="black", point_color="black",
+        point_size=8, always_visible=True, shape_opacity=0,
+    )
+    # +Y (back, cable window) is up on the page. Front is the bottom of the picture.
+    shot(pl, (0, 0, 0), (0, 0, 1), 280, up=(0, 1, 0), zoom=1.05)
+    save(pl, "four_tower_top.png")
 
 
 def print_layout():
@@ -231,4 +277,6 @@ if __name__ == "__main__":
     clip_closeup()
     joint_closeup()
     arm_ramp_views()
+    arm_join_closeup()
+    layout_top()
     print_layout()
