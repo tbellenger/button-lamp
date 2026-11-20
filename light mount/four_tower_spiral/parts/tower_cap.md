@@ -27,3 +27,4 @@ min_wall = 1.2
 
 - 2026-11-08: first cap.
 - 2026-11-08: pockets stay the rib section. Same clearance as the ring slots.
+- 2026-11-20: reprint with the taller towers. The hoop is still 54.8 × 54.8 × 8 mm.

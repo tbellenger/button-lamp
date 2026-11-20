@@ -14,20 +14,20 @@ from system import build_cap, specs
 def tower_cap(
     tube_od=13.0,
     coil_diameter=100.0,
-    gap=10.0,
+    pitch=26.0,
     clip_wall=2.4,
     snap_opening=11.5,
-    clip_width=14.0,
+    clip_width=10.0,
     rib_radial=6.0,
     rib_tangential=3.2,
-    clip_arm=4.0,
+    clip_arm=4.29,
     joint_clear=0.2,
-    strip_length=1000.0,
+    tube_length=965.2,
     extra_stations=0,
 ):
     """tube_od: outside diameter of the silicone tube (mm)
     coil_diameter: outside diameter of the whole coil, tube included (mm)
-    gap: clear space between turns (mm)
+    pitch: rise per turn (mm). The clear gap is pitch minus the tube OD.
     clip_wall: plastic outside the clip bore (mm)
     snap_opening: width of the mouth the tube pushes through (mm)
     clip_width: length of each clip along the tube (mm). The cap pocket follows the rib, not this.
@@ -35,8 +35,8 @@ def tower_cap(
     rib_tangential: width of the running rib the cap pocket clears (mm)
     clip_arm: unused on the cap; kept so the stack shares one set of sliders
     joint_clear: extra opening on each cap pocket, both ways (mm). Same value as the ring slots.
-    strip_length: LED strip length the towers are sized for (mm)
-    extra_stations: clips added past the strip, one quarter turn each
+    tube_length: tube length along the centreline the towers are sized for (mm)
+    extra_stations: clips added past the tube, one quarter turn each
     """
-    spec = specs(tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations)
+    spec = specs(tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, clip_arm, joint_clear, tube_length, extra_stations)
     return build_cap(spec)

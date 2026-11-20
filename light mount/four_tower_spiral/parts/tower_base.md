@@ -31,3 +31,4 @@ min_wall = 1.2
 
 - 2026-11-08: first ring for the four-tower variant.
 - 2026-11-08: diamond pins and lug pockets replaced by four identical slots and recessed 1–4.
+- 2026-11-20: reprint with the 26 mm towers. The ring itself is the same 128 × 128 × 4.5 mm.
