@@ -52,19 +52,37 @@ RIB_TANGENTIAL = 3.2
 # First clip centre above the ring. The tab below it fills the slot.
 FOOT_CLEAR = 16.0
 CAP_T = 8.0
-# Vertical size of the spoke at each clip. Local. Not a full-height web.
-CLIP_ARM = 4.0
+# Spoke along the tower. The earlier joint was a 6 mm spoke; it scales with the
+# clip, 6 * 10/14 = 4.29 mm. The 45° gusset is half of that, 2.15 mm, the same
+# proportion as the 3 mm gusset on the 6 mm spoke.
+CLIP_ARM = 4.29
+# Coil inputs. pitch and tube_length are also recorded in measurements.toml.
+TUBE_OD = 13.0
+COIL_DIAMETER = 100.0
+# Exactly twice the tube OD, so the clear gap equals the tube OD.
+PITCH = 26.0
+# 38 inches along the tube centreline. 38 * 25.4 = 965.2.
+TUBE_LENGTH = 965.2
+CLIP_WALL = 2.4
+SNAP_OPENING = 11.5
+# Along the tube. Was 14 mm. 10 mm is the original cage clip length for this tube,
+# and it still covers the short tail past the last quarter-turn station.
+CLIP_WIDTH = 10.0
+JOINT_CLEAR = 0.2
 
 
 def specs(
-    tube_od, coil_diameter, gap, clip_wall, snap_opening, clip_width,
-    rib_radial, rib_tangential, clip_arm, joint_clear, strip_length, extra_stations,
+    tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width,
+    rib_radial, rib_tangential, clip_arm, joint_clear, tube_length, extra_stations,
 ):
     """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
         reject("tube_od must stay between 8 and 20 mm", param="tube_od")
+    if pitch <= tube_od:
+        reject("pitch must be greater than the tube diameter", param="pitch")
+    gap = pitch - tube_od
     if gap < 6.0:
-        reject("gap under 6 mm leaves no room between turns", param="gap")
+        reject("gap under 6 mm leaves no room between turns", param="pitch")
     if clip_wall < 2.0:
         reject("clip_wall under 2 mm is under five perimeters on a 0.4 mm nozzle", param="clip_wall")
     if clip_width < 8.0 or clip_width > 18.0:
@@ -89,12 +107,11 @@ def specs(
             f"snap_opening {snap_opening:.1f} mm is not narrower than the {tube_od:.1f} mm tube",
             param="snap_opening",
         )
-    if strip_length < 200.0 or strip_length > 2500.0:
-        reject("strip_length must stay between 200 and 2500 mm", param="strip_length")
+    if tube_length < 200.0 or tube_length > 2500.0:
+        reject("tube_length must stay between 200 and 2500 mm", param="tube_length")
     if extra_stations < 0 or extra_stations > 12:
         reject("extra_stations must stay between 0 and 12", param="extra_stations")
 
-    pitch = tube_od + gap
     radius = (coil_diameter - tube_od) / 2.0
     if radius < 36.0 or radius > 55.0:
         reject("coil centre-line radius must stay between 36 and 55 mm", param="coil_diameter")
@@ -104,27 +121,42 @@ def specs(
     ro = rb + clip_wall
 
     climb = pitch / (2.0 * math.pi)
-    quarter_arc = 0.5 * math.pi * math.hypot(radius, climb)
-    stations = []
-    k = 0
-    while k * quarter_arc <= strip_length + 1e-6:
-        stations.append(k)
-        k += 1
-        if k > 60:
-            reject("strip_length asks for more than 60 clips", param="strip_length")
+    ds = math.hypot(radius, climb)
+    quarter_arc = 0.5 * math.pi * ds
+    # Clips sit on the four towers, so they are a quarter turn apart. The cut end
+    # is placed on the last of those clips. Whatever is left of the tube length
+    # lies before the first clip, still inside that clip's incoming grip.
+    # The outgoing side of a clip is only the bed face of the bore, so a tail
+    # past the last centre would leave the plastic.
+    if quarter_arc <= 0:
+        reject("pitch and coil diameter do not make a helix", param="pitch")
+    k_max = int(math.floor(tube_length / quarter_arc + 1e-9))
+    if k_max > 60:
+        reject("tube_length asks for more than 60 clips", param="tube_length")
+    if k_max < 3:
+        reject("the tube is shorter than one turn, so the four towers have nothing to share", param="tube_length")
+    lead = tube_length - k_max * quarter_arc
+    # Incoming grip is about one clip-width of arc. The entry has to land in it.
+    incoming = clip_width * ds / radius
+    if lead > incoming - 0.5:
+        reject(
+            f"the tube entry is {lead:.1f} mm of arc before the first clip, "
+            f"past the {incoming:.1f} mm the clip holds. Widen clip_width.",
+            param="tube_length",
+        )
+    stations = list(range(k_max + 1))
     for _ in range(int(extra_stations)):
         stations.append(stations[-1] + 1)
-    if len(stations) < 4:
-        reject("the strip is shorter than one turn, so the four towers have nothing to share", param="strip_length")
-
-    k_max = stations[-1]
     cap_y = FOOT_CLEAR + k_max * (pitch / 4.0) + ro + 4.0
     tower_len = cap_y + CAP_T
-    if tower_len > 280.0:
+    # The foot continues FLANGE_T below the ring top, and that length lies on the bed.
+    bed_length = tower_len + FLANGE_T
+    if bed_length > 290.0:
         reject(
-            f"the tower would be {tower_len:.0f} mm long on the bed; the CR-10 bed is 300 mm. Shorten the strip.",
-            param="strip_length",
+            f"the tower would be {bed_length:.0f} mm long on the bed; the CR-10 bed is 300 mm. Shorten the tube.",
+            param="tube_length",
         )
+    turns = tube_length / (2.0 * math.pi * ds)
     return SimpleNamespace(
         tube_od=tube_od,
         coil_diameter=coil_diameter,
@@ -135,8 +167,11 @@ def specs(
         rib_radial=rib_radial,
         rib_tangential=rib_tangential,
         clip_arm=clip_arm,
+        # 45° gusset, both sides of the spoke, where it meets the rib's outer face.
+        # Half the spoke: the same ratio as the 3 mm gusset on the 6 mm spoke.
+        arm_bevel=clip_arm / 2.0,
         joint_clear=joint_clear,
-        strip_length=strip_length,
+        tube_length=tube_length,
         extra_stations=int(extra_stations),
         pitch=pitch,
         radius=radius,
@@ -144,17 +179,45 @@ def specs(
         ro=ro,
         quarter=pitch / 4.0,
         climb=climb,
+        ds=ds,
         quarter_arc=quarter_arc,
         stations=tuple(stations),
         k_max=k_max,
+        # Arc of tube before the first clip. The cut end is the last clip.
+        lead=lead,
+        entry_theta=THETA0 - lead / ds,
+        end_theta=THETA0 + k_max * math.pi / 2.0,
+        turns=turns,
+        coil_height=turns * pitch,
         cap_y=cap_y,
         tower_len=tower_len,
+        bed_length=bed_length,
         # Rib sits on z=0. Its centre is what the slot and the cap line up with.
         bed_z=0.0,
         rib_z_center=rib_tangential / 2.0,
         # Tube centre in the tower frame. The slot is at local x = 0.
         tube_x=radius - R_PIN,
     )
+
+
+def default_specs(**overrides):
+    """The coil Tom asked for. Sliders on the parts override the same names."""
+    values = dict(
+        tube_od=TUBE_OD,
+        coil_diameter=COIL_DIAMETER,
+        pitch=PITCH,
+        clip_wall=CLIP_WALL,
+        snap_opening=SNAP_OPENING,
+        clip_width=CLIP_WIDTH,
+        rib_radial=RIB_RADIAL,
+        rib_tangential=RIB_TANGENTIAL,
+        clip_arm=CLIP_ARM,
+        joint_clear=JOINT_CLEAR,
+        tube_length=TUBE_LENGTH,
+        extra_stations=0,
+    )
+    values.update(overrides)
+    return specs(**values)
 
 
 def deck():
@@ -193,6 +256,60 @@ def stations_for(spec, index):
 def clip_y(spec, k):
     """Height of station k above the foot, which sits on the ring."""
     return FOOT_CLEAR + k * spec.quarter
+
+
+def station_theta(k):
+    """Helix angle of station k. The coil starts at THETA0 and climbs counterclockwise."""
+    return THETA0 + k * math.pi / 2.0
+
+
+def clip_world_z(spec, k):
+    """World Z of station k. The ring top is FLANGE_T above the deck."""
+    return FLANGE_T + clip_y(spec, k)
+
+
+def helix_point(spec, theta):
+    """Tube centreline. theta = 0 is +X. Z matches clip_world_z at every station."""
+    z = FLANGE_T + clip_y(spec, 0) + spec.climb * (theta - THETA0)
+    return (
+        spec.radius * math.cos(theta),
+        spec.radius * math.sin(theta),
+        z,
+    )
+
+
+def arm_profile(spec):
+    """Print-+Z top of the spoke. X is radial, Z is print-up.
+
+    The top is one straight slope from the clip's exterior height down to the
+    far face of the rib. The underside is the bed.
+    """
+    half = spec.clip_arm / 2.0
+    x_far = -spec.rib_radial / 2.0
+    x_face = spec.rib_radial / 2.0
+    x_hi = spec.tube_x - math.sqrt(spec.ro * spec.ro - half * half)
+    x_end = spec.tube_x - spec.rb - 0.4
+    span = x_hi - x_far
+    drop = spec.clip_width - spec.rib_tangential
+
+    def z_at(x):
+        if x >= x_hi:
+            return spec.clip_width
+        return spec.rib_tangential + drop * (x - x_far) / span
+
+    return SimpleNamespace(
+        half=half,
+        x_far=x_far,
+        x_face=x_face,
+        x_hi=x_hi,
+        x_end=x_end,
+        z_lo=spec.rib_tangential,
+        z_hi=spec.clip_width,
+        z_at_face=z_at(x_face),
+        drop=drop,
+        span=span,
+        angle_deg=math.degrees(math.atan2(drop, span)),
+    )
 
 
 def _bore_void(spec, cy):
@@ -239,24 +356,25 @@ def _slab(face, z0, height):
 def _arm_wedge(spec, y):
     """Spoke from the rib to the clip, in the print frame.
 
-    The plan is the original 4 mm rectangle. In print +Z the top is one slope
-    from the clip's exterior height down to the far face of the rib, across the
-    whole radial width. The underside stays on the bed. The helix tilts the bore
-    inside the clip; it does not change these two exterior heights.
+    The plan is a rectangle clip_arm long along the tower. In print +Z the top
+    is one slope from the clip's exterior height down to the far face of the
+    rib, across the whole radial width. The underside stays on the bed. The
+    helix tilts the bore inside the clip; it does not change these two exterior
+    heights.
     """
     half = spec.clip_arm / 2.0
     if half >= spec.ro - 0.4:
         reject("clip_arm is wide enough to reach through the clip wall", param="clip_arm")
     # Far face of the rib, away from the clip. The slope meets the rib height here.
     x_far = -spec.rib_radial / 2.0
-    # X where the whole 4 mm of the spoke has crossed into the clip.
+    # X where the whole spoke has crossed into the clip.
     x_hi = spec.tube_x - math.sqrt(spec.ro * spec.ro - half * half)
     x_end = spec.tube_x - spec.rb - 0.4
     z_lo = spec.rib_tangential
     z_hi = spec.clip_width
     if x_far + 2.0 >= x_hi or x_hi + 0.4 >= x_end:
         reject("the spoke ramp has no room between the rib and the bore", param="clip_arm")
-    # Sketch: X is radial, Y stands in for print +Z. Extrude the 4 mm thickness,
+    # Sketch: X is radial, Y stands in for print +Z. Extrude the spoke thickness,
     # then Rot(90) about X lays that thickness along the tower and the sketch Y up.
     face = Polygon(
         [
@@ -267,7 +385,58 @@ def _arm_wedge(spec, y):
             (x_far, z_lo),
         ]
     )
-    return Pos(0, y + half, 0) * Rot(90, 0, 0) * extrude(face, spec.clip_arm)
+    spoke = Pos(0, y + half, 0) * Rot(90, 0, 0) * extrude(face, spec.clip_arm)
+    body = spoke + _gussets(spec, y)
+    if len(body.solids()) != 1:
+        reject("the spoke and its gussets did not fuse", param="clip_arm")
+    return body
+
+
+def _ramp_cutter(spec, y):
+    """Everything above the spoke slope, across the spoke and both gussets."""
+    profile = arm_profile(spec)
+    face = Polygon(
+        [
+            (profile.x_far, profile.z_lo),
+            (profile.x_hi, profile.z_hi),
+            (profile.x_hi, profile.z_hi + 2.0),
+            (profile.x_far, profile.z_hi + 2.0),
+        ]
+    )
+    # A millimetre past each gusset toe, so the cut is not a coincident face.
+    reach = spec.clip_arm + 2.0 * spec.arm_bevel + 2.0
+    top = y + spec.clip_arm / 2.0 + spec.arm_bevel + 1.0
+    return Pos(0, top, 0) * Rot(90, 0, 0) * extrude(face, reach)
+
+
+def _gussets(spec, y):
+    """45° gussets in the print plan, one each side of the spoke, top on the ramp.
+
+    The leg is arm_bevel, which is half the spoke. The top is cut to the same
+    print-+Z slope as the spoke, so the gusset does not stand above it.
+    """
+    half = spec.clip_arm / 2.0
+    bevel = spec.arm_bevel
+    x_face = spec.rib_radial / 2.0
+    x_knee = x_face + bevel
+    if x_knee > arm_profile(spec).x_hi - 0.4:
+        reject("arm_bevel reaches the clip before the spoke does", param="clip_arm")
+    lower = Polygon(
+        [
+            (x_face, y - half),
+            (x_face, y - half - bevel),
+            (x_knee, y - half),
+        ]
+    )
+    upper = Polygon(
+        [
+            (x_face, y + half),
+            (x_knee, y + half),
+            (x_face, y + half + bevel),
+        ]
+    )
+    solid = _slab(lower + upper, spec.bed_z, spec.clip_width)
+    return solid - _ramp_cutter(spec, y)
 
 
 def build_tower(spec, index):

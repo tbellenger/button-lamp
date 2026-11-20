@@ -8,15 +8,15 @@ value = 100.0
 unit = "mm"
 how = "Outside of the coil, tube included. Centre-line radius (100 - 13) / 2 = 43.5 mm. Same coil as light mount/spiral_tube_mount."
 
-[coil_gap]
-value = 10.0
+[pitch]
+value = 26.0
 unit = "mm"
-how = "Clear gap between turns. Pitch = tube_od + coil_gap = 23 mm. A quarter turn is 5.75 mm of rise."
+how = "Rise per turn. Exactly twice the 13 mm tube OD, so the clear gap between turns is pitch - tube_od = 13 mm. A quarter turn rises 6.5 mm. Named so a later pitch change is one value."
 
-[strip_length]
-value = 1000.0
+[tube_length]
+value = 965.2
 unit = "mm"
-how = "LED strip in the coil, 160 LEDs. container/plywood/src/spiral.py strip_len. Stations are counted along the tube centre-line."
+how = "Tube length measured along the centreline, from the first clip (the bottom entry, at the 90 degree tower) to the top end. 38 inches. 38 * 25.4 = 965.2 mm. Stations are counted along that centreline."
 
 [top_deck_bolt_spacing]
 value = 76.2

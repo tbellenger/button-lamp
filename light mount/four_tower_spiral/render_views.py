@@ -14,12 +14,13 @@ from system import (
     R_PIN,
     THETA0,
     TOWER_NAMES,
+    arm_profile,
     build_base,
     build_cap,
     build_tower,
     clip_y,
+    default_specs,
     place_tower,
-    specs,
     tower_angle,
 )
 
@@ -27,7 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REND = os.path.join(HERE, "render")
 os.makedirs(REND, exist_ok=True)
 
-SPEC = specs(13.0, 100.0, 10.0, 2.4, 11.5, 14.0, 6.0, 3.2, 4.0, 0.2, 1000.0, 0)
+SPEC = default_specs()
 
 
 class Holes:
@@ -60,9 +61,9 @@ def to_poly(shape, tol=0.18):
 
 
 def tube_mesh():
+    """The tube, from the entry inside the first clip to the last clip centre."""
     climb = SPEC.pitch / (2.0 * math.pi)
-    last = SPEC.k_max * math.pi / 2.0
-    theta = np.linspace(THETA0 - 0.35, THETA0 + last, 500)
+    theta = np.linspace(SPEC.entry_theta, SPEC.end_theta, 600)
     z = FLANGE_T + clip_y(SPEC, 0) + climb * (theta - THETA0)
     pts = np.c_[SPEC.radius * np.cos(theta), SPEC.radius * np.sin(theta), z]
     return pv.Spline(pts, len(pts)).tube(radius=SPEC.tube_od / 2.0, n_sides=18)
@@ -112,7 +113,7 @@ def assembled():
     for key, mesh in placed(0.0):
         add_solid(pl, mesh, COLORS["base"] if key == "base" else COLORS["cap"] if key == "cap" else COLORS[key])
     pl.add_mesh(tube_mesh(), color="#f4f1ea", opacity=0.45, smooth_shading=True)
-    shot(pl, (0, 0, 60), (1.2, -1.4, 0.85), 280, zoom=1.1)
+    shot(pl, (0, 0, 70), (1.2, -1.4, 0.85), 300, zoom=1.05)
     save(pl, "assembled_iso.png")
 
 
@@ -121,7 +122,7 @@ def exploded():
     pl.set_background("white")
     for key, mesh in placed(28.0):
         add_solid(pl, mesh, COLORS["base"] if key == "base" else COLORS["cap"] if key == "cap" else COLORS[key])
-    shot(pl, (0, 0, 80), (1.1, -1.3, 0.9), 360, zoom=1.0)
+    shot(pl, (0, 0, 85), (1.1, -1.3, 0.9), 380, zoom=1.0)
     save(pl, "exploded.png")
 
 
@@ -132,7 +133,7 @@ def through_view(name, direction):
     for key, mesh in placed(0.0):
         add_solid(pl, mesh, COLORS["base"] if key == "base" else COLORS["cap"] if key == "cap" else COLORS[key])
     pl.add_mesh(tube_mesh(), color="#f4f1ea", opacity=0.55, smooth_shading=True)
-    shot(pl, (0, 0, 62), direction, 260, zoom=1.15)
+    shot(pl, (0, 0, 72), direction, 280, zoom=1.08)
     save(pl, name)
 
 
@@ -167,22 +168,26 @@ def joint_closeup():
 def arm_ramp_views():
     """Print-pose views of the spoke. +Z is up. The top falls from the clip to the rib."""
     y = clip_y(SPEC, 0)
+    profile = arm_profile(SPEC)
     mesh = to_poly(build_tower(SPEC, 1))
     # A cut through the spoke. Feature edges carry the print-+Z profile; the
     # faces of a paper-thin cut face away from this camera.
-    section = mesh.clip_box((-6, 34, y - 0.4, y + 0.4, -1, 16), invert=False)
+    section = mesh.clip_box((-6, 34, y - 0.4, y + 0.4, -1, profile.z_hi + 2), invert=False)
     pl = pv.Plotter(off_screen=True, window_size=(1100, 640))
     pl.set_background("white")
     pl.add_mesh(section.extract_feature_edges(25), color="#1c3d52", line_width=3)
     pl.camera.parallel_projection = True
-    pl.camera.focal_point = (14, y, 6)
-    pl.camera.position = (14, y - 80, 6)
+    pl.camera.focal_point = (14, y, profile.z_hi * 0.45)
+    pl.camera.position = (14, y - 80, profile.z_hi * 0.45)
     pl.camera.up = (0, 0, 1)
     pl.camera.parallel_scale = 14
     pl.add_text("print cross-section, +Z up. Low end is the far rib face, X=-3", position="upper_edge", font_size=11, color="black")
     pl.add_point_labels(
-        [[-3.0, y, 3.6], [12.62, y, 14.4]],
-        ["far edge  X=-3   Z=3.2", "clip  X=12.62   Z=14"],
+        [[profile.x_far, y, profile.z_lo + 0.45], [profile.x_hi, y, profile.z_hi + 0.45]],
+        [
+            f"far edge  X={profile.x_far:.0f}   Z={profile.z_lo:.1f}",
+            f"clip  X={profile.x_hi:.2f}   Z={profile.z_hi:.0f}",
+        ],
         font_size=14,
         text_color="black",
         point_color="black",
