@@ -1,4 +1,4 @@
-"""Ring that drops onto the four tower tops. Same pockets as the earlier cap."""
+"""Thin disc. Printed tabs-up. Turn it over onto the towers."""
 
 import os
 import sys

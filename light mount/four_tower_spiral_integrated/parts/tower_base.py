@@ -1,4 +1,4 @@
-"""Ring that bolts to the deck. Four identical slots, numbered 1 to 4. Same opening as the earlier four-tower ring."""
+"""Thin ring that bolts to the deck. Tabs flank each tower."""
 
 import os
 import sys

@@ -3,22 +3,22 @@
     xvfb-run -a python3 render_views.py
 """
 
-import math
+from nurb import Pos, Rot
+
 import os
 
 import numpy as np
 import pyvista as pv
 
 from system import (
-    FLANGE_T,
-    R_PIN,
+    DISC_T,
     THETA0,
     build_base,
     build_cap,
     build_tower,
-    clip_y,
     counts,
     default_specs,
+    disc_world_z,
     helix_point,
     lead_in_points,
     place_tower,
@@ -104,8 +104,7 @@ def placed():
     for index in range(4):
         ang = tower_angle(index)
         parts.append((index, to_poly(place_tower(build_tower(SPEC, index), ang))))
-    cap = to_poly(build_cap(SPEC))
-    cap.translate((0, 0, FLANGE_T + SPEC.cap_y), inplace=True)
+    cap = to_poly(Pos(0, 0, disc_world_z(SPEC) + DISC_T) * Rot(180, 0, 0) * build_cap(SPEC))
     parts.append(("cap", cap))
     return parts
 
@@ -120,18 +119,18 @@ def assembled():
     save(pl, "assembled_iso.png")
 
 
-def hook_closeup():
-    """Print pose. The C is cut into the bar and opens away from the centre."""
+def slot_closeup():
+    """Print pose, looking at the top end. The notch is the disc's arc."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
     tower = to_poly(build_tower(SPEC, 1))
     add_solid(pl, tower, COLORS[1])
-    y = clip_y(SPEC, 0)
-    bed = pv.Plane(center=(SPEC.tube_x, y, 0), direction=(0, 0, 1), i_size=36, j_size=32)
+    y = SPEC.cap_y
+    x = (SPEC.x_in + SPEC.x_out) / 2.0
+    bed = pv.Plane(center=(x, y - 8, 0), direction=(0, 0, 1), i_size=40, j_size=28)
     pl.add_mesh(bed, color="#e7e2d8", opacity=0.35)
-    # From outside the coil, so the mouth is the thing in frame.
-    shot(pl, (SPEC.tube_x + 2.0, y, 4.5), (1.15, -0.35, 0.42), 42, zoom=1.15)
-    save(pl, "hook_closeup.png")
+    shot(pl, (x, y - 1.5, 4.0), (0.45, 1.15, 0.72), 46, zoom=1.2)
+    save(pl, "slot_closeup.png")
 
 
 def top_view(kind):
@@ -142,12 +141,12 @@ def top_view(kind):
         mesh = to_poly(build_base(SPEC, Holes))
         color = COLORS["base"]
         name = "base_top.png"
-        focus_z = 2.0
+        focus_z = 3.0
     else:
         mesh = to_poly(build_cap(SPEC))
         color = COLORS["cap"]
-        name = "cap_top.png"
-        focus_z = 4.0
+        name = "disc_top.png"
+        focus_z = 3.0
     add_solid(pl, mesh, color)
     shot(pl, (0, 0, focus_z), (0, 0, 1), 220, up=(0, 1, 0), zoom=1.05)
     save(pl, name)
@@ -181,7 +180,7 @@ def print_layout():
 
 if __name__ == "__main__":
     assembled()
-    hook_closeup()
+    slot_closeup()
     print_layout()
     top_view("base")
     top_view("cap")

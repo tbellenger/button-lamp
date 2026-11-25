@@ -1,13 +1,13 @@
-"""Ring, four towers with integrated hooks, and the cap."""
+"""Ring, four towers with integrated clips, a base ring, and a top disc."""
 
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nurb import Pos, assembly, use
+from nurb import Pos, Rot, assembly, use
 
-from system import FLANGE_T, place_tower, specs, tower_angle
+from system import DISC_T, disc_world_z, place_tower, specs, tower_angle
 
 
 @assembly
@@ -50,5 +50,6 @@ def tower_assembly(
     parts = [use("tower_base", **common)]
     for index, name in enumerate(("0", "90", "180", "270")):
         parts.append(place_tower(use(f"tower_{name}", **common), tower_angle(index)))
-    parts.append(Pos(0, 0, FLANGE_T + spec.cap_y) * use("tower_cap", **common))
+    # The disc is exported tabs-up. Turn it over so the tabs hang beside the towers.
+    parts.append(Pos(0, 0, disc_world_z(spec) + DISC_T) * Rot(180, 0, 0) * use("tower_cap", **common))
     return tuple(parts)
