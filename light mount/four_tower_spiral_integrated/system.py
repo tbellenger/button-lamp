@@ -50,21 +50,21 @@ R_OUT = 64.0
 FLANGE_T = 4.5
 # Plastic left between the centre hole and the cable window, and around a pocket.
 RING_WALL = 2.4
-# 45° relief on the outer bed corner of each bar. The full rectangle would
-# break the nearest M3 hole: the towers sit on the same diagonals as the bolts.
-BOLT_CHAMFER = 3.0
-# Key notch on the print-top face of each plug. Position differs per tower.
-KEY_NOTCH_W = 2.4
-KEY_NOTCH_D = 3.2
+# 45° relief on the outer bed corner. A plain rectangle clears the nearest
+# M3 hole by under half a millimetre; 2 mm leaves about 1.2 mm of ring.
+BOLT_CHAMFER = 2.0
 FOOT_CLEAR = 16.0
-CAP_T = 8.0
+CAP_T = 4.5
 TUBE_OD = 13.0
 COIL_DIAMETER = 100.0
 PITCH = 26.0
 TUBE_LENGTH = 965.2
-CLIP_WALL = 2.4
+# 1.6 mm is four perimeters on a 0.4 mm nozzle. The lips only open 0.75 mm
+# each to pass the 13 mm tube, then sit slack in the 13.4 mm bore.
+CLIP_WALL = 1.6
 SNAP_OPENING = 11.5
-CLIP_WIDTH = 10.0
+# Grip along the tube. The bar is this thick, so the opening is this long.
+CLIP_WIDTH = 8.0
 
 # Helix order, counterclockwise and up. 1 is the lowest hook.
 TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
@@ -82,10 +82,13 @@ def specs(
     gap = pitch - tube_od
     if gap < 6.0:
         reject("gap under 6 mm leaves no room between turns", param="pitch")
-    if clip_wall < 2.0:
-        reject("clip_wall under 2 mm is under five perimeters on a 0.4 mm nozzle", param="clip_wall")
-    if clip_width < 8.0 or clip_width > 18.0:
-        reject("clip_width must stay between 8 and 18 mm along the tube", param="clip_width")
+    if clip_wall < 1.6 or clip_wall > 4.0:
+        reject(
+            "clip_wall must stay between 1.6 and 4 mm. 1.6 mm is four perimeters on a 0.4 mm nozzle.",
+            param="clip_wall",
+        )
+    if clip_width < 7.0 or clip_width > 18.0:
+        reject("clip_width must stay between 7 and 18 mm along the tube", param="clip_width")
     if joint_clear < 0.2 or joint_clear > 1.0:
         reject(
             "joint_clear must stay between 0.2 and 1.0 mm. 0.2 mm is the snug dry-fit.",
@@ -131,18 +134,26 @@ def specs(
     bore_phase = math.atan2(-bore_z, radial)
     helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
-    # Straight entry: tangent from the first hook out to the ring's outer edge.
-    # That run is part of the 965.2 mm and is not helix. There is no straight
-    # tail past the cut end; whatever remains after the lead is the coil.
+    # The rim tangent, from the first clip out to the ring edge, is fixed by
+    # the two radii. At 26 mm pitch that leaves the cut end 26 mm past the
+    # last clip. A pitch that pulled the end back onto a tower would be about
+    # 72 mm, and the coil would be more than twice as tall. The straight run
+    # is lengthened instead, so the helix is an exact number of quarter turns:
+    # it starts in the first clip and the cut end sits in the last.
     if radius >= R_OUT - 1.0:
         reject("the coil meets the outside of the ring, so the straight entry has nowhere to land", param="coil_diameter")
-    lead_in = math.sqrt(R_OUT * R_OUT - radius * radius)
-    if lead_in >= tube_length - turn_len:
+    rim_lead = math.sqrt(R_OUT * R_OUT - radius * radius)
+    quarters_at_rim = (tube_length - rim_lead) / quarter_arc
+    n_quarters = int(math.floor(quarters_at_rim + 1e-9))
+    if n_quarters < 4:
+        reject("the tube is shorter than one turn", param="tube_length")
+    helix_length = n_quarters * quarter_arc
+    lead_in = tube_length - helix_length
+    if lead_in < rim_lead - 1e-6:
         reject(
-            f"the straight entry is {lead_in:.1f} mm, which leaves less than one turn of helix",
+            "landing the cut end on a clip would start the helix inside the ring",
             param="tube_length",
         )
-    helix_length = tube_length - lead_in
     turns = helix_length / turn_len
 
     # A hook is kept when its grip (clip_width centred on the station) still
@@ -202,6 +213,7 @@ def specs(
         stations=tuple(stations),
         k_last=k_last,
         lead_in=lead_in,
+        rim_lead=rim_lead,
         helix_length=helix_length,
         tail=tail,
         turns=turns,
@@ -366,27 +378,6 @@ def _tower_mark(spec, index):
     return Pos(spec.tube_x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
-def _key_x(spec, index):
-    """Radial station of this tower's key, inner to outer as 1, 2, 3, 4."""
-    order = {1: 0, 2: 1, 3: 2, 0: 3}[index]
-    margin = 3.6
-    usable = spec.bar_w - 2.0 * margin
-    if usable < KEY_NOTCH_W:
-        reject("the bar is too narrow for four different keys", param="clip_wall")
-    return spec.x_in + margin + order * usable / 3.0
-
-
-def _key_notch(spec, index, y0, y1):
-    """Notch in the print-top face of one plug. One station per tower."""
-    cx = _key_x(spec, index)
-    half = KEY_NOTCH_W / 2.0
-    return _box(
-        cx - half, cx + half,
-        y0, y1,
-        spec.clip_width - KEY_NOTCH_D, spec.clip_width + 0.4,
-    )
-
-
 def _bed_corner_chamfer(spec, y0, y1, leg):
     """45° triangle off the outer bed corner, running along the tower."""
     x1 = spec.x_out
@@ -405,9 +396,8 @@ def _box(x0, x1, y0, y1, z0, z1):
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
 
-    The bar is the clip and the plug. Both ends are the same cross-section,
-    with this tower's key notch and the bolt-clearance chamfer. Nothing
-    hangs below z = 0.
+    The bar is the clip and the plug. Both ends are the same plain
+    cross-section, with the bolt-clearance chamfer. Nothing hangs below z = 0.
     """
     if index not in TOWER_MARK:
         reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
@@ -419,8 +409,6 @@ def build_tower(spec, index):
     y1 = spec.cap_y + CAP_T
     solid = _box(spec.x_in, spec.x_out, y0, y1, z0, spec.clip_width)
     solid -= _bed_corner_chamfer(spec, y0 - 0.2, y1 + 0.2, BOLT_CHAMFER)
-    solid -= _key_notch(spec, index, y0 - 0.2, 0.2)
-    solid -= _key_notch(spec, index, spec.cap_y - 0.2, y1 + 0.2)
     solid -= _tower_mark(spec, index)
     for k in found:
         solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
@@ -433,10 +421,11 @@ def build_tower(spec, index):
 
 
 def _plug_void(spec, index, y0, y1, chamfer_leg):
-    """Slot around one plug, minus the key tooth and plus the bolt chamfer.
+    """Plain slot around one plug, with the bolt chamfer.
 
     Built in the print frame. joint_clear is added to the opening, the same
-    way the old 6.2 × 3.4 slot was 0.2 mm over the 6.0 × 3.2 tab.
+    way the old 6.2 × 3.4 slot was 0.2 mm over the 6.0 × 3.2 tab. The index
+    is unused: the numbers, not a tooth, tell the towers apart.
     """
     c = spec.joint_clear / 2.0
     slot = _box(
@@ -447,18 +436,9 @@ def _plug_void(spec, index, y0, y1, chamfer_leg):
     # Drop the outer bed corner from the void. A larger leg than the bar's
     # chamfer leaves clearance on that face and keeps the M3 hole round.
     slot -= _bed_corner_chamfer(spec, y0 - 0.4, y1 + 0.4, chamfer_leg)
-    cx = _key_x(spec, index)
-    half = (KEY_NOTCH_W - spec.joint_clear) / 2.0
-    tooth = _box(
-        cx - half, cx + half,
-        y0 - 0.2, y1 + 0.2,
-        spec.clip_width - (KEY_NOTCH_D - spec.joint_clear),
-        spec.clip_width + c + 1.2,
-    )
-    void = slot - tooth
-    if len(void.solids()) < 1:
+    if len(slot.solids()) < 1:
         reject("a tower slot did not cut as a solid", param="joint_clear")
-    return void
+    return slot
 
 
 def _base_mark(spec, index, angle):
@@ -489,7 +469,7 @@ def cap_outer_radius(spec):
 
 
 def build_base(spec, holes):
-    """Ring. Keyed slots under the bars, the deck bolts, the cable window.
+    """Ring. Plain slots under the bars, the deck bolts, the cable window.
 
     The centre hole stops 2.4 mm short of the cable window. The bolt holes
     and the window are the deck pattern and do not move. A 3 mm chamfer on
@@ -563,15 +543,13 @@ def bore_world(spec, index, k):
 def build_coupon(spec):
     """A short bar, one outward opening, the keyed plug, and a slot gauge.
 
-    Print it on its side. The gauge is open on top and checks the 18.4 mm
-    plug width. The key tooth is only in the ring, where it can print upright.
+    Print it on its side. The gauge is open on top and checks the plug width.
     Snap the link off and try the plug in the gauge before the towers.
     """
     z0 = spec.bed_z
     y_clip = 24.0
     solid = _box(spec.x_in, spec.x_out, -FLANGE_T, 34.0, z0, spec.clip_width)
     solid -= _bed_corner_chamfer(spec, -FLANGE_T - 0.2, 34.2, BOLT_CHAMFER)
-    solid -= _key_notch(spec, 1, -FLANGE_T - 0.2, 0.4)
     solid -= _tower_mark(spec, 1)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
     c = spec.joint_clear / 2.0

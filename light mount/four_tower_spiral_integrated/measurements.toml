@@ -16,7 +16,7 @@ how = "Rise per turn. Exactly twice the 13 mm tube OD, so the clear gap between 
 [tube_length]
 value = 965.2
 unit = "mm"
-how = "Cut length of the silicone tube along its centreline. 38 inches. 38 * 25.4 = 965.2 mm. This includes the straight tangent entry from the ring's outer edge to the first hook. Only the remainder is helix. See system.py."
+how = "Cut length of the silicone tube along its centreline. 38 inches. 38 * 25.4 = 965.2 mm. 72.90 mm of that is a straight tangent. The helix is the other 892.30 mm, exactly 3.25 turns, so it starts in the first clip and the cut end is the centre of the last clip. See system.py."
 
 [top_deck_bolt_spacing]
 value = 76.2
