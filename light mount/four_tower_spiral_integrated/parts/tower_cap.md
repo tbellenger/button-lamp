@@ -11,7 +11,7 @@ The hoop that drops onto the four tenons. Same pockets as the earlier cap: 6.2 Ã
 
 ## Design notes
 
-- Outer radius stays well inside the tube. The mouths face this hoop, so the tube has to be in before the cap drops on.
+- Outer radius stays well inside the tube. The mouths face outward, so the hoop does not cover them.
 - The earlier printed cap fits these tenons. The pocket did not change.
 
 ```toml

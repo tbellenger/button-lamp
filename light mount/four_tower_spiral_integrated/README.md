@@ -1,6 +1,6 @@
 # Four-tower spiral, openings in the bar
 
-Same ring and cap as [`../four_tower_spiral/`](../four_tower_spiral/). The tower bar stands on the tube. Each C is cut into the inner face of that bar. There is no neck and no separate clip.
+Same ring and cap as [`../four_tower_spiral/`](../four_tower_spiral/). The tower bar stands on the tube. Each C is cut into the outer face of that bar. There is no neck and no separate clip.
 
 The foot is a short arm back to the original slot, and the top is a short arm back to the original cap pocket. A ring and a cap already printed from the earlier set still fit.
 
@@ -37,11 +37,11 @@ The bar is centred on the tube. It is 18.2 mm radially and 10 mm tangentially. T
 | Tube | 13 mm |
 | Bore | 13.4 mm (0.2 mm clearance) |
 | Wall | 2.4 mm on the closed sides |
-| Mouth | 11.5 mm, on the **inner** face |
+| Mouth | 11.5 mm, on the **outer** face |
 | Along the tube | 10 mm, the bar thickness |
 | Tangent | the bore rises 5.4°, the helix angle at 26 mm pitch |
 
-The mouth faces the centre of the lamp. You push the tube outward into the bar. Do that **before** the cap goes on. The cap's outer radius is 27.4 mm and the bar's inner face is at about 34.5 mm, so the gap beside the cap is about 7 mm. A 13 mm tube does not fit through that gap. With the cap off, the centre is open and the mouths face you. An outward mouth would be easier to reach later, and it would put the opening on the outer face. The bar was asked for on the inner face, so the tube goes in first and the cap drops on after.
+The mouth faces away from the lamp. You press the tube inward, from outside, and the 11.5 mm lips are narrower than the 13 mm tube, so it snaps and stays. The inner face of the bar is solid. The foot and cap arms stay on that inner side and stop at the bar, so nothing stands outside the mouth. The cap can be on already: it sits at radius 27.4 mm, inboard of the bar, and does not cross the openings.
 
 The bore is not square to the bar. Across the 10 mm it follows the helix, so the tube is not kinked at the opening.
 
@@ -79,8 +79,8 @@ Reprint the coupon, then the four towers. Leave the ring and the cap.
 
 1. Bolt the ring down. +Y, the cable window, points at the back. Number 1 is back-left, then 2, 3, and 4 counterclockwise.
 2. Drop each tower into the slot with the same number. The bar is out at the tube. The arm reaches in to the slot.
-3. Bring the tube in from the side along the tangent, and press it outward into the lowest opening. Wind counterclockwise and up. The cut end stops a little past the top opening on yellow.
-4. Drop the cap on. It does not pass the tube.
+3. Drop the cap on. It does not pass the tube, and it does not cover the mouths.
+4. Bring the tube in from the side along the tangent, and press it inward into the lowest opening. Wind counterclockwise and up. The cut end stops a little past the top opening on yellow.
 5. Glue the feet and the cap once the coil sits where you want it.
 
 ## Files
@@ -89,6 +89,6 @@ Reprint the coupon, then the four towers. Leave the ring and the cap.
 |---|---|
 | `stl/`, `3mf/` | The seven parts, in the print pose |
 | `render/assembled_iso.png` | Assembly and the tube, straight entry included |
-| `render/hook_closeup.png` | One opening, from the inner side, on the bed |
+| `render/hook_closeup.png` | One opening, from the outside, on the bed |
 | `render/print_orientation.png` | Bed poses |
 | `system.py` | Shared geometry |

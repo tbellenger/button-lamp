@@ -121,7 +121,7 @@ def assembled():
 
 
 def hook_closeup():
-    """Print pose. The C is cut into the bar and opens toward the centre of the coil."""
+    """Print pose. The C is cut into the bar and opens away from the centre."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
     tower = to_poly(build_tower(SPEC, 1))
@@ -129,8 +129,8 @@ def hook_closeup():
     y = clip_y(SPEC, 0)
     bed = pv.Plane(center=(SPEC.tube_x, y, 0), direction=(0, 0, 1), i_size=36, j_size=32)
     pl.add_mesh(bed, color="#e7e2d8", opacity=0.35)
-    # From the inner side, so the mouth is the thing in frame.
-    shot(pl, (SPEC.tube_x - 2.0, y, 4.5), (-1.15, -0.35, 0.42), 42, zoom=1.15)
+    # From outside the coil, so the mouth is the thing in frame.
+    shot(pl, (SPEC.tube_x + 2.0, y, 4.5), (1.15, -0.35, 0.42), 42, zoom=1.15)
     save(pl, "hook_closeup.png")
 
 

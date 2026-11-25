@@ -1,7 +1,7 @@
 """Four-tower spiral. The openings are cut into the tower bar.
 
 The bar stands on the tube, not inboard of it with a neck out to each clip.
-A C is cut through the bar's inner face at each station. The foot and the
+A C is cut through the bar's outer face at each station. The foot and the
 cap tenon are short arms back to the original slots, so the ring and the cap
 do not move.
 
@@ -327,12 +327,15 @@ def lead_in_points(spec):
 
 
 def _bore_void(spec, cy):
-    """Bore through the bar, mouth on the inner face.
+    """Bore through the bar, mouth on the outer face.
 
     Sections stay parallel to the bed and follow the helix, so the opening
     climbs at the coil's tangent instead of kinking the tube. The mouth opens
-    toward -X, the centre of the lamp. The cap leaves too little room beside
-    the bar for a 13 mm tube, so the tube goes in before the cap.
+    toward +X, away from the lamp, so the tube presses in from outside after
+    the cap is on. The slot is 11.5 mm, narrower than the 13 mm tube, and it
+    stops inside the bore, so the lips on either side keep the tube. The
+    inner face of the bar stays solid. The foot and cap arms are on that side
+    and do not cross the mouth.
     """
     radius = spec.radius
     cx = spec.tube_x
@@ -346,7 +349,7 @@ def _bore_void(spec, cy):
         y = cy + spec.climb * dth
         z = -radius * math.sin(dth)
         bore = Pos(x, y, z) * Circle(spec.rb)
-        mouth = Pos(x - spec.ro, y, z) * Rectangle(mouth_w, spec.snap_opening)
+        mouth = Pos(x + spec.ro, y, z) * Rectangle(mouth_w, spec.snap_opening)
         sections.append(bore + mouth)
     solid = loft(sections, ruled=True)
     if len(solid.solids()) != 1:
@@ -371,7 +374,7 @@ def _box(x0, x1, y0, y1, z0, z1):
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
 
-    The bar is the clip. Its inner face is cut with a C at each station.
+    The bar is the clip. Its outer face is cut with a C at each station.
     A short arm at the foot and another at the top reach back to the
     original slot and the original cap pocket. Nothing hangs below z = 0.
     """
