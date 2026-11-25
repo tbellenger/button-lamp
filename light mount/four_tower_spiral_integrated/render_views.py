@@ -134,6 +134,25 @@ def hook_closeup():
     save(pl, "hook_closeup.png")
 
 
+def top_view(kind):
+    """Looking down. +Y, the back, is up the page."""
+    pl = pv.Plotter(off_screen=True, window_size=(1100, 1100))
+    pl.set_background("white")
+    if kind == "base":
+        mesh = to_poly(build_base(SPEC, Holes))
+        color = COLORS["base"]
+        name = "base_top.png"
+        focus_z = 2.0
+    else:
+        mesh = to_poly(build_cap(SPEC))
+        color = COLORS["cap"]
+        name = "cap_top.png"
+        focus_z = 4.0
+    add_solid(pl, mesh, color)
+    shot(pl, (0, 0, focus_z), (0, 0, 1), 220, up=(0, 1, 0), zoom=1.05)
+    save(pl, name)
+
+
 def print_layout():
     pl = pv.Plotter(off_screen=True, window_size=(1600, 1000))
     pl.set_background("white")
@@ -144,7 +163,7 @@ def print_layout():
     add_solid(pl, base, COLORS["base"])
     add_solid(pl, cap, COLORS["cap"])
     # Number order, left to right: 1 blue, 2 yellow, 3 green, 4 orange.
-    for index, x in zip((1, 2, 3, 0), (-80, -28, 28, 80)):
+    for index, x in zip((1, 2, 3, 0), (-50, -18, 14, 46)):
         tower = to_poly(build_tower(SPEC, index))
         tower.translate((x, 0, 0), inplace=True)
         add_solid(pl, tower, COLORS[index])
@@ -164,3 +183,5 @@ if __name__ == "__main__":
     assembled()
     hook_closeup()
     print_layout()
+    top_view("base")
+    top_view("cap")

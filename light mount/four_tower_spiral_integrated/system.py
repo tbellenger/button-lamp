@@ -1,13 +1,16 @@
 """Four-tower spiral. The openings are cut into the tower bar.
 
-The bar stands on the tube, not inboard of it with a neck out to each clip.
-A C is cut through the bar's outer face at each station. The foot and the
-cap tenon are short arms back to the original slots, so the ring and the cap
-do not move.
+The bar stands on the tube. Each end of the bar is the plug: it drops
+straight into a slot under it in the ring and a pocket over it in the cap.
+There is no arm back to the middle. A notch keys each tower to its own slot
+and stops it going in turned around.
 
-Each tower prints lying on its side. The C is the layer outline. The flat
-face on the bed is a real plane. Lengths are millimetres. Fits are design
-allowances, not measured.
+The ring keeps the deck bolts and the cable window. The centre hole is as
+large as that window allows. The cap's centre hole is larger, stopped only
+by the pockets.
+
+Each tower prints lying on its side. The ring and the cap print flat.
+Lengths are millimetres. Fits are design allowances, not measured.
 """
 
 import math
@@ -18,6 +21,7 @@ from nurb import (
     Circle,
     Cylinder,
     Plane,
+    Polygon,
     Pos,
     Rectangle,
     Rot,
@@ -43,10 +47,15 @@ TOWER_PHASE = math.pi / 4.0
 THETA0 = math.pi / 2.0 + TOWER_PHASE
 R_PIN = 22.0
 R_OUT = 64.0
-R_IN = 8.0
 FLANGE_T = 4.5
-RIB_RADIAL = 6.0
-RIB_TANGENTIAL = 3.2
+# Plastic left between the centre hole and the cable window, and around a pocket.
+RING_WALL = 2.4
+# 45° relief on the outer bed corner of each bar. The full rectangle would
+# break the nearest M3 hole: the towers sit on the same diagonals as the bolts.
+BOLT_CHAMFER = 3.0
+# Key notch on the print-top face of each plug. Position differs per tower.
+KEY_NOTCH_W = 2.4
+KEY_NOTCH_D = 3.2
 FOOT_CLEAR = 16.0
 CAP_T = 8.0
 TUBE_OD = 13.0
@@ -63,7 +72,7 @@ TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 def specs(
     tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width,
-    rib_radial, rib_tangential, joint_clear, tube_length, extra_stations,
+    joint_clear, tube_length, extra_stations,
 ):
     """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
@@ -77,14 +86,6 @@ def specs(
         reject("clip_wall under 2 mm is under five perimeters on a 0.4 mm nozzle", param="clip_wall")
     if clip_width < 8.0 or clip_width > 18.0:
         reject("clip_width must stay between 8 and 18 mm along the tube", param="clip_width")
-    if rib_tangential < 2.4 or rib_tangential > clip_width:
-        reject(
-            "rib_tangential must stay between 2.4 mm and the bar thickness. "
-            "The tab is the thin end of the bar, and both sit on the bed.",
-            param="rib_tangential",
-        )
-    if rib_radial < 4.0 or rib_radial > 16.0:
-        reject("rib_radial must stay between 4 and 16 mm", param="rib_radial")
     if joint_clear < 0.2 or joint_clear > 1.0:
         reject(
             "joint_clear must stay between 0.2 and 1.0 mm. 0.2 mm is the snug dry-fit.",
@@ -124,8 +125,9 @@ def specs(
     radial = math.sqrt(radius * radius - bore_z * bore_z)
     tube_x = radial - R_PIN
     x_in = tube_x - ro
-    if x_in < rib_radial / 2.0 + 4.0:
-        reject("the bar meets the foot tab; there is no arm back to the slot", param="clip_wall")
+    x_out = tube_x + ro
+    if x_out - x_in < 8.0:
+        reject("the bar is too narrow to plug into a slot", param="clip_wall")
     bore_phase = math.atan2(-bore_z, radial)
     helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
@@ -164,8 +166,8 @@ def specs(
     real_last = k_last - int(extra_stations)
     tail = helix_length - real_last * quarter_arc
 
-    # Room above the highest opening for the short arm into the cap.
-    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 8.0
+    # Solid bar above the highest opening, then the cap plug.
+    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 4.0
     tower_len = cap_y + CAP_T
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -173,9 +175,8 @@ def specs(
             f"the tower would be {bed_length:.0f} mm long on the bed; the CR-10 bed is 300 mm. Shorten the tube.",
             param="tube_length",
         )
-    # On the bed the tower's long axis is Y. X is the radial reach of the bar.
-    foot_x = rib_radial / 2.0
-    print_x = (tube_x + ro) + foot_x
+    bar_w = x_out - x_in
+    print_x = bar_w
     print_y = bed_length
     print_z = clip_width
 
@@ -186,8 +187,6 @@ def specs(
         clip_wall=clip_wall,
         snap_opening=snap_opening,
         clip_width=clip_width,
-        rib_radial=rib_radial,
-        rib_tangential=rib_tangential,
         joint_clear=joint_clear,
         tube_length=tube_length,
         extra_stations=int(extra_stations),
@@ -212,7 +211,10 @@ def specs(
         helix_angle_deg=math.degrees(helix_angle),
         tube_x=tube_x,
         x_in=x_in,
-        x_out=tube_x + ro,
+        x_out=x_out,
+        bar_w=bar_w,
+        slot_radial=bar_w + joint_clear,
+        slot_tangent=clip_width + joint_clear,
         cap_y=cap_y,
         tower_len=tower_len,
         bed_length=bed_length,
@@ -220,7 +222,6 @@ def specs(
         print_y=print_y,
         print_z=print_z,
         bed_z=0.0,
-        rib_z_center=rib_tangential / 2.0,
     )
 
 
@@ -233,8 +234,6 @@ def default_specs(**overrides):
         clip_wall=CLIP_WALL,
         snap_opening=SNAP_OPENING,
         clip_width=CLIP_WIDTH,
-        rib_radial=RIB_RADIAL,
-        rib_tangential=RIB_TANGENTIAL,
         joint_clear=JOINT_CLEAR,
         tube_length=TUBE_LENGTH,
         extra_stations=0,
@@ -362,9 +361,41 @@ def _digit(char):
 
 
 def _tower_mark(spec, index):
-    """Recess the numeral into the top face of the foot arm."""
+    """Recess the numeral into the top face of the bar, just above the ring."""
     face = _digit(TOWER_MARK[index])
-    return Pos(0, 4.2, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+    return Pos(spec.tube_x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+
+
+def _key_x(spec, index):
+    """Radial station of this tower's key, inner to outer as 1, 2, 3, 4."""
+    order = {1: 0, 2: 1, 3: 2, 0: 3}[index]
+    margin = 3.6
+    usable = spec.bar_w - 2.0 * margin
+    if usable < KEY_NOTCH_W:
+        reject("the bar is too narrow for four different keys", param="clip_wall")
+    return spec.x_in + margin + order * usable / 3.0
+
+
+def _key_notch(spec, index, y0, y1):
+    """Notch in the print-top face of one plug. One station per tower."""
+    cx = _key_x(spec, index)
+    half = KEY_NOTCH_W / 2.0
+    return _box(
+        cx - half, cx + half,
+        y0, y1,
+        spec.clip_width - KEY_NOTCH_D, spec.clip_width + 0.4,
+    )
+
+
+def _bed_corner_chamfer(spec, y0, y1, leg):
+    """45° triangle off the outer bed corner, running along the tower."""
+    x1 = spec.x_out
+    face = Polygon([(x1 + 0.4, -0.4), (x1 - leg, -0.4), (x1 + 0.4, leg + 0.2)])
+    length = y1 - y0
+    solid = extrude(face, length)
+    # Sketch Y becomes print +Z. The extrusion, which was +Z, becomes -Y,
+    # so a shift by y1 puts the cut on y0..y1.
+    return Pos(0, y1, 0) * Rot(90, 0, 0) * solid
 
 
 def _box(x0, x1, y0, y1, z0, z1):
@@ -374,9 +405,9 @@ def _box(x0, x1, y0, y1, z0, z1):
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
 
-    The bar is the clip. Its outer face is cut with a C at each station.
-    A short arm at the foot and another at the top reach back to the
-    original slot and the original cap pocket. Nothing hangs below z = 0.
+    The bar is the clip and the plug. Both ends are the same cross-section,
+    with this tower's key notch and the bolt-clearance chamfer. Nothing
+    hangs below z = 0.
     """
     if index not in TOWER_MARK:
         reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
@@ -384,106 +415,127 @@ def build_tower(spec, index):
     if not found:
         reject("this tower has no opening on the tube", param="tube_length")
     z0 = spec.bed_z
-    z_bar = spec.clip_width
-    z_tab = spec.rib_tangential
-    x_tab = spec.rib_radial / 2.0
-    # The lowest mouth starts just above y = 10. The foot arm stops short of it
-    # on every tower, so the four feet are the same shape.
-    foot_y1 = 9.0
-    bar = _box(spec.x_in, spec.x_out, 1.0, spec.cap_y, z0, z_bar)
-    tab = _box(-x_tab, x_tab, -FLANGE_T, 2.0, z0, z_tab)
-    foot = _box(-x_tab, spec.x_in + 1.6, 0.0, foot_y1, z0, z_bar)
-    tenon = _box(-x_tab, x_tab, spec.cap_y - 2.0, spec.cap_y + CAP_T, z0, z_tab)
-    top = _box(-x_tab, spec.x_in + 1.6, spec.cap_y - 7.0, spec.cap_y, z0, z_bar)
-    solid = bar + tab + foot + tenon + top
+    y0 = -FLANGE_T
+    y1 = spec.cap_y + CAP_T
+    solid = _box(spec.x_in, spec.x_out, y0, y1, z0, spec.clip_width)
+    solid -= _bed_corner_chamfer(spec, y0 - 0.2, y1 + 0.2, BOLT_CHAMFER)
+    solid -= _key_notch(spec, index, y0 - 0.2, 0.2)
+    solid -= _key_notch(spec, index, spec.cap_y - 0.2, y1 + 0.2)
     solid -= _tower_mark(spec, index)
     for k in found:
         solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
     if len(solid.solids()) != 1:
-        reject("the tower did not come back as a single solid", param="rib_radial")
+        reject("the tower did not come back as a single solid", param="clip_width")
     low = solid.bounding_box().min.Z
     if low < -0.05:
         reject("the tower hangs below the bed", param="clip_width")
     return solid
 
 
-def _slot(spec, angle):
-    """Through-slot the rib drops into. Same size at every tower."""
-    radial = spec.rib_radial + spec.joint_clear
-    tangent = spec.rib_tangential + spec.joint_clear
-    x = R_PIN * math.cos(angle)
-    y = R_PIN * math.sin(angle)
-    return (
-        Pos(x, y, FLANGE_T / 2.0)
-        * Rot(0, 0, math.degrees(angle))
-        * Pos(0, -spec.rib_z_center, 0)
-        * Box(radial, tangent, FLANGE_T + 2.0)
+def _plug_void(spec, index, y0, y1, chamfer_leg):
+    """Slot around one plug, minus the key tooth and plus the bolt chamfer.
+
+    Built in the print frame. joint_clear is added to the opening, the same
+    way the old 6.2 × 3.4 slot was 0.2 mm over the 6.0 × 3.2 tab.
+    """
+    c = spec.joint_clear / 2.0
+    slot = _box(
+        spec.x_in - c, spec.x_out + c,
+        y0, y1,
+        -c, spec.clip_width + c,
     )
+    # Drop the outer bed corner from the void. A larger leg than the bar's
+    # chamfer leaves clearance on that face and keeps the M3 hole round.
+    slot -= _bed_corner_chamfer(spec, y0 - 0.4, y1 + 0.4, chamfer_leg)
+    cx = _key_x(spec, index)
+    half = (KEY_NOTCH_W - spec.joint_clear) / 2.0
+    tooth = _box(
+        cx - half, cx + half,
+        y0 - 0.2, y1 + 0.2,
+        spec.clip_width - (KEY_NOTCH_D - spec.joint_clear),
+        spec.clip_width + c + 1.2,
+    )
+    void = slot - tooth
+    if len(void.solids()) < 1:
+        reject("a tower slot did not cut as a solid", param="joint_clear")
+    return void
 
 
 def _base_mark(spec, index, angle):
-    """Recessed numeral on the top of the ring, just outboard of the slot."""
+    """Recessed numeral on the ring, just inboard of this tower's slot."""
     face = Text(TOWER_MARK[index], font_size=MARK_FONT, font="DejaVu Sans")
     pocket = extrude(face, MARK_DEPTH + 0.2)
-    radius = R_PIN + spec.rib_radial / 2.0 + 4.5
+    radius = (R_PIN + spec.x_in) - 5.5
     x = radius * math.cos(angle)
     y = radius * math.sin(angle)
     return Pos(x, y, FLANGE_T - MARK_DEPTH) * pocket
 
 
-def build_base(spec, holes):
-    """Ring. Four identical slots, a recessed number by each, bolts, cable window.
+def base_hole_radius(holes):
+    """Largest centre hole that keeps RING_WALL outside the cable window."""
+    cable_r = math.hypot(holes.wire_x, holes.wire_y)
+    return cable_r - holes.window_d / 2.0 - RING_WALL
 
-    The slot is the same 6.2 by 3.4 mm opening as the earlier four-tower ring,
-    so a tower from this set drops into that ring.
+
+def cap_hole_radius(spec):
+    """Largest cap hole that keeps RING_WALL inside the pockets."""
+    return (R_PIN + spec.x_in) - RING_WALL
+
+
+def cap_outer_radius(spec):
+    """Cap rim just outside the pockets, including the tangential offset."""
+    outer = math.hypot(R_PIN + spec.x_out, spec.clip_width)
+    return outer + RING_WALL
+
+
+def build_base(spec, holes):
+    """Ring. Keyed slots under the bars, the deck bolts, the cable window.
+
+    The centre hole stops 2.4 mm short of the cable window. The bolt holes
+    and the window are the deck pattern and do not move. A 3 mm chamfer on
+    each slot keeps the nearest M3 hole round.
     """
-    ring = extrude(Circle(R_OUT) - Circle(R_IN), FLANGE_T)
+    r_in = base_hole_radius(holes)
+    if r_in < 8.0:
+        reject("the cable window leaves no centre hole", param="coil_diameter")
+    ring = extrude(Circle(R_OUT) - Circle(r_in), FLANGE_T)
     body = ring
     for index in range(4):
         ang = tower_angle(index)
-        body -= _slot(spec, ang)
+        void = _plug_void(
+            spec, index,
+            -FLANGE_T - 1.0, 1.2,
+            BOLT_CHAMFER + spec.joint_clear,
+        )
+        body -= place_tower(void, ang)
         body -= _base_mark(spec, index, ang)
     half = holes.bolt / 2.0
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             body -= Pos(sx * half, sy * half, FLANGE_T / 2.0) * Cylinder(holes.bolt_d / 2.0, FLANGE_T + 2.0)
     body -= Pos(holes.wire_x, holes.wire_y, FLANGE_T / 2.0) * Cylinder(holes.window_d / 2.0, FLANGE_T + 2.0)
-    half_slot = 0.5 * math.hypot(spec.rib_radial + spec.joint_clear, spec.rib_tangential + spec.joint_clear)
-    for index in range(4):
-        ang = tower_angle(index)
-        px = R_PIN * math.cos(ang)
-        py = R_PIN * math.sin(ang)
-        dist = math.hypot(px - holes.wire_x, py - holes.wire_y)
-        if dist < half_slot + holes.window_d / 2.0 + 1.0:
-            reject("a tower slot is too close to the light-cable window", param="coil_diameter")
     if len(body.solids()) != 1:
         reject("the base ring did not come back as a single solid", param="coil_diameter")
     return body
 
 
 def build_cap(spec):
-    """Thin hoop. Pockets match the rib, the same hoop as the earlier cap."""
-    wall = 2.4
-    outer = R_PIN + spec.rib_radial / 2.0 + wall
-    inner = R_PIN - spec.rib_radial / 2.0 - wall
-    if inner < 8.0:
-        reject("rib_radial leaves no hole in the middle of the cap", param="rib_radial")
+    """Ring over the four bars. The centre hole is as large as the pockets allow."""
+    inner = cap_hole_radius(spec)
+    outer = cap_outer_radius(spec)
+    if inner < 12.0 or outer > R_OUT - 1.0:
+        reject("the cap ring does not fit inside the base", param="clip_wall")
     ring = extrude(Circle(outer) - Circle(inner), CAP_T)
     body = ring
-    radial = spec.rib_radial + spec.joint_clear
-    tangent = spec.rib_tangential + spec.joint_clear
-    pocket_y = -spec.rib_z_center
     for index in range(4):
         ang = tower_angle(index)
-        x = R_PIN * math.cos(ang)
-        y = R_PIN * math.sin(ang)
-        pocket = (
-            Pos(x, y, CAP_T / 2.0)
-            * Rot(0, 0, math.degrees(ang))
-            * Pos(0, pocket_y, 0)
-            * Box(radial, tangent, CAP_T + 2.0)
+        void = _plug_void(
+            spec, index,
+            spec.cap_y - 1.0, spec.cap_y + CAP_T + 1.0,
+            BOLT_CHAMFER + spec.joint_clear,
         )
-        body -= pocket
+        placed = place_tower(void, ang)
+        body -= Pos(0, 0, -(FLANGE_T + spec.cap_y)) * placed
     if len(body.solids()) != 1:
         reject("the cap did not come back as a single solid", param="clip_width")
     return body
@@ -509,31 +561,32 @@ def bore_world(spec, index, k):
 
 
 def build_coupon(spec):
-    """A short bar with one opening, its tab, and a slot gauge.
+    """A short bar, one outward opening, the keyed plug, and a slot gauge.
 
-    Print it on its side, like a tower. Snap the link. The tab should drop
-    into the gauge. The opening is the same C as the towers.
+    Print it on its side. The gauge is open on top and checks the 18.4 mm
+    plug width. The key tooth is only in the ring, where it can print upright.
+    Snap the link off and try the plug in the gauge before the towers.
     """
     z0 = spec.bed_z
-    z_bar = spec.clip_width
-    z_tab = spec.rib_tangential
-    x_tab = spec.rib_radial / 2.0
-    y_clip = 22.0
-    bar = _box(spec.x_in, spec.x_out, 8.0, 36.0, z0, z_bar)
-    tab = _box(-x_tab, x_tab, -FLANGE_T, 2.0, z0, z_tab)
-    foot = _box(-x_tab, spec.x_in + 1.6, 0.0, y_clip - spec.snap_opening / 2.0 - 1.0, z0, z_bar)
-    solid = bar + tab + foot
+    y_clip = 24.0
+    solid = _box(spec.x_in, spec.x_out, -FLANGE_T, 34.0, z0, spec.clip_width)
+    solid -= _bed_corner_chamfer(spec, -FLANGE_T - 0.2, 34.2, BOLT_CHAMFER)
+    solid -= _key_notch(spec, 1, -FLANGE_T - 0.2, 0.4)
     solid -= _tower_mark(spec, 1)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
-    radial = spec.rib_radial + spec.joint_clear
-    tall = spec.rib_tangential + spec.joint_clear
-    block = Pos(-22.0, 4.0, tall / 2.0) * Box(16.0, 12.0, tall)
-    channel = Pos(-22.0, 7.0, tall / 2.0) * Box(radial, 14.0, tall + 2.0)
+    c = spec.joint_clear / 2.0
+    gw = spec.slot_radial
+    gt = spec.slot_tangent
+    bx0 = spec.x_in - gw - 12.0
+    bx1 = spec.x_in - 4.0
+    block = _box(bx0, bx1, -2.0, 12.0, z0, gt)
+    gcx = (bx0 + bx1) / 2.0
+    channel = _box(gcx - gw / 2.0, gcx + gw / 2.0, 1.0, 14.0, z0, gt + 1.0)
     gauge = block - channel
-    link = Pos(-9.0, 2.0, spec.rib_tangential / 2.0) * Box(18.0, 2.4, 2.0)
+    link = _box(bx1 - 0.2, spec.x_in + 0.4, 1.2, 3.6, z0, 2.4)
     body = solid + gauge + link
     if len(body.solids()) != 1:
-        reject("the fit coupon did not come back as a single solid", param="rib_radial")
+        reject("the fit coupon did not come back as a single solid", param="joint_clear")
     return body
 
 

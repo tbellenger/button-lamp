@@ -18,8 +18,6 @@ def tower_base(
     clip_wall=2.4,
     snap_opening=11.5,
     clip_width=10.0,
-    rib_radial=6.0,
-    rib_tangential=3.2,
     joint_clear=0.2,
     tube_length=965.2,
     extra_stations=0,
@@ -30,11 +28,9 @@ def tower_base(
     clip_wall: plastic outside the hook bore (mm)
     snap_opening: width of the mouth the tube pushes through (mm)
     clip_width: length of each hook along the tube (mm)
-    rib_radial: radial depth of the running rib (mm)
-    rib_tangential: width of the running rib across the view through the coil (mm)
     joint_clear: extra opening on the slot, both ways (mm). 0.2 is the snug dry-fit.
     tube_length: cut length of the tube, straight entry included (mm)
     extra_stations: hooks added past the tube, one quarter turn each
     """
-    spec = specs(tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width, rib_radial, rib_tangential, joint_clear, tube_length, extra_stations)
+    spec = specs(tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width, joint_clear, tube_length, extra_stations)
     return build_base(spec, deck())

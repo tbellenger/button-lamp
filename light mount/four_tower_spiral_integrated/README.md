@@ -1,94 +1,91 @@
 # Four-tower spiral, openings in the bar
 
-Same ring and cap as [`../four_tower_spiral/`](../four_tower_spiral/). The tower bar stands on the tube. Each C is cut into the outer face of that bar. There is no neck and no separate clip.
+Same coil as before. The bar stands on the tube and the C is cut into its outer face. Each end of the bar is the plug. It drops straight into a slot in the ring and a pocket in the cap. There is no arm.
 
-The foot is a short arm back to the original slot, and the top is a short arm back to the original cap pocket. A ring and a cap already printed from the earlier set still fit.
+The ring and the cap in [`../four_tower_spiral/`](../four_tower_spiral/) do not fit these bars. Reprint both.
 
-## The coil, unchanged from the count fix
+## The coil
 
 | | |
 |---|---|
 | Tube | 13 mm OD, 965.2 mm cut length (38 in) |
-| Straight entry | 46.94 mm, tangent from the ring's outer edge (radius 64 mm) to the first opening |
-| Helix | 918.26 mm, **3.345 turns** |
-| One turn | 274.55 mm at the 43.5 mm centreline |
-| Pitch | 26 mm. A quarter turn is 6.5 mm. The bore climbs at **5.4°** |
+| Straight entry | 46.94 mm, tangent from the ring edge to the first opening |
+| Helix | 918.26 mm, **3.345 turns**. One turn is 274.55 mm |
+| Pitch | 26 mm. The bore climbs at **5.4°** |
 | Openings | **14** (4 + 4 + 3 + 3) |
 
-The tube ends 26 mm past the top opening, on yellow, short of the next tower.
+| Number | Colour | File | Openings, world Z (mm) |
+|---|---|---|---|
+| 1 blue, back-left | `tower_90` | 20.5, 46.5, 72.5, 98.5 |
+| 2 yellow, front-left | `tower_180` | 27.0, 53.0, 79.0, 105.0 |
+| 3 green, front-right | `tower_270` | 33.5, 59.5, 85.5 |
+| 4 orange, back-right | `tower_0` | 40.0, 66.0, 92.0 |
 
-## Where the openings are
+The tube ends 26 mm past the top yellow opening.
 
-Same 45° rotation. Yellow 2 and green 3 are the front corners. +Y is the back. −Y is the buttons.
+## The bar and the plug
 
-| Number | Colour | File | Place | Openings | World Z (mm) |
-|---|---|---|---|---|---|
-| 1 | blue | `tower_90` | back-left, 135° | 4, the lowest | 20.5, 46.5, 72.5, 98.5 |
-| 2 | yellow | `tower_180` | front-left, 225° | 4, the highest | 27.0, 53.0, 79.0, 105.0 |
-| 3 | green | `tower_270` | front-right, 315° | 3 | 33.5, 59.5, 85.5 |
-| 4 | orange | `tower_0` | back-right, 45° | 3 | 40.0, 66.0, 92.0 |
-
-## The bar and the C
-
-The bar is centred on the tube. It is 18.2 mm radially and 10 mm tangentially. The 10 mm is the grip along the tube: the bore goes through the bar.
+The bar is 18.2 mm radially and 10 mm tangentially. The bore is centred in it.
 
 | | |
 |---|---|
-| Tube | 13 mm |
-| Bore | 13.4 mm (0.2 mm clearance) |
-| Wall | 2.4 mm on the closed sides |
+| Bore | 13.4 mm (13 mm tube, 0.2 mm clearance) |
+| Wall | 2.4 mm |
 | Mouth | 11.5 mm, on the **outer** face |
 | Along the tube | 10 mm, the bar thickness |
-| Tangent | the bore rises 5.4°, the helix angle at 26 mm pitch |
+| Plug | the bar end itself, 18.2 × 10.0 mm, 4.5 mm into the ring and 8 mm into the cap |
+| Slot | 18.4 × 10.2 mm. The extra 0.2 mm is `joint_clear`, the same style as the old 6.2 × 3.4 over a 6.0 × 3.2 tab |
 
-The mouth faces away from the lamp. You press the tube inward, from outside, and the 11.5 mm lips are narrower than the 13 mm tube, so it snaps and stays. The inner face of the bar is solid. The foot and cap arms stay on that inner side and stop at the bar, so nothing stands outside the mouth. The cap can be on already: it sits at radius 27.4 mm, inboard of the bar, and does not cross the openings.
+The 11.5 mm mouth is narrower than the 13 mm tube, so the lips snap and hold. Press the tube in from outside. The cap sits inboard of the mouths, so it can be on already. Nothing stands outside the bar.
 
-The bore is not square to the bar. Across the 10 mm it follows the helix, so the tube is not kinked at the opening.
+A 3 mm 45° chamfer takes the outer bed corner off the bar and out of the slot. Without it the slot breaks the nearest M3 hole: the towers are on the same diagonals as the four deck bolts. The chamfer leaves about 1.5 mm of ring between the slot and the hole. The bolt pattern is unchanged.
 
-The bar lies on the bed, 10 mm thick. That puts the bore centre 5 mm off the tower's radial plane. The bar is shifted in until the centreline is still at 43.5 mm. The helix phase is −6.6° so every bore is on the tube. The towers themselves stay on the 45° lines, and the heights above do not move.
+Each plug has one notch, 2.4 mm wide and 3.2 mm deep, in the print-top face. From the inside of the bar outward the notches are towers 1, 2, 3, 4. The slot keeps a tooth 0.2 mm smaller. A tower only drops into its own slot, and only one way around. The same notch is on the top plug, so the cap is keyed the same way. The recessed 1–4 on the bar and on the ring say which is which.
 
-## Base and cap
+## Centre holes
 
-They did not change. The slot and the pocket are still 6.2 × 3.4 mm. The foot tab is still 6.0 × 3.2 mm, 4.5 mm through the ring. The ring solid is the same 55174.3 mm³. The cap is the same 11268.5 mm³ hoop.
+| Part | Hole | What stops it |
+|---|---|---|
+| Ring | **Ø44.8 mm** | The Ø19 cable window. Its inner edge is 24.8 mm from the centre. The hole stops 2.4 mm short of that. The slots would have allowed about Ø63 mm. |
+| Cap | **Ø63.4 mm** | The pockets. 2.4 mm of hoop inside them. The cap has no bolts and no cable window. |
 
-The cap sits at 117.6 mm above the ring, 4 mm higher than the necked towers, because the arm needs room above the top opening. The pocket is the same pocket.
+The ring is still Ø128 mm, 4.5 mm thick. The four M3 holes stay on the 76.2 mm square. The cable window stays Ø19 at (+11.71, +32.24). That is the deck joint, and it did not move.
+
+The cap's outside is Ø111.3 mm, 8 mm thick. It is inside the ring.
 
 ## Print
 
-Creality CR-10 V2, 300 × 300 × 400 mm, PLA, 0.4 mm nozzle. Tom slices in Cura. The STL and 3MF are already lying down. Flat face on the bed. The C is the layer outline. No supports.
+Creality CR-10 V2, 300 × 300 × 400, PLA. The STL and 3MF are in the print pose. Towers lie on the flat face, C in the layers. Ring and cap are flat. No supports.
 
-| Part | Qty | On the bed (mm) | Against the 300 × 300 bed |
-|---|---|---|---|
-| `tower_90` | 1 | 33.3 × 130.1 × 10 | 130 mm on the 300 mm axis. All four bars are this size. |
-| `tower_180` | 1 | 33.3 × 130.1 × 10 | same |
-| `tower_270` | 1 | 33.3 × 130.1 × 10 | same |
-| `tower_0` | 1 | 33.3 × 130.1 × 10 | same |
-| `tower_coupon` | 1 | 60.3 × 40.5 × 10 | print this first |
-| `tower_base` | 1 | 128 × 128 × 4.5 | reuse the earlier ring |
-| `tower_cap` | 1 | 54.8 × 54.8 × 8 | reuse the earlier cap |
+| Part | On the bed (mm) |
+|---|---|
+| each tower | **18.2 × 126.1 × 10**. The 126 mm side is on the 300 mm axis. |
+| `tower_coupon` | **48.6 × 38.5 × 10.2**. Print this first. |
+| `tower_base` | **128 × 128 × 4.5**, hole Ø44.8 |
+| `tower_cap` | **111.3 × 111.3 × 8**, hole Ø63.4 |
 
-Stood up, the assembly is 128 × 128 × 130.1 mm.
+Stood up, the assembly is 128 × 128 × 126.1 mm.
 
-`nurb check` reports nothing to fix. It warns that the helix bore meets the bed at a few degrees, which polishes the first layer, and that the recessed digit is a thin stroke. Neither needs a support.
+`nurb check` has nothing to fix. The assembly and the cap are clean. The towers warn that the helix bore meets the bed at a few degrees, which polishes the first layer, and that the digit is a thin stroke.
 
 ## Reprint
 
-Reprint the coupon, then the four towers. Leave the ring and the cap.
+Reprint the ring, the cap, the coupon, and all four towers. The earlier ring and cap do not have these slots.
 
 ## Assembly
 
-1. Bolt the ring down. +Y, the cable window, points at the back. Number 1 is back-left, then 2, 3, and 4 counterclockwise.
-2. Drop each tower into the slot with the same number. The bar is out at the tube. The arm reaches in to the slot.
-3. Drop the cap on. It does not pass the tube, and it does not cover the mouths.
-4. Bring the tube in from the side along the tangent, and press it inward into the lowest opening. Wind counterclockwise and up. The cut end stops a little past the top opening on yellow.
-5. Glue the feet and the cap once the coil sits where you want it.
+1. Bolt the ring down. +Y, the cable window, points at the back. Match 1 to 1, then 2, 3, and 4. The tooth stops a tower going in the wrong slot or turned around.
+2. Drop the cap on the same way.
+3. Press the tube in from the outside, starting at the lowest opening, and wind counterclockwise. The cut end stops a little past the top opening on yellow.
+4. Glue the plugs once the coil sits where you want it.
 
 ## Files
 
 | File | |
 |---|---|
 | `stl/`, `3mf/` | The seven parts, in the print pose |
-| `render/assembled_iso.png` | Assembly and the tube, straight entry included |
-| `render/hook_closeup.png` | One opening, from the outside, on the bed |
+| `render/assembled_iso.png` | Assembly and the tube |
+| `render/hook_closeup.png` | One outward opening, on the bed |
 | `render/print_orientation.png` | Bed poses |
-| `system.py` | Shared geometry |
+| `render/base_top.png` | Ring, looking down |
+| `render/cap_top.png` | Cap, looking down |
