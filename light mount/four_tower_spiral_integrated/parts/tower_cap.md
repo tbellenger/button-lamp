@@ -7,13 +7,12 @@ Checks: clean
 
 ## What it is
 
-A ring that drops onto the four tower tops and holds their radius. Same hoop and the same 6.2 × 3.4 mm pockets as the earlier cap. It sits lower, because the towers are one hook shorter.
+The hoop that drops onto the four tenons. Same pockets as the earlier cap: 6.2 × 3.4 mm. It sits a little higher, because the bar needs room above the top opening for the arm.
 
 ## Design notes
 
-- The hoop is only wide enough for the 6 mm rib plus a 2.4 mm wall each side.
-- Outer radius stays inside the tube. The hooks are below the cap and still open from the outside.
-- The earlier cap fits these tenons. The pocket did not change.
+- Outer radius stays well inside the tube. The mouths face this hoop, so the tube has to be in before the cap drops on.
+- The earlier printed cap fits these tenons. The pocket did not change.
 
 ```toml
 [part]
@@ -22,8 +21,8 @@ min_wall = 1.2
 
 ## Don't
 
-- Don't make the cap reach the tube. The tube has to snap in after the cap is on, and the cap has to drop on after the tube is in.
+- Don't enlarge the hoop out to the bar. That would close the mouths.
 
 ## Changelog
 
-- 2026-11-25: same hoop as the earlier cap. It sits at 113.6 mm above the ring instead of 120.1 mm, because the empty top hook is gone.
+- 2026-11-25: same hoop. It sits at 117.6 mm above the ring instead of 113.6 mm.

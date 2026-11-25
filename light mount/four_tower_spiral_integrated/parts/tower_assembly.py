@@ -20,7 +20,6 @@ def tower_assembly(
     clip_width=10.0,
     rib_radial=6.0,
     rib_tangential=3.2,
-    clip_arm=6.0,
     joint_clear=0.2,
     tube_length=965.2,
     extra_stations=0,
@@ -33,7 +32,6 @@ def tower_assembly(
     clip_width: length of each hook along the tube (mm)
     rib_radial: radial depth of the running rib (mm)
     rib_tangential: width of the running rib across the view through the coil (mm)
-    clip_arm: width of the neck where the hook leaves the rib (mm). The root fillet is half of this.
     joint_clear: extra opening on the slot, both ways (mm). 0.2 is the snug dry-fit.
     tube_length: cut length of the tube, straight entry included (mm)
     extra_stations: hooks added past the tube, one quarter turn each
@@ -41,7 +39,7 @@ def tower_assembly(
     spec = specs(
         float(tube_od), float(coil_diameter), float(pitch), float(clip_wall),
         float(snap_opening), float(clip_width), float(rib_radial), float(rib_tangential),
-        float(clip_arm), float(joint_clear), float(tube_length), int(extra_stations),
+        float(joint_clear), float(tube_length), int(extra_stations),
     )
     common = dict(
         tube_od=float(tube_od),
@@ -52,7 +50,6 @@ def tower_assembly(
         clip_width=float(clip_width),
         rib_radial=float(rib_radial),
         rib_tangential=float(rib_tangential),
-        clip_arm=float(clip_arm),
         joint_clear=float(joint_clear),
         tube_length=float(tube_length),
         extra_stations=int(extra_stations),

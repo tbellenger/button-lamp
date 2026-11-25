@@ -1,14 +1,13 @@
-"""Four-tower spiral with the hooks printed in the towers.
+"""Four-tower spiral. The openings are cut into the tower bar.
 
-Same ring, same cap, same numbered slots as light mount/four_tower_spiral.
-The hooks are not separate clips and there is no clip-to-arm joint: each
-tower is one solid. It prints lying on its side, so the C of every hook is
-the layer outline and the flat face on the bed is a real plane.
+The bar stands on the tube, not inboard of it with a neck out to each clip.
+A C is cut through the bar's inner face at each station. The foot and the
+cap tenon are short arms back to the original slots, so the ring and the cap
+do not move.
 
-The 965.2 mm tube is not all helix. A straight tangent runs from the outer
-edge of the ring into the first hook. Hooks are placed only where that helix
-still has tube. Lengths are millimetres. Fits are design allowances, not
-measured.
+Each tower prints lying on its side. The C is the layer outline. The flat
+face on the bed is a real plane. Lengths are millimetres. Fits are design
+allowances, not measured.
 """
 
 import math
@@ -19,14 +18,12 @@ from nurb import (
     Circle,
     Cylinder,
     Plane,
-    Polygon,
     Pos,
     Rectangle,
     Rot,
     Text,
     Vector,
     extrude,
-    fillet,
     loft,
     measured,
     reject,
@@ -52,10 +49,6 @@ RIB_RADIAL = 6.0
 RIB_TANGENTIAL = 3.2
 FOOT_CLEAR = 16.0
 CAP_T = 8.0
-# Neck of the hook where it leaves the rib. Wider than the old 4.29 mm spoke
-# so the root fillet has a 3 mm radius (half the neck) and the neck itself
-# clears the 5 mm snap-root rule.
-CLIP_ARM = 6.0
 TUBE_OD = 13.0
 COIL_DIAMETER = 100.0
 PITCH = 26.0
@@ -70,7 +63,7 @@ TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 def specs(
     tube_od, coil_diameter, pitch, clip_wall, snap_opening, clip_width,
-    rib_radial, rib_tangential, clip_arm, joint_clear, tube_length, extra_stations,
+    rib_radial, rib_tangential, joint_clear, tube_length, extra_stations,
 ):
     """Derived sizes, or a refusal when a combination cannot be printed."""
     if tube_od < 8.0 or tube_od > 20.0:
@@ -86,17 +79,12 @@ def specs(
         reject("clip_width must stay between 8 and 18 mm along the tube", param="clip_width")
     if rib_tangential < 2.4 or rib_tangential > clip_width:
         reject(
-            "rib_tangential must stay between 2.4 mm and clip_width. "
-            "The hook is thicker than the rib and both sit on the bed.",
+            "rib_tangential must stay between 2.4 mm and the bar thickness. "
+            "The tab is the thin end of the bar, and both sit on the bed.",
             param="rib_tangential",
         )
     if rib_radial < 4.0 or rib_radial > 16.0:
         reject("rib_radial must stay between 4 and 16 mm", param="rib_radial")
-    if clip_arm < 5.0 or clip_arm > 12.0:
-        reject(
-            "clip_arm must stay between 5 and 12 mm. 5 mm is the neck at the root; thinner, the fillet has nothing to land on.",
-            param="clip_arm",
-        )
     if joint_clear < 0.2 or joint_clear > 1.0:
         reject(
             "joint_clear must stay between 0.2 and 1.0 mm. 0.2 mm is the snug dry-fit.",
@@ -127,17 +115,19 @@ def specs(
     if quarter_arc <= 0:
         reject("pitch and coil diameter do not make a helix", param="pitch")
 
-    # The hook sits on the bed, so its bore centre is clip_width/2 off the
-    # tower's radial plane. Pull the arm in until that offset still lands on
-    # the 43.5 mm centreline, and shift the helix phase to match.
+    # The bar lies on the bed, so the bore centre is clip_width/2 off the
+    # tower's radial plane. Shift the bar until that offset is still on the
+    # 43.5 mm centreline. The phase follows, so the tube is not asked to kink.
     bore_z = clip_width / 2.0
     if bore_z >= radius - 1.0:
         reject("clip_width is too long for the coil radius", param="clip_width")
     radial = math.sqrt(radius * radius - bore_z * bore_z)
     tube_x = radial - R_PIN
-    if tube_x < rib_radial / 2.0 + 4.0:
-        reject("the hook has no room between the rib and the tube", param="coil_diameter")
+    x_in = tube_x - ro
+    if x_in < rib_radial / 2.0 + 4.0:
+        reject("the bar meets the foot tab; there is no arm back to the slot", param="clip_wall")
     bore_phase = math.atan2(-bore_z, radial)
+    helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
     # Straight entry: tangent from the first hook out to the ring's outer edge.
     # That run is part of the 965.2 mm and is not helix. There is no straight
@@ -174,7 +164,8 @@ def specs(
     real_last = k_last - int(extra_stations)
     tail = helix_length - real_last * quarter_arc
 
-    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 4.0
+    # Room above the highest opening for the short arm into the cap.
+    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 8.0
     tower_len = cap_y + CAP_T
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -182,14 +173,11 @@ def specs(
             f"the tower would be {bed_length:.0f} mm long on the bed; the CR-10 bed is 300 mm. Shorten the tube.",
             param="tube_length",
         )
-
-    arm_bevel = clip_arm / 2.0
-    x_face = rib_radial / 2.0
-    if x_face + arm_bevel + 1.0 >= tube_x - ro:
-        reject("the root fillet reaches the hook bore; narrow clip_arm", param="clip_arm")
-    # Fillets on one tower must not meet the next hook a pitch higher.
-    if clip_arm / 2.0 + arm_bevel > pitch / 2.0 - 1.0:
-        reject("the root fillet meets the next hook on this tower", param="clip_arm")
+    # On the bed the tower's long axis is Y. X is the radial reach of the bar.
+    foot_x = rib_radial / 2.0
+    print_x = (tube_x + ro) + foot_x
+    print_y = bed_length
+    print_z = clip_width
 
     return SimpleNamespace(
         tube_od=tube_od,
@@ -200,8 +188,6 @@ def specs(
         clip_width=clip_width,
         rib_radial=rib_radial,
         rib_tangential=rib_tangential,
-        clip_arm=clip_arm,
-        arm_bevel=arm_bevel,
         joint_clear=joint_clear,
         tube_length=tube_length,
         extra_stations=int(extra_stations),
@@ -223,10 +209,16 @@ def specs(
         coil_height=turns * pitch,
         bore_z=bore_z,
         bore_phase=bore_phase,
+        helix_angle_deg=math.degrees(helix_angle),
         tube_x=tube_x,
+        x_in=x_in,
+        x_out=tube_x + ro,
         cap_y=cap_y,
         tower_len=tower_len,
         bed_length=bed_length,
+        print_x=print_x,
+        print_y=print_y,
+        print_z=print_z,
         bed_z=0.0,
         rib_z_center=rib_tangential / 2.0,
     )
@@ -243,7 +235,6 @@ def default_specs(**overrides):
         clip_width=CLIP_WIDTH,
         rib_radial=RIB_RADIAL,
         rib_tangential=RIB_TANGENTIAL,
-        clip_arm=CLIP_ARM,
         joint_clear=JOINT_CLEAR,
         tube_length=TUBE_LENGTH,
         extra_stations=0,
@@ -336,16 +327,18 @@ def lead_in_points(spec):
 
 
 def _bore_void(spec, cy):
-    """Curved bore and outward mouth. Sections stay parallel to the bed.
+    """Bore through the bar, mouth on the inner face.
 
-    The grip matches the side-printed clip: bore radius tube/2 + 0.2, mouth
-    11.5 mm, wall 2.4 mm. The loft follows the helix so the tube is not
-    asked to be straight inside the hook.
+    Sections stay parallel to the bed and follow the helix, so the opening
+    climbs at the coil's tangent instead of kinking the tube. The mouth opens
+    toward -X, the centre of the lamp. The cap leaves too little room beside
+    the bar for a 13 mm tube, so the tube goes in before the cap.
     """
     radius = spec.radius
     cx = spec.tube_x
-    half = spec.clip_width / 2.0 + 1.4
-    alpha = math.asin(min(0.9, half / radius))
+    half = spec.clip_width / 2.0 + 2.0
+    alpha = math.asin(min(0.5, half / radius))
+    mouth_w = 2.0 * spec.ro + 8.0
     sections = []
     for i in range(5):
         dth = -alpha + 2.0 * alpha * i / 4.0
@@ -353,11 +346,11 @@ def _bore_void(spec, cy):
         y = cy + spec.climb * dth
         z = -radius * math.sin(dth)
         bore = Pos(x, y, z) * Circle(spec.rb)
-        mouth = Pos(x + spec.ro, y, z) * Rectangle(2.0 * spec.ro + 4.0, spec.snap_opening)
+        mouth = Pos(x - spec.ro, y, z) * Rectangle(mouth_w, spec.snap_opening)
         sections.append(bore + mouth)
     solid = loft(sections, ruled=True)
     if len(solid.solids()) != 1:
-        reject("a hook bore did not loft as a single solid", param="clip_width")
+        reject("a clip bore did not loft as a single solid", param="clip_width")
     return solid
 
 
@@ -366,98 +359,48 @@ def _digit(char):
 
 
 def _tower_mark(spec, index):
-    """Recess the numeral into the top face of the rib, just above the ring."""
+    """Recess the numeral into the top face of the foot arm."""
     face = _digit(TOWER_MARK[index])
-    return Pos(0, 8.0, spec.rib_tangential - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+    return Pos(0, 4.2, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
-def _slab(face, z0, height):
-    return Pos(0, 0, z0) * extrude(face, height)
-
-
-def _root_fillet(spec, y, sign):
-    """Fillet in the layer plane where the neck leaves the rib.
-
-    sign is +1 above the neck and -1 below it. The arc sits outside the rib
-    and overlaps the neck, so the union is one face with the normal pointing
-    up. Extrude then builds on the bed instead of through it. The fillet adds
-    material at the root: that is the gusset.
-    """
-    half = spec.clip_arm / 2.0
-    radius = spec.arm_bevel
-    x0 = spec.rib_radial / 2.0
-    # Overlap the neck, not the rib. A bite into the rib becomes a fin once
-    # the hook is taller than the spine.
-    into = 0.2
-    corner_y = y + sign * half
-    cy = y + sign * (half + radius)
-    cx = x0 + radius
-    steps = 10
-    # CCW, seen from +Z: corner, out along the neck, arc back to the rib face.
-    pts = [
-        (x0, corner_y - sign * into),
-        (x0 + radius, corner_y - sign * into),
-    ]
-    # Upper fillet: arc from the neck-side tangent (angle 3π/2) back to the
-    # rib face (angle π). Lower fillet is the mirror, π/2 back to π.
-    if sign > 0:
-        a0, a1 = 1.5 * math.pi, math.pi
-    else:
-        a0, a1 = 0.5 * math.pi, math.pi
-    for i in range(steps + 1):
-        a = a0 + (a1 - a0) * i / steps
-        pts.append((cx + radius * math.cos(a), cy + radius * math.sin(a)))
-    pts.append((x0, cy))
-    # A clockwise outline extrudes through the bed. Keep the material on +Z.
-    area = 0.0
-    for i, (x1, y1) in enumerate(pts):
-        x2, y2 = pts[(i + 1) % len(pts)]
-        area += x1 * y2 - x2 * y1
-    if area < 0.0:
-        pts.reverse()
-    return Polygon(pts)
-
-
-def _hook_plan(spec, y):
-    """Layer outline of one hook: neck, C, and the two root fillets."""
-    half = spec.clip_arm / 2.0
-    x_face = spec.rib_radial / 2.0
-    x_end = spec.tube_x - spec.rb - 0.4
-    if x_face + 1.0 >= x_end:
-        reject("the hook neck has no room between the rib and the bore", param="clip_arm")
-    neck = Pos((x_face + x_end) / 2.0, y) * Rectangle(x_end - x_face, spec.clip_arm)
-    clip = Pos(spec.tube_x, y) * Circle(spec.ro)
-    plan = neck + clip
-    junctions = [v for v in plan.vertices() if v.X > x_face + 1.0]
-    if len(junctions) >= 2:
-        plan = fillet(junctions, min(2.0, spec.arm_bevel))
-    plan = plan + _root_fillet(spec, y, 1.0) + _root_fillet(spec, y, -1.0)
-    return plan
+def _box(x0, x1, y0, y1, z0, z1):
+    return Pos((x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0) * Box(x1 - x0, y1 - y0, z1 - z0)
 
 
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
 
-    The flat face is z = 0, the whole way: rib, neck, fillets, and hook.
-    Nothing hangs below that plane, so the part lies on the bed with no support.
-    The C is the outline in XY, which is the layer plane.
+    The bar is the clip. Its inner face is cut with a C at each station.
+    A short arm at the foot and another at the top reach back to the
+    original slot and the original cap pocket. Nothing hangs below z = 0.
     """
     if index not in TOWER_MARK:
         reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
-    rib_h = spec.cap_y + FLANGE_T
-    rib = Pos(0, (spec.cap_y - FLANGE_T) / 2.0) * Rectangle(spec.rib_radial, rib_h)
-    tenon = Pos(0, spec.cap_y + CAP_T / 2.0) * Rectangle(spec.rib_radial, CAP_T)
-    solid = _slab(rib + tenon, spec.bed_z, spec.rib_tangential)
-    solid -= _tower_mark(spec, index)
     found = stations_for(spec, index)
     if not found:
-        reject("this tower has no hook on the tube", param="tube_length")
+        reject("this tower has no opening on the tube", param="tube_length")
+    z0 = spec.bed_z
+    z_bar = spec.clip_width
+    z_tab = spec.rib_tangential
+    x_tab = spec.rib_radial / 2.0
+    # The lowest mouth starts just above y = 10. The foot arm stops short of it
+    # on every tower, so the four feet are the same shape.
+    foot_y1 = 9.0
+    bar = _box(spec.x_in, spec.x_out, 1.0, spec.cap_y, z0, z_bar)
+    tab = _box(-x_tab, x_tab, -FLANGE_T, 2.0, z0, z_tab)
+    foot = _box(-x_tab, spec.x_in + 1.6, 0.0, foot_y1, z0, z_bar)
+    tenon = _box(-x_tab, x_tab, spec.cap_y - 2.0, spec.cap_y + CAP_T, z0, z_tab)
+    top = _box(-x_tab, spec.x_in + 1.6, spec.cap_y - 7.0, spec.cap_y, z0, z_bar)
+    solid = bar + tab + foot + tenon + top
+    solid -= _tower_mark(spec, index)
     for k in found:
-        y = clip_y(spec, k)
-        solid += _slab(_hook_plan(spec, y), spec.bed_z, spec.clip_width)
-        solid -= Pos(0, 0, spec.bed_z + spec.bore_z) * _bore_void(spec, y)
+        solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
     if len(solid.solids()) != 1:
         reject("the tower did not come back as a single solid", param="rib_radial")
+    low = solid.bounding_box().min.Z
+    if low < -0.05:
+        reject("the tower hangs below the bed", param="clip_width")
     return solid
 
 
@@ -563,18 +506,21 @@ def bore_world(spec, index, k):
 
 
 def build_coupon(spec):
-    """A short rib, one hook, and a block with the same slot.
+    """A short bar with one opening, its tab, and a slot gauge.
 
     Print it on its side, like a tower. Snap the link. The tab should drop
-    into the gauge. The opening is joint_clear larger than the rib.
+    into the gauge. The opening is the same C as the towers.
     """
     z0 = spec.bed_z
+    z_bar = spec.clip_width
+    z_tab = spec.rib_tangential
+    x_tab = spec.rib_radial / 2.0
     y_clip = 22.0
-    rib_h = 28.0 + FLANGE_T
-    rib = Pos(0, (28.0 - FLANGE_T) / 2.0) * Rectangle(spec.rib_radial, rib_h)
-    solid = _slab(rib, z0, spec.rib_tangential)
+    bar = _box(spec.x_in, spec.x_out, 8.0, 36.0, z0, z_bar)
+    tab = _box(-x_tab, x_tab, -FLANGE_T, 2.0, z0, z_tab)
+    foot = _box(-x_tab, spec.x_in + 1.6, 0.0, y_clip - spec.snap_opening / 2.0 - 1.0, z0, z_bar)
+    solid = bar + tab + foot
     solid -= _tower_mark(spec, 1)
-    solid += _slab(_hook_plan(spec, y_clip), z0, spec.clip_width)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
     radial = spec.rib_radial + spec.joint_clear
     tall = spec.rib_tangential + spec.joint_clear

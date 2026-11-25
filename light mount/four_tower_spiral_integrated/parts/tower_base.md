@@ -8,14 +8,13 @@ Checks: 2 findings: 2 warn (min_wall, sliver)
 
 ## What it is
 
-The mounting ring. Four M3 holes on the deck's 76.2 mm square, a Ø19 window on the light-cable hole, and four identical slots. Same ring as `light mount/four_tower_spiral`: the slot is still 6.2 × 3.4 mm.
+The mounting ring. Four M3 holes on the 76.2 mm square, a Ø19 window, and four identical slots. This is the same ring as `light mount/four_tower_spiral`.
 
 ## Design notes
 
-- Each slot is the 6.0 × 3.2 mm rib plus 0.2 mm. That 0.2 mm is `joint_clear`, a design allowance, not a measured fit. The slot goes through the 4.5 mm ring.
-- A recessed digit sits just outboard of each slot. 1 is back-left, then 2, 3, and 4 counterclockwise.
-- The window is Ø19 at (+11.71, +32.24). The deck hole under it is Ø15.
-- A tower from the earlier four-tower set drops into this ring, and a tower from this set drops into that ring. The hooks changed. The foot did not.
+- Each slot is 6.2 × 3.4 mm, the 6.0 × 3.2 mm tab plus 0.2 mm. The towers' feet still drop into these slots. The bars stand further out, on a short arm.
+- A recessed digit sits just outboard of each slot.
+- Do not reprint this if the earlier ring is already on the lamp.
 
 ```toml
 [part]
@@ -25,8 +24,8 @@ min_wall = 1.2
 ## Don't
 
 - Don't fill the middle of the ring. The cable window has to stay open.
-- Don't drill this for the original spiral's Ø6.35 mm screws. This deck is M3.
+- Don't move the slots out to the tube. The arm does that job.
 
 ## Changelog
 
-- 2026-11-25: copied with the integrated towers. The solid matches the earlier ring. Reprint it only if you don't already have one.
+- 2026-11-25: unchanged. The new bars use the same slots.
