@@ -738,15 +738,15 @@ def _lobe_solid(spec, bolt_ang):
     for i in range(1, n_fil + 1):
         phi = -band_phi + (math.pi / 2.0 + band_phi) * i / n_fil
         pts.append(world(uc + fillet_r * math.cos(phi), -vc + fillet_r * math.sin(phi)))
-    return _extrude_xy(pts, 0.0, TAB_LEN)
+    return _extrude_xy(pts, 0.0, BASE_T)
 
 
 def build_base(spec, holes):
     """Narrow bolt ring. Each tower has a rounded inward lobe with a through-slot.
 
-    The band is the M3 hole plus 1.6 mm of wall. The lobe is 4 mm tall so
-    the tab can be 4 mm long without sticking through the deck. The slot and
-    the bolt share the lobe's centre line. The bolt is the one further out.
+    The band and the lobes are one plate, 2.4 mm thick, with a flat top.
+    The flare is only in the plan view. The slot and the bolt share the
+    lobe's centre line. The bolt is the one further out.
     """
     width = holes.bolt_d + 2.0 * BAND_WALL
     if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:

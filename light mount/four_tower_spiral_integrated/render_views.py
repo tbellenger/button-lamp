@@ -356,6 +356,33 @@ def foot_section():
     save(pl, "foot_section.png")
 
 
+def base_edge():
+    """Whole base from just above the top face, so a step would show as a rise."""
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 700))
+    pl.set_background("white")
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    pl.enable_parallel_projection()
+    shot(pl, (0, 0, BASE_T), (0.15, -1.0, 0.08), 180, up=(0, 0, 1), zoom=1.0)
+    pl.camera.parallel_scale = 62.0
+    save(pl, "base_edge.png")
+
+
+def base_joint_edge():
+    """One lobe where it meets the band, camera level with the top face."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 800))
+    pl.set_background("white")
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    ang = math.radians(45)
+    r = (SPEC.base_r_in + SPEC.base_r_out) / 2.0
+    focus = np.array([r * math.cos(ang), r * math.sin(ang), BASE_T])
+    # Across the joint, almost in the plane of the top face.
+    side = np.array([-math.sin(ang), math.cos(ang), 0.0])
+    pl.enable_parallel_projection()
+    shot(pl, focus, side + np.array([0.0, 0.0, 0.06]), 70, up=(0, 0, 1), zoom=1.2)
+    pl.camera.parallel_scale = 18.0
+    save(pl, "base_joint_edge.png")
+
+
 if __name__ == "__main__":
     assembled()
     slot_closeup()
@@ -365,3 +392,5 @@ if __name__ == "__main__":
     exploded()
     tower_side()
     base_slot_closeup()
+    base_edge()
+    base_joint_edge()

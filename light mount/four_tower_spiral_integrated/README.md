@@ -29,7 +29,7 @@ The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at
 
 Each clip is still a C-ring. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm, 8 mm along the tube. The centres stay on the 43.5 mm helix.
 
-The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on the deck. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
+The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on the deck. The plate is 2.4 mm, so **1.6 mm** of the tab stands above it. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
 
 | | |
 |---|---|
@@ -48,7 +48,7 @@ The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on th
 | Outside radius | **57.18 mm** (Ø114.4) |
 | Band width | **6.6 mm**. The Ø3.4 hole plus 1.6 mm of wall each side |
 | Band thickness | **2.4 mm** |
-| Lobes | four, rounded tip, **4.0 mm** tall. The sides flare out into the band on a **5 mm** radius |
+| Lobes | four, rounded tip, same **2.4 mm** plate as the band. The sides flare out into the band on a **5 mm** radius, in plan only |
 | Slot | **4.2 × 8.2 mm**, square to the bolt ray. 0.2 mm over the 4.0 × 8.0 mm tab |
 | Slot centre | radius **34.5 mm**, on the bolt ray |
 | M3 hole | radius **53.9 mm**, on the same ray |
@@ -80,7 +80,7 @@ The widened spine is in the layer plane, full thickness, so nothing bridges when
 |---|---|
 | each tower | spine **4 to 11** wide, **8** thick, clips out to about **17** radially, **116.0** long |
 | `tower_coupon` | short spine, one clip, and the tab. Print this first. |
-| `tower_base` | **Ø114.4 × 4.0** with the lobes. The band itself is 2.4 mm |
+| `tower_base` | **Ø114.4 × 2.4**, lobes included. One flat top |
 | `tower_cap` | **Ø73.77 × 1.2**, hole Ø68.97 |
 
 Stood up, the assembly is 114.4 × 114.4 × **116.0** mm. The tower tops and the disc top are the high point.
