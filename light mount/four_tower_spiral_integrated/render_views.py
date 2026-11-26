@@ -134,7 +134,7 @@ def slot_closeup():
     disc = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     add_solid(pl, tower, COLORS[1])
     add_solid(pl, disc, COLORS["cap"])
-    nx = (SPEC.notch_x0 + SPEC.notch_x1) / 2.0
+    nx = (SPEC.notch_r_in + SPEC.notch_r_out) / 2.0 - R_PIN
     ny = SPEC.cap_y - SPEC.slot_depth / 2.0
     c = _world(nx, ny, SPEC.clip_width / 2.0, ang)
     radial, tangent = _frame(ang)
@@ -195,9 +195,13 @@ def _frame(ang):
 
 
 def _world(x, y, z, ang):
-    """Print-frame point of a tower at ang, in world millimetres."""
+    """Print-frame point of a tower at ang, in world millimetres.
+
+    Matches place_tower: the spine midplane is on the ray, so local z is
+    measured from the bed face and the midplane offset is removed.
+    """
     radial, tangent = _frame(ang)
-    return (R_PIN + x) * radial + z * tangent + np.array([0.0, 0.0, FLANGE_T + y])
+    return (R_PIN + x) * radial + (z - SPEC.bore_z) * tangent + np.array([0.0, 0.0, FLANGE_T + y])
 
 
 def _label(pl, points, texts, size=22):

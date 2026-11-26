@@ -21,25 +21,24 @@ The ring and the cap in [`../four_tower_spiral/`](../four_tower_spiral/) do not 
 | 3 green, front-right | `tower_270` | 33.5, 59.5, 85.5 |
 | 4 orange, back-right | `tower_0` | 40.0, 66.0, 92.0 |
 
-The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the centre of the top opening (yellow, 105.0 mm). The whole set is turned **6.65°** so each tab lines up with its bolt. The towers stay a quarter turn apart, so these heights did not change.
+The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the centre of the top opening (yellow, 105.0 mm). Each tower stands on a bolt diagonal, 45° / 135° / 225° / 315°. The clip heights did not change.
 
 ## The bar
 
-The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at each bore, and past the end clips it is **4.0 mm** wide radially. Between clips the outer face follows the inner arc of the bore, 0.2 mm clear of it, and runs out to the tube centreline. There the spine is **11.0 mm** wide. That is the blue line on the sketch: the rings merge into the spine instead of hanging off a 1.3 mm bite.
+The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at each bore, and past the end clips it is **4.0 mm** wide radially. Between clips the outer face follows the inner arc of the bore, 0.2 mm clear of it, and runs out to the tube centreline. There the spine is **11.0 mm** wide.
 
 Each clip is still a C-ring. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm, 8 mm along the tube. The centres stay on the 43.5 mm helix.
 
-The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on the deck. The old hooked slot at the top is gone. A straight notch, open upward, is cut through the full 8 mm:
+The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on the deck. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
 
 | | |
 |---|---|
-| Height | **1.4 mm** (the 1.2 mm disc plus 0.2 mm), open at the top |
-| Radial width | **3.36 mm**, from local x 19.44 to 22.80 |
-| Through | the full **8 mm** thickness |
-| Floor under the notch | **1.6 mm** |
-| Side wall, outboard | **1.6 mm** |
-
-A 2.6 mm slot (2.4 plus 0.2) does not pass the ring. Across 8 mm of thickness the 43.5 mm arc shifts, and the ring's footprint is 3.16 mm wide. The notch is that footprint plus 0.2 mm. The 4 mm spine itself sits inboard of the ring, around radius 32 to 37 mm, so a short head on the spine top reaches out to the ring and the notch is cut in the head. The underside of the head runs up from the top clip.
+| Notch depth | **1.3 mm**. The 1.2 mm ring sits with its top flush and **0.1 mm** under it |
+| Notch radii | **34.33 / 37.03 mm**. The ring plus **0.15 mm** each side |
+| Radial width | **2.70 mm** |
+| Inboard wall | **1.6 mm** at the bed face and the top face |
+| Outboard wall | **1.6 mm** |
+| Floor | the head is solid down to the top clip |
 
 ## Base ring
 
@@ -49,39 +48,27 @@ A 2.6 mm slot (2.4 plus 0.2) does not pass the ring. Across 8 mm of thickness th
 | Outside radius | **57.18 mm** (Ø114.4) |
 | Band width | **6.6 mm**. The Ø3.4 hole plus 1.6 mm of wall each side |
 | Band thickness | **2.4 mm** |
-| Lobes | four, rounded, **4.0 mm** tall, filleted into the band with a **5 mm** radius |
-| Slot | **4.2 × 8.2 mm** through the lobe. 0.2 mm over the 4.0 × 8.0 mm tab |
+| Lobes | four, rounded tip, **4.0 mm** tall. The sides flare out into the band on a **5 mm** radius |
+| Slot | **4.2 × 8.2 mm**, square to the bolt ray. 0.2 mm over the 4.0 × 8.0 mm tab |
+| Slot centre | radius **34.5 mm**, on the bolt ray |
+| M3 hole | radius **53.9 mm**, on the same ray |
 | Lobe tip | about **28.3 mm** from the centre |
 
-The bolts and the old tower angles both sit on 45° / 135° / 225° / 315°, so that offset is zero. The slot is the 8 mm spine, built out from the bed face, so its middle sat **6.65°** off the bolt (4 mm of tangential offset at radius 34.5 mm). Each tower is rotated by that 6.65° and the middle of the slot now lies on the bolt ray. The hole is on the band, further out on the same ray: the slot centre is at radius **34.5 mm**, the M3 hole at **53.9 mm**. The centre of the ring is open. The cable at (+11.71, +32.24) does not meet the lobes.
-
-## Base ring
-
-| | |
-|---|---|
-| Inside radius | **50.58 mm** (Ø101.2) |
-| Outside radius | **57.18 mm** (Ø114.4) |
-| Band width | **6.6 mm**. The Ø3.4 hole plus 1.6 mm of wall each side |
-| Band thickness | **2.4 mm** |
-| Lobes | four, one under each tower, **4.0 mm** tall |
-| Slot | **4.2 × 8.2 mm** through the lobe. 0.2 mm over the 4.0 × 8.0 mm tab |
-
-The four M3 holes stay on the 76.2 mm square, on the band just outside each lobe. The centre is open. The cable at (+11.71, +32.24) is 34.3 mm from the middle. The deck hole reaches 41.8 mm. The ring starts at 50.6 mm, so the cable clears the band by about 9 mm.
+The centre is open. The cable at (+11.71, +32.24) does not meet the lobes.
 
 ## Top disc
 
-A plain annulus. No tabs, no pockets.
+A plain annulus. No tabs. It moved in onto the spine, so the diameters changed. The width and the thickness did not.
 
 | | |
 |---|---|
-| Outside radius | **44.7 mm** (Ø89.4) |
-| Hole | **42.3 mm** (Ø84.6) |
-| Radial width | **2.4 mm**. Six perimeters on a 0.4 mm nozzle, centred on the 43.5 mm coil |
-| Thickness | **1.2 mm**, six layers at 0.2 mm |
+| Outside radius | **36.88 mm** (Ø73.77) |
+| Hole | **34.48 mm** (Ø68.97) |
+| Radial width | **2.4 mm** |
+| Thickness | **1.2 mm** |
+| Centreline | **35.68 mm** |
 
-The hole is the open centre. The disc itself did not change.
-
-The underside is **114.7 mm** above the deck. The top of the disc is **115.9 mm**. The tower tops are **116.1 mm**, 0.2 mm above the disc. The disc drops into the straight notch.
+The underside is **114.8 mm** above the deck. The top of the disc is **116.0 mm**, flush with the towers.
 
 ## Print
 
@@ -91,18 +78,18 @@ The widened spine is in the layer plane, full thickness, so nothing bridges when
 
 | Part | On the bed (mm) |
 |---|---|
-| each tower | spine **4 to 11** wide, **8** thick, clips out to about **17** radially, **116.1** long |
+| each tower | spine **4 to 11** wide, **8** thick, clips out to about **17** radially, **116.0** long |
 | `tower_coupon` | short spine, one clip, and the tab. Print this first. |
 | `tower_base` | **Ø114.4 × 4.0** with the lobes. The band itself is 2.4 mm |
-| `tower_cap` | **Ø89.4 × 1.2**, hole Ø84.6 |
+| `tower_cap` | **Ø73.77 × 1.2**, hole Ø68.97 |
 
-Stood up, the assembly is 114.4 × 114.4 × **116.1** mm. The tower tops are the high point.
+Stood up, the assembly is 114.4 × 114.4 × **116.0** mm. The tower tops and the disc top are the high point.
 
 `nurb check` has nothing to fix.
 
 ## Reprint
 
-Reprint the four towers, the base, and the coupon. The top disc did not change.
+Reprint the four towers, the base, the coupon, and the top disc.
 
 ## Assembly
 

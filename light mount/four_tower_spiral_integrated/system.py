@@ -56,14 +56,14 @@ BOLT_CHAMFER = 2.0
 FOOT_CLEAR = 16.0
 # Base ring. 2.4 mm is twelve layers at 0.2 mm. The top disc is separate.
 BASE_T = 2.4
-# Top disc. 1.2 mm is six layers at 0.2 mm. Thinner than that and a ring
-# this size flops in the hand. 2.4 mm of radial width is six perimeters
-# on a 0.4 mm nozzle, centred on the coil.
+# Top disc. 1.2 mm is six layers at 0.2 mm. 2.4 mm of radial width is six
+# perimeters on a 0.4 mm nozzle. The radius is chosen in specs() so the
+# ring sits on the spine, not out past it.
 DISC_T = 1.2
 DISC_RADIAL = 2.4
-DISC_MID_R = 43.5
-DISC_R = DISC_MID_R + DISC_RADIAL / 2.0
-DISC_HOLE_R = DISC_MID_R - DISC_RADIAL / 2.0
+# Arc notch: 0.15 mm each side of the ring. 0.1 mm under a flush top.
+NOTCH_SIDE = 0.15
+NOTCH_DROP = 0.1
 # Spine. 4 mm radial is the narrow beam that still leaves a solid root on the
 # clip wall without entering the bore. 8 mm matches the clip thickness, so
 # the tower is one slab on the bed.
@@ -123,8 +123,8 @@ def _span_x(r0, r1, z_a, z_b):
 
 
 def disc_world_z(spec):
-    """World Z of the underside of the top disc, seated in the slots."""
-    return FLANGE_T + spec.cap_y - spec.slot_depth
+    """World Z of the underside of the top disc. The top is flush with the towers."""
+    return FLANGE_T + spec.cap_y - spec.disc_t
 
 
 def specs(
@@ -176,19 +176,18 @@ def specs(
     if quarter_arc <= 0:
         reject("pitch and coil diameter do not make a helix", param="pitch")
 
-    # The bar lies on the bed, so the bore centre is clip_width/2 off the
-    # tower's radial plane. Shift the bar until that offset is still on the
-    # 43.5 mm centreline. The phase follows, so the tube is not asked to kink.
+    # The placement origin is shifted by half the spine thickness, so the
+    # bore centre lies on the tower ray. Local x is then the world radius
+    # minus R_PIN, and the helix needs no extra phase.
     bore_z = clip_width / 2.0
     if bore_z >= radius - 1.0:
         reject("clip_width is too long for the coil radius", param="clip_width")
-    radial = math.sqrt(radius * radius - bore_z * bore_z)
-    tube_x = radial - R_PIN
+    tube_x = radius - R_PIN
     x_in = tube_x - ro
     x_out = tube_x + ro
     if x_out - x_in < 8.0:
         reject("the bar is too narrow to plug into a slot", param="clip_wall")
-    bore_phase = math.atan2(-bore_z, radial)
+    bore_phase = 0.0
     helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
     # The rim tangent, from the first clip out to the ring edge, is fixed by
@@ -234,12 +233,10 @@ def specs(
     real_last = k_last - int(extra_stations)
     tail = helix_length - real_last * quarter_arc
 
-    # The notch is cut down from the top of the spine. It is the disc plus
-    # 0.2 mm, open upward. 1.6 mm of floor stays under it.
-    slot_depth = DISC_T + joint_clear
+    # 0.1 mm under the ring, so the notch is 1.3 mm deep and the ring top
+    # is flush with the tower. 1.6 mm of floor stays under the notch.
+    slot_depth = DISC_T + NOTCH_DROP
     cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + SLOT_ABOVE_CLIP + slot_depth
-    slot_r_outer = DISC_R + joint_clear / 2.0
-    slot_r_inner = DISC_HOLE_R - joint_clear / 2.0
     if slot_depth >= 4.0:
         reject("the disc notch would cut more than 4 mm off the tower top", param="joint_clear")
     base_r_in, base_r_out = _base_ring_radii()
@@ -247,15 +244,15 @@ def specs(
     spine_in = spine_out - SPINE_RADIAL
     if spine_out <= spine_in:
         reject("the spine has no radial thickness", param="clip_wall")
-    # Straight notch. The ring is an arc, so across the 8 mm thickness its
-    # footprint is wider than the 2.4 mm band. The slot covers that footprint
-    # plus 0.2 mm, or the ring will not pass through.
-    if DISC_HOLE_R <= clip_width:
-        reject("the disc falls inside the spine thickness", param="clip_width")
-    notch_x0 = math.sqrt(DISC_HOLE_R * DISC_HOLE_R - clip_width * clip_width) - R_PIN - joint_clear / 2.0
-    notch_x1 = DISC_R - R_PIN + joint_clear / 2.0
-    if notch_x1 - notch_x0 < DISC_RADIAL:
-        reject("the top notch is narrower than the disc", param="joint_clear")
+    # The ring sits on the spine. Its inner arc, at the bed face and the
+    # top face, stays 1.6 mm outboard of the spine's inner face. 0.15 mm
+    # of clearance each side of the 2.4 mm band.
+    notch_r_in = math.hypot(R_PIN + spine_in + CLIP_WALL, bore_z)
+    disc_hole_r = notch_r_in + NOTCH_SIDE
+    disc_r = disc_hole_r + DISC_RADIAL
+    notch_r_out = disc_r + NOTCH_SIDE
+    if notch_r_out <= notch_r_in:
+        reject("the top notch has no radial width", param="joint_clear")
     tower_len = cap_y
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -307,14 +304,15 @@ def specs(
         slot_radial=bar_w + joint_clear,
         slot_tangent=clip_width + joint_clear,
         cap_y=cap_y,
-        disc_r=DISC_R,
-        disc_hole_r=DISC_HOLE_R,
+        disc_r=disc_r,
+        disc_hole_r=disc_hole_r,
         disc_t=DISC_T,
         slot_depth=slot_depth,
-        slot_r_outer=slot_r_outer,
-        slot_r_inner=slot_r_inner,
-        notch_x0=notch_x0,
-        notch_x1=notch_x1,
+        slot_r_outer=notch_r_out,
+        slot_r_inner=notch_r_in,
+        notch_r_in=notch_r_in,
+        notch_r_out=notch_r_out,
+        head_x=(notch_r_out - R_PIN) + CLIP_WALL,
         base_r_in=base_r_in,
         base_r_out=base_r_out,
         base_slot_depth=BASE_T + joint_clear,
@@ -363,16 +361,14 @@ def deck():
 
 
 def axis_offset(spec):
-    """Clockwise angle from the placement radial to the middle of the spine.
+    """No extra rotation. The placement origin centres the spine on the bolt ray.
 
-    The spine is the slab that starts on the bed face, so its middle sits
-    half the thickness off that radial. The bolts are on the 45° diagonals.
-    Advancing the placement by this angle puts the middle of the tab on the
-    bolt ray. The four towers stay a quarter turn apart, so the clip heights
-    do not move.
+    Rotating the tower by atan(4 mm / slot radius) put the slot centre on the
+    bolt but left the 8 mm faces 6.65° off square to that ray. The origin
+    shift in place_tower does the centring instead, so local X lies along
+    the bolt ray and local Z is perpendicular to it.
     """
-    x_mid = (spec.spine_in + spec.spine_out) / 2.0
-    return math.atan2(spec.clip_width / 2.0, R_PIN + x_mid)
+    return 0.0 * spec.clip_width
 
 
 def theta0(spec):
@@ -599,43 +595,46 @@ def _spine_flesh(spec, stations):
     return block
 
 
-def _top_head(spec, stations):
-    """Short head on the spine top, with a straight notch the disc drops into.
+def _arc_notch(spec, y0, y1):
+    """Arc slot the disc occupies. Axis is the lamp axis in the print frame.
 
-    The 4 mm spine sits inboard of the 43.5 mm ring, so the head reaches out
-    to the ring. The notch is open at the top and cut through the full 8 mm.
+    The placement origin is shifted, so that axis is at local x = -R_PIN
+    and local z = bore_z, not at z = 0. The slot is the ring plus 0.15 mm
+    each side, and it is open through the top of the tower.
     """
-    x_out = spec.notch_x1 + CLIP_WALL
+    if spec.notch_r_out <= spec.notch_r_in:
+        reject("a curved slot has no radial width", param="joint_clear")
+    height = y1 - y0
+    mid = (y0 + y1) / 2.0
+    centre = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0)
+    outer = centre * Cylinder(spec.notch_r_out, height)
+    inner = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0) * Cylinder(spec.notch_r_in, height + 0.4)
+    band = outer - inner
+    if len(band.solids()) < 1:
+        reject("the top notch did not cut as a solid", param="joint_clear")
+    return band
+
+
+def _top_head(spec, stations):
+    """Spine top, solid up to the highest clip, with an arc notch for the disc.
+
+    The region under the notch is filled through, so there is no window
+    between the head, the spine and the top clip. The fill stops 0.2 mm
+    short of that clip's bore, and the mouth is left open.
+    """
+    x_out = spec.head_x
     y_top = spec.cap_y
-    y_floor = y_top - spec.slot_depth - NOTCH_FLOOR
-    if y_floor < 0.0:
-        reject("the top notch falls off the tower", param="tube_length")
-    head = _box(spec.spine_in, x_out, y_floor, y_top, 0.0, spec.clip_width)
-    notch = _box(
-        spec.notch_x0, spec.notch_x1,
-        y_top - spec.slot_depth, y_top + 0.6,
-        -0.4, spec.clip_width + 0.4,
-    )
-    # Angled underside from the last clip's arc up to the head, so the top
-    # of the widened spine runs into the notch instead of stopping square.
     y_last = max(clip_y(spec, k) for k in stations)
-    horn = y_last + spec.rb + BORE_CLEAR
-    if y_floor - horn > 0.4:
-        web = _extrude_xy(
-            [
-                (spec.spine_out, horn),
-                (spec.tube_x, horn),
-                (x_out, y_floor),
-                (spec.spine_in, y_floor),
-            ],
-            0.0, spec.clip_width,
-        )
-        head += web
-    elif horn < y_floor:
-        head += _box(spec.spine_out, spec.tube_x, horn, y_floor, 0.0, spec.clip_width)
-    head -= notch
+    if y_top - spec.slot_depth - NOTCH_FLOOR < 0.0:
+        reject("the top notch falls off the tower", param="tube_length")
+    head = _box(spec.spine_in, x_out, y_last - spec.ro, y_top, 0.0, spec.clip_width)
+    head -= _arc_notch(spec, y_top - spec.slot_depth, y_top + 0.6)
     for k in stations:
-        head -= Pos(0, 0, spec.bore_z) * _clearance_solid(spec, clip_y(spec, k))
+        cy = clip_y(spec, k)
+        if cy + spec.ro + 1.0 < y_last - spec.ro:
+            continue
+        head -= Pos(0, 0, spec.bore_z) * _bore_void(spec, cy)
+        head -= Pos(0, 0, spec.bore_z) * _clearance_solid(spec, cy)
     if head is None or len(head.solids()) < 1:
         reject("the top notch ate the head", param="joint_clear")
     return head
@@ -674,6 +673,9 @@ def build_tower(spec, index):
         solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
     solid += _spine_flesh(spec, found)
     solid += _top_head(spec, found)
+    # The spine itself runs through the notch. Cut it from the union, or the
+    # ring stops on the spine instead of threading it.
+    solid -= _arc_notch(spec, spec.cap_y - spec.slot_depth, spec.cap_y + 0.6)
     if len(solid.solids()) != 1:
         reject("the tower did not come back as a single solid", param="clip_width")
     low = solid.bounding_box().min.Z
@@ -690,20 +692,20 @@ def _lobe_solid(spec, bolt_ang):
     circle. The slot is cut afterwards, on the same ray.
     """
     x_mid = (spec.spine_in + spec.spine_out) / 2.0
-    r_slot = math.hypot(R_PIN + x_mid, spec.clip_width / 2.0)
+    # The spine midplane is the bolt ray, so the slot centre radius is plain.
+    r_slot = R_PIN + x_mid
     half_t = (spec.clip_width + spec.joint_clear) / 2.0
     half_r = (SPINE_RADIAL + spec.joint_clear) / 2.0
-    # The slot rectangle is turned a few degrees off this ray, so the wall
-    # is measured to the corner, not to the flat.
     rad = math.hypot(half_r, half_t) + LOBE_WALL
     fillet_r = 5.0
     band = spec.base_r_in
-    if band - fillet_r <= rad - fillet_r:
+    # Fillet centre sits outside the straight side, so the joint flares
+    # wider than the lobe body as it meets the band.
+    vc = rad + fillet_r
+    if band - fillet_r <= vc:
         reject("the lobe fillet does not meet the band", param="joint_clear")
-    # Fillet centre, in the bolt frame. u is outward, v is clockwise.
-    vf = rad - fillet_r
-    uf = math.sqrt((band - fillet_r) ** 2 - vf * vf)
-    if uf <= r_slot:
+    uc = math.sqrt((band - fillet_r) ** 2 - vc * vc)
+    if uc <= r_slot + rad:
         reject("the lobe fillet runs into the slot", param="joint_clear")
     radial = (math.cos(bolt_ang), math.sin(bolt_ang))
     # Clockwise tangent, matching the tower's print +Z once the tower is stood up.
@@ -723,21 +725,19 @@ def _lobe_solid(spec, bolt_ang):
         pts.append(world(r_slot + rad * math.cos(phi + math.pi), rad * math.sin(phi)))
     # phi from -90° to +90° with cos(phi+180) = -cos(phi): u from r_slot down to r_slot-rad and back.
     # At i=0, phi=-90, u=r_slot, v=-rad. At i=mid, phi=0, u=r_slot-rad, v=0. At end, u=r_slot, v=+rad.
-    # Side from the tip circle out to the fillet, v = +rad.
-    pts.append(world(uf, rad))
-    # Fillet from the side down onto the band. Centre (uf, vf), sweeping from +90° to the band ray.
-    band_phi = math.atan2(vf, uf)
-    n_fil = 12
+    # Straight side, then a flare that grows wider than the body.
+    pts.append(world(uc, rad))
+    band_phi = math.atan2(vc, uc)
+    n_fil = 16
     for i in range(1, n_fil + 1):
-        phi = math.pi / 2.0 + (band_phi - math.pi / 2.0) * i / n_fil
-        pts.append(world(uf + fillet_r * math.cos(phi), vf + fillet_r * math.sin(phi)))
-    # Across the band, just outside the inner circle, to the other fillet.
+        phi = -math.pi / 2.0 + (band_phi + math.pi / 2.0) * i / n_fil
+        pts.append(world(uc + fillet_r * math.cos(phi), vc + fillet_r * math.sin(phi)))
     overlap = band + 2.5
     pts.append(world(overlap * math.cos(band_phi), overlap * math.sin(band_phi)))
     pts.append(world(overlap * math.cos(-band_phi), overlap * math.sin(-band_phi)))
     for i in range(1, n_fil + 1):
-        phi = -band_phi + (-math.pi / 2.0 + band_phi) * i / n_fil
-        pts.append(world(uf + fillet_r * math.cos(phi), -vf + fillet_r * math.sin(phi)))
+        phi = -band_phi + (math.pi / 2.0 + band_phi) * i / n_fil
+        pts.append(world(uc + fillet_r * math.cos(phi), -vc + fillet_r * math.sin(phi)))
     return _extrude_xy(pts, 0.0, TAB_LEN)
 
 
@@ -816,11 +816,21 @@ def build_cap(spec):
     return extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), spec.disc_t)
 
 
-def place_tower(solid, angle):
-    """Stand a print-frame tower on its slot. Local +X is radial, +Y is up."""
+def place_tower(solid, angle, centre_z=None):
+    """Stand a print-frame tower on its slot. Local +X is radial, +Y is up.
+
+    The print frame still has the bed at local z = 0. The origin is shifted
+    along the tangent so the spine midplane, local z = centre_z, lies on the
+    ray. Local X then runs along that ray and the 8 mm side is square to it.
+    """
+    if centre_z is None:
+        centre_z = CLIP_WIDTH / 2.0
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
-    origin = Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+    origin = (
+        Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+        - centre_z * z_dir
+    )
     return Plane(origin=origin, x_dir=radial, z_dir=z_dir) * solid
 
 
@@ -830,7 +840,10 @@ def bore_world(spec, index, k):
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
     up = Vector(0, 0, 1)
-    origin = Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+    origin = (
+        Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+        - spec.bore_z * z_dir
+    )
     local = Vector(spec.tube_x, clip_y(spec, k), spec.bore_z)
     return origin + local.X * radial + local.Y * up + local.Z * z_dir
 
