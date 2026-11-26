@@ -49,6 +49,6 @@ def tower_assembly(
     )
     parts = [use("tower_base", **common)]
     for index, name in enumerate(("0", "90", "180", "270")):
-        parts.append(place_tower(use(f"tower_{name}", **common), tower_angle(index)))
+        parts.append(place_tower(use(f"tower_{name}", **common), tower_angle(index, spec)))
     parts.append(Pos(0, 0, disc_world_z(spec)) * use("tower_cap", **common))
     return tuple(parts)

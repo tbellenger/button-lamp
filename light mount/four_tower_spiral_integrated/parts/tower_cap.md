@@ -7,12 +7,12 @@ Checks: clean
 
 ## What it is
 
-The plain disc that drops into the four top slots. Outside Ø89.4, hole Ø84.6, 1.2 mm thick. No tabs.
+The plain disc that threads through the four top notches. Outside Ø89.4, hole Ø84.6, 1.2 mm thick. No tabs.
 
 ## Design notes
 
 - The band is 2.4 mm wide, six perimeters on a 0.4 mm nozzle, centred on the 43.5 mm coil radius.
-- The slot in each tower is 0.2 mm larger, 1.4 mm deep. Arcs at 42.2 and 44.8 mm.
+- Each tower notch is a straight slot, 1.4 mm deep and 3.36 mm wide, open at the top, through the 8 mm spine.
 
 ```toml
 [part]

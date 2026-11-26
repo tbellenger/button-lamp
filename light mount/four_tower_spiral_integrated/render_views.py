@@ -16,7 +16,6 @@ from system import (
     FLANGE_T,
     R_PIN,
     TAB_LEN,
-    THETA0,
     TOWER_MARK,
     build_base,
     build_cap,
@@ -27,6 +26,7 @@ from system import (
     helix_point,
     lead_in_points,
     place_tower,
+    theta0,
     tower_angle,
 )
 
@@ -69,8 +69,9 @@ def to_poly(shape, tol=0.18):
 def tube_points():
     """Straight tangent into the first hook, then the helix out to the cut end."""
     start, _bore = lead_in_points(SPEC)
-    theta1 = THETA0 + SPEC.helix_length / SPEC.ds
-    theta = np.linspace(THETA0, theta1, 500)
+    theta_start = theta0(SPEC)
+    theta1 = theta_start + SPEC.helix_length / SPEC.ds
+    theta = np.linspace(theta_start, theta1, 500)
     helix = np.array([helix_point(SPEC, t) for t in theta], float)
     return np.vstack([np.array(start, float), helix])
 
@@ -107,7 +108,7 @@ def placed():
     base = to_poly(build_base(SPEC, Holes))
     parts = [("base", base)]
     for index in range(4):
-        ang = tower_angle(index)
+        ang = tower_angle(index, SPEC)
         parts.append((index, to_poly(place_tower(build_tower(SPEC, index), ang))))
     cap = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     parts.append(("cap", cap))
@@ -125,21 +126,20 @@ def assembled():
 
 
 def slot_closeup():
-    """Assembled. The disc sits in the curved slot at one tower top."""
+    """The disc threaded through the straight notch in one tower top."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
-    ang = tower_angle(1)
+    ang = tower_angle(1, SPEC)
     tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
     disc = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     add_solid(pl, tower, COLORS[1])
     add_solid(pl, disc, COLORS["cap"])
-    c = np.array([
-        SPEC.radius * math.cos(ang),
-        SPEC.radius * math.sin(ang),
-        disc_world_z(SPEC) + SPEC.disc_t / 2.0,
-    ])
-    outward = np.array([math.cos(ang), math.sin(ang), 0.42])
-    shot(pl, c, outward, 55, zoom=1.35)
+    nx = (SPEC.notch_x0 + SPEC.notch_x1) / 2.0
+    ny = SPEC.cap_y - SPEC.slot_depth / 2.0
+    c = _world(nx, ny, SPEC.clip_width / 2.0, ang)
+    radial, tangent = _frame(ang)
+    # From the side and a little outside, so the notch reads as a slot with the ring in it.
+    shot(pl, c, tangent * 1.15 + radial * 0.45 + np.array([0.0, 0.0, 0.35]), 48, zoom=1.45)
     save(pl, "slot_closeup.png")
 
 
@@ -229,7 +229,7 @@ def exploded():
     marks = []
     texts = []
     for index in range(4):
-        ang = tower_angle(index)
+        ang = tower_angle(index, SPEC)
         mesh = to_poly(place_tower(build_tower(SPEC, index), ang))
         mesh.translate((0, 0, tower_lift), inplace=True)
         add_solid(pl, mesh, COLORS[index])
@@ -249,7 +249,7 @@ def base_slot_closeup():
     """Tower 1's tab seated in its lobe, from outside and above."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
-    ang = tower_angle(1)
+    ang = tower_angle(1, SPEC)
     add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
     add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
     focus = _world((SPEC.spine_in + SPEC.spine_out) / 2.0, -FLANGE_T + TAB_LEN / 2.0, SPEC.clip_width / 2.0, ang)
@@ -262,7 +262,7 @@ def tower_side():
     """Tower 1 from the tangential side, so the clip rings read against the spine."""
     pl = pv.Plotter(off_screen=True, window_size=(700, 1400))
     pl.set_background("white")
-    ang = tower_angle(1)
+    ang = tower_angle(1, SPEC)
     add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
     radial, tangent = _frame(ang)
     focus = radial * (R_PIN + (SPEC.spine_in + SPEC.spine_out) / 2.0)
@@ -278,7 +278,7 @@ def foot_closeup(with_ring, name):
     """One tower foot, from outside and a little below. The notch opens outward."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
-    ang = tower_angle(1)
+    ang = tower_angle(1, SPEC)
     tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
     add_solid(pl, tower, COLORS[1])
     if with_ring:
@@ -306,7 +306,7 @@ def foot_section():
     """Radial cut through tower 1's foot and the ring, with the notch sizes."""
     pl = pv.Plotter(off_screen=True, window_size=(1400, 1000))
     pl.set_background("white")
-    ang = tower_angle(1)
+    ang = tower_angle(1, SPEC)
     radial, tangent = _frame(ang)
     add_solid(pl, _half(to_poly(place_tower(build_tower(SPEC, 1), ang)), ang), COLORS[1])
     add_solid(pl, _half(to_poly(build_base(SPEC, Holes)), ang), COLORS["base"])
