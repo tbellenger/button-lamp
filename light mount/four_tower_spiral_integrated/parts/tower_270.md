@@ -13,7 +13,7 @@ Number 3, rendered green. Front-right, 315°. Recessed 3. Three openings: 33.5, 
 ## Design notes
 
 - Print it on its side, flat face down. The C opens outward. Between clips the spine widens to 11 mm.
-- The foot is a 4 × 8 mm tab, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 3 is the only mark.
+- The foot is a 4 × 8 mm tab, 2.4 mm long, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 3 is the only mark.
 
 ```toml
 [part]

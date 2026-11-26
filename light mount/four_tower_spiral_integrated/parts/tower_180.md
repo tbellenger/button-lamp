@@ -13,7 +13,7 @@ Number 2, rendered yellow. Front-left, 225°. Recessed 2. Four openings, and the
 ## Design notes
 
 - Print it on its side, flat face down. The C opens outward. Between clips the spine widens to 11 mm.
-- The foot is a 4 × 8 mm tab, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 2 is the only mark.
+- The foot is a 4 × 8 mm tab, 2.4 mm long, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 2 is the only mark.
 - The bore follows the helix tangent, 5.4° from horizontal.
 
 ```toml

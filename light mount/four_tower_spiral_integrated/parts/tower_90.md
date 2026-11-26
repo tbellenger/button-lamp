@@ -15,7 +15,7 @@ Number 1, rendered blue. Back-left, on the 135° bolt. Recessed 1. The lowest op
 - Print it on its side. The flat face is z = 0. The C is the layer outline, and the widened spine is in that same plane.
 - The mouth opens away from the centre. Press the tube in from outside.
 - Bore 13.4 mm, wall 1.6 mm, mouth 11.5 mm. The spine is 8 mm thick, 4 mm wide at the bores and 11 mm wide between them.
-- The bottom end is a 4 × 8 mm tab, 4 mm long, square to its bolt, into a 4.2 × 8.2 mm slot. An arc notch at the top takes the disc. The head under that notch is solid. The recessed 1 is on the spine.
+- The bottom end is a 4 × 8 mm tab, 2.4 mm long, square to its bolt, into a 4.2 × 8.2 mm slot. It ends flush with the underside of the plate. An arc notch at the top takes the disc. The head under that notch is solid. The recessed 1 is on the spine.
 
 ```toml
 [part]

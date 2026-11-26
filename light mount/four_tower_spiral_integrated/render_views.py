@@ -383,6 +383,28 @@ def base_joint_edge():
     save(pl, "base_joint_edge.png")
 
 
+def tab_flush():
+    """Cut through the seated foot, level, so the tab end and the plate bottom share one line."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 800))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    focus = _world(
+        (SPEC.spine_in + SPEC.spine_out) / 2.0,
+        -FLANGE_T + TAB_LEN / 2.0,
+        SPEC.clip_width / 2.0,
+        ang,
+    )
+    _radial, tangent = _frame(ang)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang)).clip(normal=tangent, origin=focus)
+    base = to_poly(build_base(SPEC, Holes)).clip(normal=tangent, origin=focus)
+    add_solid(pl, tower, COLORS[1])
+    add_solid(pl, base, COLORS["base"])
+    pl.enable_parallel_projection()
+    shot(pl, focus, tangent, 50, up=(0, 0, 1), zoom=1.6)
+    pl.camera.parallel_scale = 7.0
+    save(pl, "tab_flush.png")
+
+
 if __name__ == "__main__":
     assembled()
     slot_closeup()
@@ -394,3 +416,4 @@ if __name__ == "__main__":
     base_slot_closeup()
     base_edge()
     base_joint_edge()
+    tab_flush()

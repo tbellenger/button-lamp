@@ -8,7 +8,7 @@ Checks: 14 findings: 14 warn (bed_bevel, min_wall, sliver)
 
 ## What it is
 
-A short spine, one outward clip with the widened root, and the 4 × 8 mm tab. Print this before the four towers and try the tab in a base slot.
+A short spine, one outward clip with the widened root, and the 4 × 8 mm tab, 2.4 mm long. Print this before the four towers and try the tab in a base slot.
 
 ## Design notes
 

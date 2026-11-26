@@ -69,7 +69,9 @@ NOTCH_DROP = 0.1
 # the tower is one slab on the bed.
 SPINE_RADIAL = 4.0
 ROOT_GAP = 0.3
-TAB_LEN = 4.0
+# Tab drops through the plate. 2.4 mm ends flush with the underside
+# when the shoulder sits on the plate top.
+TAB_LEN = 2.4
 LOBE_WALL = 1.6
 # Band around each M3 hole, from the hole edge to the ring edge.
 BAND_WALL = 1.6
@@ -409,6 +411,16 @@ def stations_for(spec, index):
     return tuple(found)
 
 
+def shoulder_y():
+    """Local Y of the shoulder. In the assembly this is the top of the plate."""
+    return BASE_T - FLANGE_T
+
+
+def tab_bottom_y():
+    """Local Y of the tab end. In the assembly this is the underside of the plate."""
+    return shoulder_y() - TAB_LEN
+
+
 def clip_y(spec, k):
     """Height of station k above the foot, which sits on the ring."""
     return FOOT_CLEAR + k * spec.quarter
@@ -653,7 +665,7 @@ def build_tower(spec, index):
     if not found:
         reject("this tower has no opening on the tube", param="tube_length")
     z0 = spec.bed_z
-    y0 = -FLANGE_T
+    y0 = tab_bottom_y()
     y1 = spec.cap_y
     solid = _box(spec.spine_in, spec.spine_out, y0, y1, z0, spec.clip_width)
     for k in found:
@@ -754,8 +766,8 @@ def build_base(spec, holes):
     ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), BASE_T)
     body = ring
     c = spec.joint_clear / 2.0
-    y0 = -FLANGE_T
-    y1 = -FLANGE_T + TAB_LEN
+    y0 = tab_bottom_y()
+    y1 = shoulder_y()
     for index in range(4):
         body += _lobe_solid(spec, bolt_angle(index))
         slot = _box(
@@ -855,7 +867,7 @@ def build_coupon(spec):
     """
     z0 = spec.bed_z
     y_clip = 18.0
-    y0 = -FLANGE_T
+    y0 = tab_bottom_y()
     solid = _box(spec.spine_in, spec.spine_out, y0, 32.0, z0, spec.clip_width)
     disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, y_clip)
     slab = _box(
@@ -869,8 +881,8 @@ def build_coupon(spec):
     solid += ring
     solid -= _tower_mark(spec, 1)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
-    # Same widened root as a tower, around this one clip. The tab below
-    # y = 0 is left at 4 mm.
+    # Same widened root as a tower, around this one clip. The tab is the
+    # 2.4 mm of spine below the plate line.
     reach = spec.rb + BORE_CLEAR
     clearance = Pos(0, 0, z0 + spec.bore_z) * _clearance_solid(spec, y_clip)
     block = _box(

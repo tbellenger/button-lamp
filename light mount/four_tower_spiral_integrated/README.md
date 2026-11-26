@@ -29,7 +29,7 @@ The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at
 
 Each clip is still a C-ring. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm, 8 mm along the tube. The centres stay on the 43.5 mm helix.
 
-The foot is the spine itself, **4.0 × 8.0 mm**, **4.0 mm** long, standing on the deck. The plate is 2.4 mm, so **1.6 mm** of the tab stands above it. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
+The foot is the spine itself, **4.0 × 8.0 mm** in section. The shoulder sits on the plate top, at **2.4 mm**. The tab below that is **2.4 mm** and ends flush with the underside of the plate. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
 
 | | |
 |---|---|
@@ -110,5 +110,6 @@ Reprint the four towers, the base, the coupon, and the top disc.
 | `render/print_orientation.png` | Bed poses |
 | `render/base_top.png` | Ring, rounded lobes, and the bolts, looking down |
 | `render/base_slot_closeup.png` | Tab seated in a lobe |
+| `render/tab_flush.png` | Tab end flush with the underside of the plate |
 | `render/disc_top.png` | Disc, looking down |
 | `render/exploded.png` | Base, towers, and disc pulled apart. Numbers beside the towers |

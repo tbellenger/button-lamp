@@ -13,7 +13,7 @@ Number 4, rendered orange. Back-right, 45°. Recessed 4. Three openings: 40, 66 
 ## Design notes
 
 - Print it on its side, flat face down. The C opens outward. Between clips the spine widens to 11 mm.
-- The foot is a 4 × 8 mm tab, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 4 is the only mark.
+- The foot is a 4 × 8 mm tab, 2.4 mm long, square to its bolt. The top has an arc notch for the disc, and the head under it is solid. The recessed 4 is the only mark.
 
 ```toml
 [part]
