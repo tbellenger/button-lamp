@@ -122,3 +122,7 @@ Reprint the disc and all four towers. The ring and the coupon did not change.
 | `render/print_orientation.png` | Bed poses |
 | `render/base_top.png` | Ring, looking down |
 | `render/disc_top.png` | Disc, looking down |
+| `render/exploded.png` | Base, towers, and disc pulled apart. Numbers beside the towers |
+| `render/foot_notch.png` | One foot from outside, notch open |
+| `render/foot_seated.png` | The same foot with the ring in the notch |
+| `render/foot_section.png` | Section through the foot and the ring |
