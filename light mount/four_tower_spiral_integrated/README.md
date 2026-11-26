@@ -1,6 +1,6 @@
-# Four-tower spiral, openings in the bar
+# Four-tower spiral, clips on a spine
 
-Same coil as before. The bar stands on the tube and the C is cut into its outer face. There is no arm and no plug. Each end of the bar has a curved slot. A thin ring sits in the bottom slots and a thin disc sits in the top slots. The recessed numbers on the towers say which bar is which.
+Same coil as before. Each tower is a spine with a C-ring at every clip, opening outward. Between clips the spine widens out to the tube centreline. The foot is a tab in a rounded lobe on the base ring. A plain disc threads through a straight notch at the top. The recessed numbers say which tower is which.
 
 The ring and the cap in [`../four_tower_spiral/`](../four_tower_spiral/) do not fit these bars.
 
@@ -21,90 +21,81 @@ The ring and the cap in [`../four_tower_spiral/`](../four_tower_spiral/) do not 
 | 3 green, front-right | `tower_270` | 33.5, 59.5, 85.5 |
 | 4 orange, back-right | `tower_0` | 40.0, 66.0, 92.0 |
 
-The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the centre of the top opening (yellow, 105.0 mm).
+The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the centre of the top opening (yellow, 105.0 mm). Each tower stands on a bolt diagonal, 45° / 135° / 225° / 315°. The clip heights did not change.
 
 ## The bar
 
-The bar is **16.6 mm** radially and **8 mm** tangentially. Unchanged.
+The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at each bore, and past the end clips it is **4.0 mm** wide radially. Between clips the outer face follows the inner arc of the bore, 0.2 mm clear of it, and runs out to the tube centreline. There the spine is **11.0 mm** wide.
+
+Each clip is still a C-ring. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm, 8 mm along the tube. The centres stay on the 43.5 mm helix.
+
+The foot is the spine itself, **4.0 × 8.0 mm** in section. The shoulder sits on the plate top, at **2.4 mm**. The tab below that is **2.4 mm** and ends flush with the underside of the plate. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
 
 | | |
 |---|---|
-| Bore | 13.4 mm (13 mm tube, 0.2 mm clearance) |
-| Wall | **1.6 mm** |
-| Mouth | 11.5 mm, on the outer face |
-| Along the tube | **8 mm** |
+| Notch depth | **1.3 mm**. The 1.2 mm ring sits with its top flush and **0.1 mm** under it |
+| Notch radii | **34.33 / 37.03 mm**. The ring plus **0.15 mm** each side |
+| Radial width | **2.70 mm** |
+| Inboard wall | **1.6 mm** at the bed face and the top face |
+| Outboard wall | **1.6 mm** |
+| Floor | the head is solid down to the top clip |
 
 ## Base ring
 
-The ring is only as wide as the four M3 holes. The holes stay on the deck's **76.2 mm** square, centres (±38.1, ±38.1), drilled **Ø3.4** so they match the deck. The bolt circle is 53.88 mm from the lamp axis.
-
 | | |
 |---|---|
-| Inside radius | **49.18 mm** (Ø98.4) |
-| Outside radius | **58.58 mm** (Ø117.2) |
-| Width | **9.4 mm**. 3 mm of PLA past each edge of the Ø3.4 hole, enough for an M3 socket head to bear |
-| Thickness | **2.4 mm** |
+| Inside radius | **50.58 mm** (Ø101.2) |
+| Outside radius | **57.18 mm** (Ø114.4) |
+| Band width | **6.6 mm**. The Ø3.4 hole plus 1.6 mm of wall each side |
+| Band thickness | **2.4 mm** |
+| Lobes | four, rounded tip, same **2.4 mm** plate as the band. The sides flare out into the band on a **5 mm** radius, in plan only |
+| Slot | **4.2 × 8.2 mm**, square to the bolt ray. 0.2 mm over the 4.0 × 8.0 mm tab |
+| Slot centre | radius **34.5 mm**, on the bolt ray |
+| M3 hole | radius **53.9 mm**, on the same ray |
+| Lobe tip | about **28.3 mm** from the centre |
 
-The cable leaves the deck at (+11.71, +32.24), 34.3 mm from the centre. The deck hole is Ø15, so it reaches 41.8 mm. The ring's inner edge is at 49.2 mm. The gap from the deck-hole edge to the ring is **7.4 mm**. The old Ø19 window would have reached 43.8 mm, still **5.4 mm** inside the ring. The middle of the ring is open. Nothing covers the cable.
-
-The bolt circle sits outside the bar. The bar's outer face is at 51.6 mm on the bed edge, and the hole's inner edge is at 52.2 mm, so the screws clear the towers by about 0.6 mm. The ring's inner band is what enters the bar: **2.4 mm** at the bed face, **3.1 mm** on the far face. The slot therefore opens through the outer face of the bar. The inner arc is the fit.
+The centre is open. The cable at (+11.71, +32.24) does not meet the lobes.
 
 ## Top disc
 
-| | |
-|---|---|
-| Outside radius | **48 mm** (Ø96) |
-| Hole | **40 mm** (Ø80). The annulus is 8 mm wide |
-| Thickness | **2.4 mm** |
-
-48 mm puts the rim through the bar with **3.5 mm** of bar outside the slot and **4.0 mm** inside it. The hole leaves the middle open.
-
-## Slots and guides
-
-Both plates are 2.4 mm. Each slot is **2.6 mm** deep, 0.2 mm over the plate. The plate sits on the floor of the slot.
-
-| Slot | Arc radii | Radial width | Depth |
-|---|---|---|---|
-| Top | **39.9 / 48.1 mm** | **8.2 mm** (0.2 mm over the 8 mm annulus, 0.1 mm a side) | **2.6 mm** |
-| Bottom | inner arc **48.98 mm** (0.2 mm under the ring's 49.18 mm). The outer side is open | the overlap, 2.4–3.1 mm | **2.6 mm** |
-
-The arcs are concentric with the lamp axis.
-
-Each plate has two tabs at every tower, standing perpendicular to the plate. They flank the 8 mm bar.
+A plain annulus. No tabs. It moved in onto the spine, so the diameters changed. The width and the thickness did not.
 
 | | |
 |---|---|
-| Tab | **2.0 mm** thick, **4.0 mm** tall |
-| Gap | **8.2 mm** (0.1 mm each side of the bar) |
-| Top tabs | 4 mm along the radius, from r 42 to 46. They hang down beside the bar. Print the disc tabs-up and turn it over |
-| Base tabs | 2.4 mm along the radius, on the inner edge of the ring, standing up. That keeps them **0.6 mm** clear of the M3 hole |
+| Outside radius | **36.88 mm** (Ø73.77) |
+| Hole | **34.48 mm** (Ø68.97) |
+| Radial width | **2.4 mm** |
+| Thickness | **1.2 mm** |
+| Centreline | **35.68 mm** |
+
+The underside is **114.8 mm** above the deck. The top of the disc is **116.0 mm**, flush with the towers.
 
 ## Print
 
-Creality CR-10 V2, 300 × 300 × 400, PLA. Towers lie on the flat face, C in the layers. Ring and disc are flat, tabs up. No supports.
+Creality CR-10 V2, 300 × 300 × 400, PLA. Towers lie on the flat face. The C is the layer outline. The ring and the disc print flat. No supports.
 
-On a tower the slot is a straight notch in each layer. The arc shows up as that notch shifting across the 8 mm of layers, about **0.7 mm**, roughly 5° from vertical. That is polish, not a support.
+The widened spine is in the layer plane, full thickness, so nothing bridges when a tower lies on its side. The original 4 mm face still comes within about **0.08 mm** of the bore at the bed face and the top face, because the helix shifts the bore across the 8 mm. It does not enter the bore. Cutting that face back would leave a sliver, so it stays. Every new face is held 0.2 mm off the bore.
 
 | Part | On the bed (mm) |
 |---|---|
-| each tower | **16.6 × 117.3 × 8** |
-| `tower_coupon` | **16.6 × 38.5 × 8**. One opening and the bottom slot. Print this first. |
-| `tower_base` | **Ø117.2 × 6.4** with the tabs. The ring itself is 2.4 mm |
-| `tower_cap` | **Ø96 × 6.4** with the tabs. The disc itself is 2.4 mm. Turn it over |
+| each tower | spine **4 to 11** wide, **8** thick, clips out to about **17** radially, **116.0** long |
+| `tower_coupon` | short spine, one clip, and the tab. Print this first. |
+| `tower_base` | **Ø114.4 × 2.4**, lobes included. One flat top |
+| `tower_cap` | **Ø73.77 × 1.2**, hole Ø68.97 |
 
-Stood up, the assembly is 117.2 × 117.2 × **117.3** mm. The disc's top is at 117.1 mm. The tower tops are the high point.
+Stood up, the assembly is 114.4 × 114.4 × **116.0** mm. The tower tops and the disc top are the high point.
 
-`nurb check` has nothing to fix. The assembly, the ring, and the disc are clean. The towers still warn that the helix bore meets the bed at a few degrees, and that the digit is a thin stroke.
+`nurb check` has nothing to fix.
 
 ## Reprint
 
-Reprint the ring, the disc, the coupon, and all four towers.
+Reprint the four towers, the base, the coupon, and the top disc.
 
 ## Assembly
 
-1. Bolt the ring down. The cable window side, +Y, points at the back. The cable comes up through the open middle.
-2. Drop the four towers onto the ring. The numbers face you. The tabs take the sides.
-3. Turn the disc over so the tabs point down, and drop it into the top slots.
+1. Bolt the ring down. +Y, toward the cable, points at the back. The cable comes up through the open middle.
+2. Drop each tower tab into its lobe. Match 1 to 1, then 2, 3, and 4.
+3. Drop the disc through the top notches. It is a straight slot, open at the top of each spine.
 4. Press the tube in from the outside, starting at the lowest opening, and wind counterclockwise. The cut end stops in the top opening on yellow.
 5. Glue once the coil sits where you want it.
 
@@ -114,7 +105,11 @@ Reprint the ring, the disc, the coupon, and all four towers.
 |---|---|
 | `stl/`, `3mf/` | The seven parts, in the print pose |
 | `render/assembled_iso.png` | Assembly, ring, disc, and the tube |
-| `render/slot_closeup.png` | Top slot, tower on its side |
+| `render/tower_side.png` | One tower from the side, widened spine and clips |
+| `render/slot_closeup.png` | Disc threaded through the straight top notch |
 | `render/print_orientation.png` | Bed poses |
-| `render/base_top.png` | Ring, looking down |
-| `render/disc_top.png` | Disc, looking down, tabs up |
+| `render/base_top.png` | Ring, rounded lobes, and the bolts, looking down |
+| `render/base_slot_closeup.png` | Tab seated in a lobe |
+| `render/tab_flush.png` | Tab end flush with the underside of the plate |
+| `render/disc_top.png` | Disc, looking down |
+| `render/exploded.png` | Base, towers, and disc pulled apart. Numbers beside the towers |

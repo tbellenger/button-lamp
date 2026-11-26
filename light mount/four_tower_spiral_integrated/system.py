@@ -1,16 +1,18 @@
 """Four-tower spiral. The openings are cut into the tower bar.
 
-The bar stands on the tube. There is no arm and no key tooth. Each end of
-the bar has a curved slot. A thin base ring sits in the bottom slots and a
-thin disc sits in the top slots. Short tabs on each plate flank the bar and
-locate it sideways.
+The bar is a slim spine. Each clip is a C-shaped ring on the outer edge,
+opening away from the lamp. Between clips the spine widens out to the
+tube centreline, following the inner arc of each bore, so the rings merge
+into the spine. The foot is a rectangular tab that drops through a slot in
+a rounded lobe on the base ring. The top of the spine carries a straight
+notch the plain disc threads through.
 
-The base ring is only as wide as the four M3 holes, on the deck's 76.2 mm
-square. The middle is open, so the light cable still comes up through the
-deck hole. The coil and the clips are unchanged.
+The base ring is only as wide as the four M3 holes. A lobe reaches inward
+under each tower, on the same ray as its bolt. The middle is open, so the
+light cable still comes up through the deck hole. The coil and the clip
+centres are unchanged.
 
-Each tower prints lying on its side. The ring and the disc print flat, tabs
-up. The disc is turned over on assembly so the tabs point down at the towers.
+Each tower prints lying on its side. The ring and the disc print flat.
 Lengths are millimetres. Fits are design allowances, not measured.
 """
 
@@ -52,18 +54,37 @@ FLANGE_T = 4.5
 # 45° relief on the outer bed corner of the bar. Kept with the bar section.
 BOLT_CHAMFER = 2.0
 FOOT_CLEAR = 16.0
-# Both plates are 2.4 mm: twelve layers at 0.2 mm, inside the 2–3 mm band.
-DISC_T = 2.4
-# Top disc. Outer radius 48 mm crosses the bar with plastic left on both sides.
-DISC_R = 48.0
-DISC_HOLE_R = 40.0
+# Base ring. 2.4 mm is twelve layers at 0.2 mm. The top disc is separate.
+BASE_T = 2.4
+# Top disc. 1.2 mm is six layers at 0.2 mm. 2.4 mm of radial width is six
+# perimeters on a 0.4 mm nozzle. The radius is chosen in specs() so the
+# ring sits on the spine, not out past it.
+DISC_T = 1.2
+DISC_RADIAL = 2.4
+# Arc notch: 0.15 mm each side of the ring. 0.1 mm under a flush top.
+NOTCH_SIDE = 0.15
+NOTCH_DROP = 0.1
+# Spine. 4 mm radial is the narrow beam that still leaves a solid root on the
+# clip wall without entering the bore. 8 mm matches the clip thickness, so
+# the tower is one slab on the bed.
+SPINE_RADIAL = 4.0
+ROOT_GAP = 0.3
+# Tab drops through the plate. 2.4 mm ends flush with the underside
+# when the shoulder sits on the plate top.
+TAB_LEN = 2.4
+LOBE_WALL = 1.6
+# Band around each M3 hole, from the hole edge to the ring edge.
+BAND_WALL = 1.6
+# Solid spine between the outside of the top clip and the floor of the disc notch.
+SLOT_ABOVE_CLIP = 1.4
+# Floor of plastic under the open top notch, so the disc has something to sit on.
+NOTCH_FLOOR = 1.6
 # PLA outside an M3 clearance hole, measured from the hole edge. 3 mm covers
 # the M3 socket head (Ø5.5) and leaves a rim the screw can clamp.
 BOLT_MARGIN = 3.0
-# Tabs perpendicular to each plate, one on each side of a tower.
+# Tabs on the base ring only, perpendicular to the ring, one each side of a tower.
 GUIDE_T = 2.0
 GUIDE_H = 4.0
-GUIDE_RADIAL = 4.0
 BASE_GUIDE_RADIAL = 2.4
 TUBE_OD = 13.0
 COIL_DIAMETER = 100.0
@@ -81,11 +102,15 @@ TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 
 def _base_ring_radii():
-    """Inner and outer radius of the base ring, from the deck bolt square."""
+    """Inner and outer radius of the base band, from the deck bolt square.
+
+    The band is the M3 hole plus BAND_WALL on each side. The lobes that hold
+    the towers are added inside this edge.
+    """
     bolt = measured("top_deck_bolt_spacing")
     hole = measured("m3_clearance")
     bolt_r = bolt / math.sqrt(2.0)
-    return bolt_r - hole / 2.0 - BOLT_MARGIN, bolt_r + hole / 2.0 + BOLT_MARGIN
+    return bolt_r - hole / 2.0 - BAND_WALL, bolt_r + hole / 2.0 + BAND_WALL
 
 
 def _span_x(r0, r1, z_a, z_b):
@@ -100,8 +125,8 @@ def _span_x(r0, r1, z_a, z_b):
 
 
 def disc_world_z(spec):
-    """World Z of the underside of the top disc, seated in the slots."""
-    return FLANGE_T + spec.cap_y - spec.slot_depth
+    """World Z of the underside of the top disc. The top is flush with the towers."""
+    return FLANGE_T + spec.cap_y - spec.disc_t
 
 
 def specs(
@@ -153,19 +178,18 @@ def specs(
     if quarter_arc <= 0:
         reject("pitch and coil diameter do not make a helix", param="pitch")
 
-    # The bar lies on the bed, so the bore centre is clip_width/2 off the
-    # tower's radial plane. Shift the bar until that offset is still on the
-    # 43.5 mm centreline. The phase follows, so the tube is not asked to kink.
+    # The placement origin is shifted by half the spine thickness, so the
+    # bore centre lies on the tower ray. Local x is then the world radius
+    # minus R_PIN, and the helix needs no extra phase.
     bore_z = clip_width / 2.0
     if bore_z >= radius - 1.0:
         reject("clip_width is too long for the coil radius", param="clip_width")
-    radial = math.sqrt(radius * radius - bore_z * bore_z)
-    tube_x = radial - R_PIN
+    tube_x = radius - R_PIN
     x_in = tube_x - ro
     x_out = tube_x + ro
     if x_out - x_in < 8.0:
         reject("the bar is too narrow to plug into a slot", param="clip_wall")
-    bore_phase = math.atan2(-bore_z, radial)
+    bore_phase = 0.0
     helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
     # The rim tangent, from the first clip out to the ring edge, is fixed by
@@ -211,27 +235,26 @@ def specs(
     real_last = k_last - int(extra_stations)
     tail = helix_length - real_last * quarter_arc
 
-    # Solid bar above the highest opening. The disc slot is cut down from
-    # this top. joint_clear is the extra depth and the extra radial width.
-    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 4.0
-    slot_depth = DISC_T + joint_clear
-    slot_r_outer = DISC_R + joint_clear / 2.0
-    slot_r_inner = DISC_HOLE_R - joint_clear / 2.0
-    # The bar's outer face is closest to the axis at the bed edge (z = 0).
-    # The inner face is farthest at the top edge (z = clip_width).
-    face_out = R_PIN + x_out
-    face_in = math.hypot(R_PIN + x_in, clip_width)
-    if slot_r_outer > face_out - 2.4:
-        reject("the disc rim leaves under 2.4 mm of bar outside the slot", param="clip_wall")
-    if slot_r_inner < face_in + 2.4:
-        reject("the disc rim leaves under 2.4 mm of bar inside the slot", param="clip_wall")
+    # 0.1 mm under the ring, so the notch is 1.3 mm deep and the ring top
+    # is flush with the tower. 1.6 mm of floor stays under the notch.
+    slot_depth = DISC_T + NOTCH_DROP
+    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + SLOT_ABOVE_CLIP + slot_depth
     if slot_depth >= 4.0:
-        reject("the disc slot would cut more than 4 mm off the tower top", param="joint_clear")
+        reject("the disc notch would cut more than 4 mm off the tower top", param="joint_clear")
     base_r_in, base_r_out = _base_ring_radii()
-    # The bolt circle is outside the bar. The ring's inner edge is the part
-    # that enters the tower. It has to bite in, or the slot does nothing.
-    if base_r_in > face_out - 1.5:
-        reject("the base ring does not reach into the bar", param="clip_wall")
+    spine_out = tube_x - rb - ROOT_GAP
+    spine_in = spine_out - SPINE_RADIAL
+    if spine_out <= spine_in:
+        reject("the spine has no radial thickness", param="clip_wall")
+    # The ring sits on the spine. Its inner arc, at the bed face and the
+    # top face, stays 1.6 mm outboard of the spine's inner face. 0.15 mm
+    # of clearance each side of the 2.4 mm band.
+    notch_r_in = math.hypot(R_PIN + spine_in + CLIP_WALL, bore_z)
+    disc_hole_r = notch_r_in + NOTCH_SIDE
+    disc_r = disc_hole_r + DISC_RADIAL
+    notch_r_out = disc_r + NOTCH_SIDE
+    if notch_r_out <= notch_r_in:
+        reject("the top notch has no radial width", param="joint_clear")
     tower_len = cap_y
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -277,18 +300,24 @@ def specs(
         tube_x=tube_x,
         x_in=x_in,
         x_out=x_out,
+        spine_in=spine_in,
+        spine_out=spine_out,
         bar_w=bar_w,
         slot_radial=bar_w + joint_clear,
         slot_tangent=clip_width + joint_clear,
         cap_y=cap_y,
-        disc_r=DISC_R,
-        disc_hole_r=DISC_HOLE_R,
+        disc_r=disc_r,
+        disc_hole_r=disc_hole_r,
         disc_t=DISC_T,
         slot_depth=slot_depth,
-        slot_r_outer=slot_r_outer,
-        slot_r_inner=slot_r_inner,
+        slot_r_outer=notch_r_out,
+        slot_r_inner=notch_r_in,
+        notch_r_in=notch_r_in,
+        notch_r_out=notch_r_out,
+        head_x=(notch_r_out - R_PIN) + CLIP_WALL,
         base_r_in=base_r_in,
         base_r_out=base_r_out,
+        base_slot_depth=BASE_T + joint_clear,
         base_slot_r_inner=base_r_in - joint_clear,
         base_slot_r_outer=base_r_out + joint_clear,
         tower_len=tower_len,
@@ -333,26 +362,63 @@ def deck():
     )
 
 
-def tower_angle(index):
-    """World angle of tower index, 45° off the axes. 0° is +X, 90° is +Y (back)."""
+def axis_offset(spec):
+    """No extra rotation. The placement origin centres the spine on the bolt ray.
+
+    Rotating the tower by atan(4 mm / slot radius) put the slot centre on the
+    bolt but left the 8 mm faces 6.65° off square to that ray. The origin
+    shift in place_tower does the centring instead, so local X lies along
+    the bolt ray and local Z is perpendicular to it.
+    """
+    return 0.0 * spec.clip_width
+
+
+def theta0(spec):
+    """Tower angle of the lowest hook. The whole set is shifted by axis_offset."""
+    return math.pi / 2.0 + TOWER_PHASE + axis_offset(spec)
+
+
+def tower_angle(index, spec=None):
+    """World angle of the placement radial for tower index.
+
+    The tab itself lands on the bolt diagonal, which is index * 90° + 45°.
+    0° is +X, 90° is +Y (back).
+    """
+    if spec is None:
+        spec = default_specs()
+    return index * math.pi / 2.0 + TOWER_PHASE + axis_offset(spec)
+
+
+def bolt_angle(index):
+    """World angle of deck bolt index. The square is fixed; the towers move to it."""
     return index * math.pi / 2.0 + TOWER_PHASE
 
 
-def station_theta(k):
-    """Tower angle of station k. The coil starts at THETA0 and climbs counterclockwise."""
-    return THETA0 + k * math.pi / 2.0
+def station_theta(spec, k):
+    """Tower angle of station k. The coil starts at theta0 and climbs counterclockwise."""
+    return theta0(spec) + k * math.pi / 2.0
 
 
 def stations_for(spec, index):
     """Hook stations whose tower angle lands on this tower."""
-    target = tower_angle(index)
+    target = tower_angle(index, spec)
     found = []
     for k in spec.stations:
-        ang = station_theta(k) % (2.0 * math.pi)
+        ang = station_theta(spec, k) % (2.0 * math.pi)
         delta = abs(ang - target)
         if min(delta, 2.0 * math.pi - delta) < 1e-6:
             found.append(k)
     return tuple(found)
+
+
+def shoulder_y():
+    """Local Y of the shoulder. In the assembly this is the top of the plate."""
+    return BASE_T - FLANGE_T
+
+
+def tab_bottom_y():
+    """Local Y of the tab end. In the assembly this is the underside of the plate."""
+    return shoulder_y() - TAB_LEN
 
 
 def clip_y(spec, k):
@@ -373,7 +439,7 @@ def helix_phi(spec, theta):
 def helix_point(spec, theta):
     """Tube centreline through the hook bores. theta is the tower angle."""
     phi = helix_phi(spec, theta)
-    z = FLANGE_T + clip_y(spec, 0) + spec.climb * (theta - THETA0)
+    z = FLANGE_T + clip_y(spec, 0) + spec.climb * (theta - theta0(spec))
     return (
         spec.radius * math.cos(phi),
         spec.radius * math.sin(phi),
@@ -387,7 +453,7 @@ def lead_in_points(spec):
     The point at the ring is where the tube enters from the side. The other
     end is the first bore. Both sit at the first hook's height.
     """
-    theta = station_theta(0)
+    theta = station_theta(spec, 0)
     bore = helix_point(spec, theta)
     phi = helix_phi(spec, theta)
     # Increasing phi walks the helix. The entry is the other way.
@@ -436,9 +502,10 @@ def _digit(char):
 
 
 def _tower_mark(spec, index):
-    """Recess the numeral into the top face of the bar, just above the ring."""
+    """Recess the numeral into the top face of the spine, just above the tab."""
     face = _digit(TOWER_MARK[index])
-    return Pos(spec.tube_x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+    x = (spec.spine_in + spec.spine_out) / 2.0
+    return Pos(x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
 def _bed_corner_chamfer(spec, y0, y1, leg):
@@ -450,6 +517,273 @@ def _bed_corner_chamfer(spec, y0, y1, leg):
     # Sketch Y becomes print +Z. The extrusion, which was +Z, becomes -Y,
     # so a shift by y1 puts the cut on y0..y1.
     return Pos(0, y1, 0) * Rot(90, 0, 0) * solid
+
+
+def _clip_disk(spec, cy):
+    """Solid disk of the clip ring, following the same helix as the bore.
+
+    The spine overlaps the inner edge of this disk. Subtracting the bore
+    and the mouth leaves the C and the short root.
+    """
+    radius = spec.radius
+    cx = spec.tube_x
+    reach = spec.clip_width / 2.0 + 2.0
+    alpha = math.asin(min(0.5, reach / radius))
+    sections = []
+    for i in range(5):
+        dth = -alpha + 2.0 * alpha * i / 4.0
+        x = cx - radius * (1.0 - math.cos(dth))
+        y = cy + spec.climb * dth
+        z = -radius * math.sin(dth)
+        sections.append(Pos(x, y, z) * Circle(spec.ro))
+    disk = loft(sections, ruled=True)
+    if len(disk.solids()) != 1:
+        reject("a clip ring did not loft as a single solid", param="clip_width")
+    return disk
+
+
+def _clearance_solid(spec, cy):
+    """Bore grown by the 0.2 mm fit clearance, without the mouth.
+
+    Subtracting this from the spine keeps the widened edge off the bore.
+    The clip wall itself is not trimmed: the caller only cuts the spine.
+    """
+    radius = spec.radius
+    cx = spec.tube_x
+    reach = spec.clip_width / 2.0 + 2.0
+    alpha = math.asin(min(0.5, reach / radius))
+    sections = []
+    grown = spec.rb + BORE_CLEAR
+    for i in range(5):
+        dth = -alpha + 2.0 * alpha * i / 4.0
+        x = cx - radius * (1.0 - math.cos(dth))
+        y = cy + spec.climb * dth
+        z = -radius * math.sin(dth)
+        sections.append(Pos(x, y, z) * Circle(grown))
+    solid = loft(sections, ruled=True)
+    if len(solid.solids()) != 1:
+        reject("a bore clearance did not loft as a single solid", param="clip_width")
+    return solid
+
+
+def _extrude_xy(pts, z0, z1):
+    """Extrude a polygon in the print plane through the bed thickness.
+
+    The polygon is forced counter-clockwise. A clockwise face extrudes the
+    wrong way and the union comes back as a compound.
+    """
+    area = 0.0
+    for i, (x1, y1) in enumerate(pts):
+        x2, y2 = pts[(i + 1) % len(pts)]
+        area += x1 * y2 - x2 * y1
+    if area < 0.0:
+        pts = list(reversed(pts))
+    face = Polygon(pts)
+    return Pos(0, 0, z0) * extrude(face, z1 - z0)
+
+
+def _spine_flesh(spec, stations):
+    """Widen the spine out to the tube centreline between the end clips.
+
+    The outer face follows each bore's inner arc and runs straight across
+    the gap. It meets the 4 mm spine on a tangent at the first and last
+    clip, which is the taper back to the spine at the two ends. The foot
+    tab, below y = 0, stays the 4 mm section.
+    """
+    ys = [clip_y(spec, k) for k in stations]
+    y0 = min(ys)
+    y1 = max(ys)
+    if y1 - y0 < 1.0:
+        # One clip. Show the arc for a short way each side of it, still
+        # clear of the bore, so the coupon has the same root.
+        reach = spec.rb + BORE_CLEAR
+        y0 = max(0.0, ys[0] - reach)
+        y1 = ys[0] + reach
+    block = _box(spec.spine_out - 0.05, spec.tube_x, y0, y1, 0.0, spec.clip_width)
+    for k in stations:
+        block -= Pos(0, 0, spec.bore_z) * _clearance_solid(spec, clip_y(spec, k))
+    if block is None or len(block.solids()) < 1:
+        reject("the widened spine disappeared", param="clip_width")
+    return block
+
+
+def _arc_notch(spec, y0, y1):
+    """Arc slot the disc occupies. Axis is the lamp axis in the print frame.
+
+    The placement origin is shifted, so that axis is at local x = -R_PIN
+    and local z = bore_z, not at z = 0. The slot is the ring plus 0.15 mm
+    each side, and it is open through the top of the tower.
+    """
+    if spec.notch_r_out <= spec.notch_r_in:
+        reject("a curved slot has no radial width", param="joint_clear")
+    height = y1 - y0
+    mid = (y0 + y1) / 2.0
+    centre = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0)
+    outer = centre * Cylinder(spec.notch_r_out, height)
+    inner = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0) * Cylinder(spec.notch_r_in, height + 0.4)
+    band = outer - inner
+    if len(band.solids()) < 1:
+        reject("the top notch did not cut as a solid", param="joint_clear")
+    return band
+
+
+def _top_head(spec, stations):
+    """Spine top, solid up to the highest clip, with an arc notch for the disc.
+
+    The region under the notch is filled through, so there is no window
+    between the head, the spine and the top clip. The fill stops 0.2 mm
+    short of that clip's bore, and the mouth is left open.
+    """
+    x_out = spec.head_x
+    y_top = spec.cap_y
+    y_last = max(clip_y(spec, k) for k in stations)
+    if y_top - spec.slot_depth - NOTCH_FLOOR < 0.0:
+        reject("the top notch falls off the tower", param="tube_length")
+    head = _box(spec.spine_in, x_out, y_last - spec.ro, y_top, 0.0, spec.clip_width)
+    head -= _arc_notch(spec, y_top - spec.slot_depth, y_top + 0.6)
+    for k in stations:
+        cy = clip_y(spec, k)
+        if cy + spec.ro + 1.0 < y_last - spec.ro:
+            continue
+        head -= Pos(0, 0, spec.bore_z) * _bore_void(spec, cy)
+        head -= Pos(0, 0, spec.bore_z) * _clearance_solid(spec, cy)
+    if head is None or len(head.solids()) < 1:
+        reject("the top notch ate the head", param="joint_clear")
+    return head
+
+
+def build_tower(spec, index):
+    """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
+
+    A 4 mm spine carries a C-ring at each clip and widens between the clips.
+    The foot is the tab. The top head holds the straight disc notch. Nothing
+    hangs below z = 0.
+    """
+    if index not in TOWER_MARK:
+        reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
+    found = stations_for(spec, index)
+    if not found:
+        reject("this tower has no opening on the tube", param="tube_length")
+    z0 = spec.bed_z
+    y0 = tab_bottom_y()
+    y1 = spec.cap_y
+    solid = _box(spec.spine_in, spec.spine_out, y0, y1, z0, spec.clip_width)
+    for k in found:
+        cy = clip_y(spec, k)
+        disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, cy)
+        slab = _box(
+            spec.tube_x - spec.ro - 1.0, spec.tube_x + spec.ro + 1.0,
+            cy - spec.ro - 2.0, cy + spec.ro + 2.0,
+            z0, spec.clip_width,
+        )
+        ring = disk.intersect(slab)
+        if ring is None or len(ring.solids()) < 1:
+            reject("a clip ring missed the print slab", param="clip_width")
+        solid += ring
+    solid -= _tower_mark(spec, index)
+    for k in found:
+        solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
+    solid += _spine_flesh(spec, found)
+    solid += _top_head(spec, found)
+    # The spine itself runs through the notch. Cut it from the union, or the
+    # ring stops on the spine instead of threading it.
+    solid -= _arc_notch(spec, spec.cap_y - spec.slot_depth, spec.cap_y + 0.6)
+    if len(solid.solids()) != 1:
+        reject("the tower did not come back as a single solid", param="clip_width")
+    low = solid.bounding_box().min.Z
+    if low < -0.05:
+        reject("the tower hangs below the bed", param="clip_width")
+    return solid
+
+
+def _lobe_solid(spec, bolt_ang):
+    """Inward lobe centred on a bolt ray, blending into the band.
+
+    A stadium wide enough for the slot plus 1.6 mm of wall, with a round
+    inner end. Fillet arcs carry the straight sides into the band's inner
+    circle. The slot is cut afterwards, on the same ray.
+    """
+    x_mid = (spec.spine_in + spec.spine_out) / 2.0
+    # The spine midplane is the bolt ray, so the slot centre radius is plain.
+    r_slot = R_PIN + x_mid
+    half_t = (spec.clip_width + spec.joint_clear) / 2.0
+    half_r = (SPINE_RADIAL + spec.joint_clear) / 2.0
+    rad = math.hypot(half_r, half_t) + LOBE_WALL
+    fillet_r = 5.0
+    band = spec.base_r_in
+    # Fillet centre sits outside the straight side, so the joint flares
+    # wider than the lobe body as it meets the band.
+    vc = rad + fillet_r
+    if band - fillet_r <= vc:
+        reject("the lobe fillet does not meet the band", param="joint_clear")
+    uc = math.sqrt((band - fillet_r) ** 2 - vc * vc)
+    if uc <= r_slot + rad:
+        reject("the lobe fillet runs into the slot", param="joint_clear")
+    radial = (math.cos(bolt_ang), math.sin(bolt_ang))
+    # Clockwise tangent, matching the tower's print +Z once the tower is stood up.
+    tangent = (math.sin(bolt_ang), -math.cos(bolt_ang))
+
+    def world(u, v):
+        return (
+            u * radial[0] + v * tangent[0],
+            u * radial[1] + v * tangent[1],
+        )
+
+    pts = []
+    # Inner semicircle, from the clockwise side around the tip to the other side.
+    n_arc = 24
+    for i in range(n_arc + 1):
+        phi = -math.pi / 2.0 + math.pi * i / n_arc
+        pts.append(world(r_slot + rad * math.cos(phi + math.pi), rad * math.sin(phi)))
+    # phi from -90° to +90° with cos(phi+180) = -cos(phi): u from r_slot down to r_slot-rad and back.
+    # At i=0, phi=-90, u=r_slot, v=-rad. At i=mid, phi=0, u=r_slot-rad, v=0. At end, u=r_slot, v=+rad.
+    # Straight side, then a flare that grows wider than the body.
+    pts.append(world(uc, rad))
+    band_phi = math.atan2(vc, uc)
+    n_fil = 16
+    for i in range(1, n_fil + 1):
+        phi = -math.pi / 2.0 + (band_phi + math.pi / 2.0) * i / n_fil
+        pts.append(world(uc + fillet_r * math.cos(phi), vc + fillet_r * math.sin(phi)))
+    overlap = band + 2.5
+    pts.append(world(overlap * math.cos(band_phi), overlap * math.sin(band_phi)))
+    pts.append(world(overlap * math.cos(-band_phi), overlap * math.sin(-band_phi)))
+    for i in range(1, n_fil + 1):
+        phi = -band_phi + (math.pi / 2.0 + band_phi) * i / n_fil
+        pts.append(world(uc + fillet_r * math.cos(phi), -vc + fillet_r * math.sin(phi)))
+    return _extrude_xy(pts, 0.0, BASE_T)
+
+
+def build_base(spec, holes):
+    """Narrow bolt ring. Each tower has a rounded inward lobe with a through-slot.
+
+    The band and the lobes are one plate, 2.4 mm thick, with a flat top.
+    The flare is only in the plan view. The slot and the bolt share the
+    lobe's centre line. The bolt is the one further out.
+    """
+    width = holes.bolt_d + 2.0 * BAND_WALL
+    if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:
+        reject("the base ring does not match the deck bolt holes", param="joint_clear")
+    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), BASE_T)
+    body = ring
+    c = spec.joint_clear / 2.0
+    y0 = tab_bottom_y()
+    y1 = shoulder_y()
+    for index in range(4):
+        body += _lobe_solid(spec, bolt_angle(index))
+        slot = _box(
+            spec.spine_in - c, spec.spine_out + c,
+            y0 - 0.4, y1 + 0.4,
+            -c, spec.clip_width + c,
+        )
+        body -= place_tower(slot, tower_angle(index, spec))
+    half = holes.bolt / 2.0
+    span = TAB_LEN + 2.0
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            body -= Pos(sx * half, sy * half, span / 2.0) * Cylinder(holes.bolt_d / 2.0, span)
+    if len(body.solids()) != 1:
+        reject("the base ring did not come back as a single solid", param="coil_diameter")
+    return body
 
 
 def _box(x0, x1, y0, y1, z0, z1):
@@ -489,132 +823,75 @@ def _guide(spec, side, r0, r1, y0, y1):
     return _box(x0, x1, y0, y1, z_a, z_b)
 
 
-def build_tower(spec, index):
-    """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
-
-    The bar is the clip. Both ends carry a curved slot for a plate. Nothing
-    hangs below z = 0, so it prints on its side without supports.
-    """
-    if index not in TOWER_MARK:
-        reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
-    found = stations_for(spec, index)
-    if not found:
-        reject("this tower has no opening on the tube", param="tube_length")
-    z0 = spec.bed_z
-    y0 = -FLANGE_T
-    y1 = spec.cap_y
-    solid = _box(spec.x_in, spec.x_out, y0, y1, z0, spec.clip_width)
-    solid -= _bed_corner_chamfer(spec, y0 - 0.2, y1 + 0.2, BOLT_CHAMFER)
-    solid -= _tower_mark(spec, index)
-    solid -= _arc_band(
-        spec.slot_r_inner, spec.slot_r_outer,
-        y1 - spec.slot_depth, y1 + 0.4,
-    )
-    solid -= _arc_band(
-        spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.slot_depth,
-    )
-    for k in found:
-        solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
-    if len(solid.solids()) != 1:
-        reject("the tower did not come back as a single solid", param="clip_width")
-    low = solid.bounding_box().min.Z
-    if low < -0.05:
-        reject("the tower hangs below the bed", param="clip_width")
-    return solid
-
-
-def build_base(spec, holes):
-    """Thin ring on the deck bolts, with a tab each side of every tower.
-
-    The ring is only as wide as the M3 holes plus BOLT_MARGIN. It does not
-    close over the cable. The cable comes up in the open middle.
-    """
-    width = holes.bolt_d + 2.0 * BOLT_MARGIN
-    if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:
-        reject("the base ring does not match the deck bolt holes", param="joint_clear")
-    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), DISC_T)
-    body = ring
-    y0 = -FLANGE_T + DISC_T - 0.2
-    y1 = -FLANGE_T + DISC_T + GUIDE_H
-    r0 = spec.base_r_in
-    r1 = spec.base_r_in + BASE_GUIDE_RADIAL
-    for index in range(4):
-        ang = tower_angle(index)
-        for side in (-1, 1):
-            body += place_tower(_guide(spec, side, r0, r1, y0, y1), ang)
-    half = holes.bolt / 2.0
-    span = DISC_T + GUIDE_H + 2.0
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            body -= Pos(sx * half, sy * half, span / 2.0) * Cylinder(holes.bolt_d / 2.0, span)
-    if len(body.solids()) != 1:
-        reject("the base ring did not come back as a single solid", param="coil_diameter")
-    return body
-
-
 def build_cap(spec):
-    """Thin disc. Printed tabs-up. Turn it over so the tabs point down.
+    """Plain annulus. Prints flat, and drops into the top slots as printed."""
+    return extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), spec.disc_t)
 
-    The returned solid sits on z = 0 with the tabs standing up, which is the
-    print pose.
+
+def place_tower(solid, angle, centre_z=None):
+    """Stand a print-frame tower on its slot. Local +X is radial, +Y is up.
+
+    The print frame still has the bed at local z = 0. The origin is shifted
+    along the tangent so the spine midplane, local z = centre_z, lies on the
+    ray. Local X then runs along that ray and the 8 mm side is square to it.
     """
-    disc_z0 = disc_world_z(spec)
-    disc = Pos(0, 0, disc_z0) * extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), DISC_T)
-    body = disc
-    y1 = spec.cap_y - spec.slot_depth + 0.2
-    y0 = spec.cap_y - spec.slot_depth - GUIDE_H
-    r0 = spec.disc_hole_r + 2.0
-    r1 = spec.disc_r - 2.0
-    for index in range(4):
-        ang = tower_angle(index)
-        for side in (-1, 1):
-            body += place_tower(_guide(spec, side, r0, r1, y0, y1), ang)
-    z_lift = disc_z0 + DISC_T
-    parked = Rot(180, 0, 0) * Pos(0, 0, -z_lift) * body
-    if len(parked.solids()) != 1:
-        reject("the disc did not come back as a single solid", param="clip_width")
-    low = parked.bounding_box().min.Z
-    if low < -0.05:
-        reject("the disc hangs below the bed", param="clip_width")
-    return parked
-
-
-def place_tower(solid, angle):
-    """Stand a print-frame tower on its slot. Local +X is radial, +Y is up."""
+    if centre_z is None:
+        centre_z = CLIP_WIDTH / 2.0
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
-    origin = Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+    origin = (
+        Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+        - centre_z * z_dir
+    )
     return Plane(origin=origin, x_dir=radial, z_dir=z_dir) * solid
 
 
 def bore_world(spec, index, k):
     """World point of this hook's bore centre, from the print frame."""
-    angle = tower_angle(index)
+    angle = tower_angle(index, spec)
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
     up = Vector(0, 0, 1)
-    origin = Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+    origin = (
+        Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
+        - spec.bore_z * z_dir
+    )
     local = Vector(spec.tube_x, clip_y(spec, k), spec.bore_z)
     return origin + local.X * radial + local.Y * up + local.Z * z_dir
 
 
 def build_coupon(spec):
-    """A short bar, one outward opening, and the curved slot for the base ring.
+    """A short spine, one outward clip, and the foot tab.
 
-    Print it on its side. Offer the slotted end up to the ring before the towers.
+    Print it on its side. Try the tab in a base slot before the towers.
     """
     z0 = spec.bed_z
-    y_clip = 24.0
-    y0 = -FLANGE_T
-    solid = _box(spec.x_in, spec.x_out, y0, 34.0, z0, spec.clip_width)
-    solid -= _bed_corner_chamfer(spec, y0 - 0.2, 34.2, BOLT_CHAMFER)
-    solid -= _tower_mark(spec, 1)
-    solid -= _arc_band(
-        spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.slot_depth,
+    y_clip = 18.0
+    y0 = tab_bottom_y()
+    solid = _box(spec.spine_in, spec.spine_out, y0, 32.0, z0, spec.clip_width)
+    disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, y_clip)
+    slab = _box(
+        spec.tube_x - spec.ro - 1.0, spec.tube_x + spec.ro + 1.0,
+        y_clip - spec.ro - 2.0, y_clip + spec.ro + 2.0,
+        z0, spec.clip_width,
     )
+    ring = disk.intersect(slab)
+    if ring is None or len(ring.solids()) < 1:
+        reject("the coupon clip missed the print slab", param="clip_width")
+    solid += ring
+    solid -= _tower_mark(spec, 1)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
+    # Same widened root as a tower, around this one clip. The tab is the
+    # 2.4 mm of spine below the plate line.
+    reach = spec.rb + BORE_CLEAR
+    clearance = Pos(0, 0, z0 + spec.bore_z) * _clearance_solid(spec, y_clip)
+    block = _box(
+        spec.spine_out - 0.05, spec.tube_x,
+        max(0.0, y_clip - reach), y_clip + reach,
+        z0, spec.clip_width,
+    )
+    block -= clearance
+    solid += block
     if len(solid.solids()) != 1:
         reject("the fit coupon did not come back as a single solid", param="joint_clear")
     low = solid.bounding_box().min.Z

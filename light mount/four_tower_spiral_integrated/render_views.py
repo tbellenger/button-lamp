@@ -3,16 +3,20 @@
     xvfb-run -a python3 render_views.py
 """
 
-from nurb import Pos, Rot
+from nurb import Pos
 
+import math
 import os
 
 import numpy as np
 import pyvista as pv
 
 from system import (
-    DISC_T,
-    THETA0,
+    BASE_T,
+    FLANGE_T,
+    R_PIN,
+    TAB_LEN,
+    TOWER_MARK,
     build_base,
     build_cap,
     build_tower,
@@ -22,6 +26,7 @@ from system import (
     helix_point,
     lead_in_points,
     place_tower,
+    theta0,
     tower_angle,
 )
 
@@ -64,8 +69,9 @@ def to_poly(shape, tol=0.18):
 def tube_points():
     """Straight tangent into the first hook, then the helix out to the cut end."""
     start, _bore = lead_in_points(SPEC)
-    theta1 = THETA0 + SPEC.helix_length / SPEC.ds
-    theta = np.linspace(THETA0, theta1, 500)
+    theta_start = theta0(SPEC)
+    theta1 = theta_start + SPEC.helix_length / SPEC.ds
+    theta = np.linspace(theta_start, theta1, 500)
     helix = np.array([helix_point(SPEC, t) for t in theta], float)
     return np.vstack([np.array(start, float), helix])
 
@@ -102,9 +108,9 @@ def placed():
     base = to_poly(build_base(SPEC, Holes))
     parts = [("base", base)]
     for index in range(4):
-        ang = tower_angle(index)
+        ang = tower_angle(index, SPEC)
         parts.append((index, to_poly(place_tower(build_tower(SPEC, index), ang))))
-    cap = to_poly(Pos(0, 0, disc_world_z(SPEC) + DISC_T) * Rot(180, 0, 0) * build_cap(SPEC))
+    cap = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     parts.append(("cap", cap))
     return parts
 
@@ -120,16 +126,20 @@ def assembled():
 
 
 def slot_closeup():
-    """Print pose, looking at the top end. The notch is the disc's arc."""
+    """The disc threaded through the straight notch in one tower top."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
-    tower = to_poly(build_tower(SPEC, 1))
+    ang = tower_angle(1, SPEC)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
+    disc = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     add_solid(pl, tower, COLORS[1])
-    y = SPEC.cap_y
-    x = (SPEC.x_in + SPEC.x_out) / 2.0
-    bed = pv.Plane(center=(x, y - 8, 0), direction=(0, 0, 1), i_size=40, j_size=28)
-    pl.add_mesh(bed, color="#e7e2d8", opacity=0.35)
-    shot(pl, (x, y - 1.5, 4.0), (0.45, 1.15, 0.72), 46, zoom=1.2)
+    add_solid(pl, disc, COLORS["cap"])
+    nx = (SPEC.notch_r_in + SPEC.notch_r_out) / 2.0 - R_PIN
+    ny = SPEC.cap_y - SPEC.slot_depth / 2.0
+    c = _world(nx, ny, SPEC.clip_width / 2.0, ang)
+    radial, tangent = _frame(ang)
+    # From the side and a little outside, so the notch reads as a slot with the ring in it.
+    shot(pl, c, tangent * 1.15 + radial * 0.45 + np.array([0.0, 0.0, 0.35]), 48, zoom=1.45)
     save(pl, "slot_closeup.png")
 
 
@@ -178,9 +188,232 @@ def print_layout():
     save(pl, "print_orientation.png")
 
 
+def _frame(ang):
+    radial = np.array([math.cos(ang), math.sin(ang), 0.0])
+    tangent = np.array([math.sin(ang), -math.cos(ang), 0.0])
+    return radial, tangent
+
+
+def _world(x, y, z, ang):
+    """Print-frame point of a tower at ang, in world millimetres.
+
+    Matches place_tower: the spine midplane is on the ray, so local z is
+    measured from the bed face and the midplane offset is removed.
+    """
+    radial, tangent = _frame(ang)
+    return (R_PIN + x) * radial + (z - SPEC.bore_z) * tangent + np.array([0.0, 0.0, FLANGE_T + y])
+
+
+def _label(pl, points, texts, size=22):
+    pl.add_point_labels(
+        np.asarray(points, float),
+        list(texts),
+        font_size=size,
+        text_color="black",
+        font_family="arial",
+        shape_color="white",
+        shape_opacity=0.9,
+        always_visible=True,
+        show_points=False,
+    )
+
+
+def _dim(pl, a, b, text):
+    pl.add_mesh(pv.Line(np.asarray(a, float), np.asarray(b, float)), color="#1a1a1a", line_width=3)
+    _label(pl, [(np.asarray(a) + np.asarray(b)) / 2.0], [text], size=16)
+
+
+def exploded():
+    """Base, towers, and disc pulled apart on the lamp axis. Numbers sit beside the towers."""
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 1700))
+    pl.set_background("white")
+    tower_lift = 55.0
+    disc_gap = 36.0
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    marks = []
+    texts = []
+    for index in range(4):
+        ang = tower_angle(index, SPEC)
+        mesh = to_poly(place_tower(build_tower(SPEC, index), ang))
+        mesh.translate((0, 0, tower_lift), inplace=True)
+        add_solid(pl, mesh, COLORS[index])
+        radial, _tangent = _frame(ang)
+        marks.append(radial * 78.0 + np.array([0.0, 0.0, tower_lift + 55.0]))
+        texts.append(TOWER_MARK[index])
+    disc = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
+    disc_lift = tower_lift + (FLANGE_T + SPEC.cap_y - disc_world_z(SPEC)) + disc_gap
+    disc.translate((0, 0, disc_lift), inplace=True)
+    add_solid(pl, disc, COLORS["cap"])
+    _label(pl, marks, texts, size=32)
+    shot(pl, (0, 0, 100), (0.85, -0.45, 1.15), 560, zoom=0.82)
+    save(pl, "exploded.png")
+
+
+def base_slot_closeup():
+    """Tower 1's tab seated in its lobe, from outside and above."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    focus = _world((SPEC.spine_in + SPEC.spine_out) / 2.0, -FLANGE_T + TAB_LEN / 2.0, SPEC.clip_width / 2.0, ang)
+    radial, tangent = _frame(ang)
+    shot(pl, focus, radial * 0.9 + tangent * 0.55 + np.array([0.0, 0.0, 0.7]), 48, zoom=1.6)
+    save(pl, "base_slot_closeup.png")
+
+
+def tower_side():
+    """Tower 1 from the tangential side, so the clip rings read against the spine."""
+    pl = pv.Plotter(off_screen=True, window_size=(700, 1400))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
+    radial, tangent = _frame(ang)
+    focus = radial * (R_PIN + (SPEC.spine_in + SPEC.spine_out) / 2.0)
+    focus = focus + tangent * (SPEC.clip_width / 2.0)
+    focus = focus + np.array([0.0, 0.0, (FLANGE_T + SPEC.cap_y) / 2.0])
+    pl.enable_parallel_projection()
+    shot(pl, focus, tangent, 80, up=(0, 0, 1), zoom=1.0)
+    pl.camera.parallel_scale = 68.0
+    save(pl, "tower_side.png")
+
+
+def foot_closeup(with_ring, name):
+    """One tower foot, from outside and a little below. The notch opens outward."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
+    add_solid(pl, tower, COLORS[1])
+    if with_ring:
+        add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    focus = _world(SPEC.x_out - 1.2, -FLANGE_T + 1.0, SPEC.clip_width / 2.0, ang)
+    radial, tangent = _frame(ang)
+    if with_ring:
+        # Beside the foot, a little outside and below, so the ring is seen in the notch.
+        shot(pl, focus, tangent * 1.15 + radial * 0.4 + np.array([0.0, 0.0, -0.55]), 36, zoom=1.9)
+    else:
+        shot(pl, focus, np.array([radial[0], radial[1], -1.05]), 42, zoom=1.7)
+    save(pl, name)
+
+
+def _half(mesh, ang):
+    """Cut away one side of the bar and the far half of the ring."""
+    radial, tangent = _frame(ang)
+    mid = radial * R_PIN + tangent * (SPEC.clip_width / 2.0)
+    mesh = mesh.clip(normal=tangent, origin=mid)
+    mesh = mesh.clip(normal=-radial, origin=np.array([0.0, 0.0, 2.0]))
+    return mesh
+
+
+def foot_section():
+    """Radial cut through tower 1's foot and the ring, with the notch sizes."""
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 1000))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    radial, tangent = _frame(ang)
+    add_solid(pl, _half(to_poly(place_tower(build_tower(SPEC, 1), ang)), ang), COLORS[1])
+    add_solid(pl, _half(to_poly(build_base(SPEC, Holes)), ang), COLORS["base"])
+    z = SPEC.clip_width / 2.0
+    y0 = -FLANGE_T
+    y1 = -FLANGE_T + SPEC.base_slot_depth
+    x_face = SPEC.x_out
+    x_notch = math.sqrt(SPEC.base_slot_r_inner ** 2 - z * z) - R_PIN
+    x_ring = math.sqrt(SPEC.base_r_in ** 2 - z * z) - R_PIN
+    face_r = math.hypot(R_PIN + x_face, z)
+    engage = face_r - SPEC.base_r_in
+    depth = face_r - SPEC.base_slot_r_inner
+    _dim(
+        pl,
+        _world(x_notch - 2.2, y0, z, ang),
+        _world(x_notch - 2.2, y1, z, ang),
+        f"{SPEC.base_slot_depth:.1f} mm high",
+    )
+    _dim(
+        pl,
+        _world(x_notch, y1 + 2.2, z, ang),
+        _world(x_face, y1 + 2.2, z, ang),
+        f"notch {depth:.1f} mm deep",
+    )
+    _dim(
+        pl,
+        _world(x_ring, y0 - 2.4, z, ang),
+        _world(x_face, y0 - 2.4, z, ang),
+        f"engages {engage:.1f} mm",
+    )
+    x_ring_mid = (x_face + (math.sqrt(SPEC.base_r_out ** 2 - z * z) - R_PIN)) / 2.0
+    _dim(
+        pl,
+        _world(x_ring_mid, y0, z, ang),
+        _world(x_ring_mid, y0 + BASE_T, z, ang),
+        f"ring {BASE_T:.1f} mm",
+    )
+    _label(pl, [_world(x_face + 3.5, (y0 + y1) / 2.0, z, ang)], ["opens outward"], size=16)
+    focus = _world((x_notch + x_face) / 2.0, y0 + 1.3, z, ang)
+    pl.enable_parallel_projection()
+    shot(pl, focus, -tangent, 40, up=(0, 0, 1), zoom=1.0)
+    pl.camera.parallel_scale = 14.0
+    save(pl, "foot_section.png")
+
+
+def base_edge():
+    """Whole base from just above the top face, so a step would show as a rise."""
+    pl = pv.Plotter(off_screen=True, window_size=(1400, 700))
+    pl.set_background("white")
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    pl.enable_parallel_projection()
+    shot(pl, (0, 0, BASE_T), (0.15, -1.0, 0.08), 180, up=(0, 0, 1), zoom=1.0)
+    pl.camera.parallel_scale = 62.0
+    save(pl, "base_edge.png")
+
+
+def base_joint_edge():
+    """One lobe where it meets the band, camera level with the top face."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 800))
+    pl.set_background("white")
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    ang = math.radians(45)
+    r = (SPEC.base_r_in + SPEC.base_r_out) / 2.0
+    focus = np.array([r * math.cos(ang), r * math.sin(ang), BASE_T])
+    # Across the joint, almost in the plane of the top face.
+    side = np.array([-math.sin(ang), math.cos(ang), 0.0])
+    pl.enable_parallel_projection()
+    shot(pl, focus, side + np.array([0.0, 0.0, 0.06]), 70, up=(0, 0, 1), zoom=1.2)
+    pl.camera.parallel_scale = 18.0
+    save(pl, "base_joint_edge.png")
+
+
+def tab_flush():
+    """Cut through the seated foot, level, so the tab end and the plate bottom share one line."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 800))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    focus = _world(
+        (SPEC.spine_in + SPEC.spine_out) / 2.0,
+        -FLANGE_T + TAB_LEN / 2.0,
+        SPEC.clip_width / 2.0,
+        ang,
+    )
+    _radial, tangent = _frame(ang)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang)).clip(normal=tangent, origin=focus)
+    base = to_poly(build_base(SPEC, Holes)).clip(normal=tangent, origin=focus)
+    add_solid(pl, tower, COLORS[1])
+    add_solid(pl, base, COLORS["base"])
+    pl.enable_parallel_projection()
+    shot(pl, focus, tangent, 50, up=(0, 0, 1), zoom=1.6)
+    pl.camera.parallel_scale = 7.0
+    save(pl, "tab_flush.png")
+
+
 if __name__ == "__main__":
     assembled()
     slot_closeup()
     print_layout()
     top_view("base")
     top_view("cap")
+    exploded()
+    tower_side()
+    base_slot_closeup()
+    base_edge()
+    base_joint_edge()
+    tab_flush()
