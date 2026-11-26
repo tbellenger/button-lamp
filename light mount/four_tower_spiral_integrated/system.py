@@ -62,6 +62,10 @@ DISC_RADIAL = 2.4
 DISC_MID_R = 43.5
 DISC_R = DISC_MID_R + DISC_RADIAL / 2.0
 DISC_HOLE_R = DISC_MID_R - DISC_RADIAL / 2.0
+# Windows between clips. 1.6 mm is four perimeters on a 0.4 mm nozzle.
+# The foot notch and the top slot keep a taller solid margin.
+FRAME_WALL = 1.6
+FRAME_END = 2.0
 # Solid bar between the outside of the top clip and the floor of the disc slot.
 SLOT_ABOVE_CLIP = 1.4
 # PLA outside an M3 clearance hole, measured from the hole edge. 3 mm covers
@@ -459,6 +463,45 @@ def _bed_corner_chamfer(spec, y0, y1, leg):
     return Pos(0, y1, 0) * Rot(90, 0, 0) * solid
 
 
+def _frame_window(spec, y_mid, half):
+    """Diamond through the 8 mm thickness. Points are 45°, so the hole is self-supporting.
+
+    The tower prints on its side, layers stacked through this thickness, so the
+    diamond is the layer outline and the cut has no ceiling to bridge.
+    """
+    x = (spec.x_in + spec.x_out) / 2.0
+    pts = [
+        (x, y_mid + half),
+        (x - half, y_mid),
+        (x, y_mid - half),
+        (x + half, y_mid),
+    ]
+    area = 0.0
+    for i in range(4):
+        x0, y0 = pts[i]
+        x1, y1 = pts[(i + 1) % 4]
+        area += x0 * y1 - x1 * y0
+    if area < 0.0:
+        pts.reverse()
+    height = spec.clip_width + 0.4
+    return Pos(0, 0, -0.2) * extrude(Polygon(pts), height)
+
+
+def _window_half(spec):
+    """Half-diagonal that stays FRAME_WALL clear of every clip void.
+
+    Clips on one tower are one pitch apart. The void reaches rb past the
+    small helix shift of the loft.
+    """
+    reach = spec.clip_width / 2.0 + 2.0
+    alpha = math.asin(min(0.5, reach / spec.radius))
+    keep = spec.rb + abs(spec.climb * alpha) + FRAME_WALL
+    half = spec.pitch / 2.0 - keep - 0.15
+    if half < 2.0:
+        reject("the clips are too close to leave a window between them", param="pitch")
+    return half
+
+
 def _box(x0, x1, y0, y1, z0, z1):
     return Pos((x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0) * Box(x1 - x0, y1 - y0, z1 - z0)
 
@@ -499,8 +542,8 @@ def _guide(spec, side, r0, r1, y0, y1):
 def build_tower(spec, index):
     """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
 
-    The bar is the clip. Both ends carry a curved slot for a plate. Nothing
-    hangs below z = 0, so it prints on its side without supports.
+    The bar is the clip. Diamonds between the clips cut through the 8 mm
+    thickness, leaving rails on both edges. Nothing hangs below z = 0.
     """
     if index not in TOWER_MARK:
         reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
@@ -523,6 +566,14 @@ def build_tower(spec, index):
     )
     for k in found:
         solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
+    half = _window_half(spec)
+    y_keep_lo = -FLANGE_T + spec.base_slot_depth + FRAME_END
+    y_keep_hi = spec.cap_y - spec.slot_depth - FRAME_END
+    for k0, k1 in zip(found, found[1:]):
+        y_mid = (clip_y(spec, k0) + clip_y(spec, k1)) / 2.0
+        if y_mid - half < y_keep_lo or y_mid + half > y_keep_hi:
+            reject("a frame window runs into the foot or the top slot", param="pitch")
+        solid -= _frame_window(spec, y_mid, half)
     if len(solid.solids()) != 1:
         reject("the tower did not come back as a single solid", param="clip_width")
     low = solid.bounding_box().min.Z

@@ -244,6 +244,22 @@ def exploded():
     save(pl, "exploded.png")
 
 
+def tower_side():
+    """Tower 1 from the tangential side, so the diamonds read as holes."""
+    pl = pv.Plotter(off_screen=True, window_size=(700, 1400))
+    pl.set_background("white")
+    ang = tower_angle(1)
+    add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
+    radial, tangent = _frame(ang)
+    focus = radial * (R_PIN + (SPEC.x_in + SPEC.x_out) / 2.0)
+    focus = focus + tangent * (SPEC.clip_width / 2.0)
+    focus = focus + np.array([0.0, 0.0, (FLANGE_T + SPEC.cap_y) / 2.0])
+    pl.enable_parallel_projection()
+    shot(pl, focus, tangent, 80, up=(0, 0, 1), zoom=1.0)
+    pl.camera.parallel_scale = 62.0
+    save(pl, "tower_side.png")
+
+
 def foot_closeup(with_ring, name):
     """One tower foot, from outside and a little below. The notch opens outward."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
@@ -329,6 +345,7 @@ if __name__ == "__main__":
     top_view("base")
     top_view("cap")
     exploded()
+    tower_side()
     foot_closeup(False, "foot_notch.png")
     foot_closeup(True, "foot_seated.png")
     foot_section()

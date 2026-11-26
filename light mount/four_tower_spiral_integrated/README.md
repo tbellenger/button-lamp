@@ -25,14 +25,17 @@ The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the ce
 
 ## The bar
 
-The bar is **16.6 mm** radially and **8 mm** tangentially. Unchanged.
+The bar is **16.6 mm** radially and **8 mm** tangentially. Between the clips it is a frame.
 
 | | |
 |---|---|
 | Bore | 13.4 mm (13 mm tube, 0.2 mm clearance) |
-| Wall | **1.6 mm** |
+| Wall | **1.6 mm** around each clip, and the same minimum on the inner and outer rails |
 | Mouth | 11.5 mm, on the outer face |
 | Along the tube | **8 mm** |
+| Windows | a **7.95 mm** diamond between each pair of clips, through the 8 mm thickness. The points are 45°. Rails are **4.3 mm**. |
+
+The foot, the recessed number, and the top slot stay solid. The nearest diamond is 1.7 mm clear of a clip void, and more than 2 mm clear of the notch and the disc slot. On the bed the diamond is the layer outline, so there is no bridge. The widest opening is 7.95 mm.
 
 ## Base ring
 
@@ -118,7 +121,7 @@ Reprint the disc and all four towers. The ring and the coupon did not change.
 |---|---|
 | `stl/`, `3mf/` | The seven parts, in the print pose |
 | `render/assembled_iso.png` | Assembly, ring, disc, and the tube |
-| `render/slot_closeup.png` | Disc seated in one top slot |
+| `render/tower_side.png` | One tower from the side, windows through the bar |
 | `render/print_orientation.png` | Bed poses |
 | `render/base_top.png` | Ring, looking down |
 | `render/disc_top.png` | Disc, looking down |
