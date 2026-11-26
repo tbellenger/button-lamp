@@ -25,11 +25,11 @@ The helix starts in the lowest opening (blue, 20.5 mm) and the cut end is the ce
 
 ## The bar
 
-The spine is **8 mm** thick, so the tower is one slab on the bed. At the tab, at each bore, and past the end clips it is **4.0 mm** wide radially. Between clips the outer face follows the inner arc of the bore, 0.2 mm clear of it, and runs out to the tube centreline. There the spine is **11.0 mm** wide.
+The spine is **5 mm** thick. At the tab, at each bore, and past the end clips it is **4.0 mm** wide radially. Between clips the outer face follows the inner arc of the bore, 0.2 mm clear of it, and runs out to the tube centreline.
 
-Each clip is still a C-ring. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm, 8 mm along the tube. The centres stay on the 43.5 mm helix.
+Each clip is still a C-ring, **8 mm** along the tube. It shares the print-bed face with the spine and stands **3 mm** proud on the other side. Bore 13.4 mm, mouth 11.5 mm on the outer side, wall 1.6 mm. The bore centres stay on the 43.5 mm helix. Because the clip centre is 1.5 mm off the spine midplane, the bar is shifted in its plane so that offset is still on the helix. The heights did not change.
 
-The foot is the spine itself, **4.0 × 8.0 mm** in section. The shoulder sits on the plate top, at **2.4 mm**. The tab below that is **2.4 mm** and ends flush with the underside of the plate. Its 8 mm side is square to the bolt ray. The head above the top clip is solid: no window between the spine, the head and the clip. An arc notch, open at the top, is cut through the full 8 mm where the disc sits on the spine.
+The foot is the spine itself, **4.0 × 5.0 mm** in section. The shoulder sits on the plate top, at **2.4 mm**. The tab below that is **2.4 mm** and ends flush with the underside of the plate. Its 5 mm side is square to the bolt ray. The head above the top clip is solid. An arc notch, open at the top, is cut through the **5 mm** spine. The ring is unchanged.
 
 | | |
 |---|---|
@@ -49,7 +49,7 @@ The foot is the spine itself, **4.0 × 8.0 mm** in section. The shoulder sits on
 | Band width | **6.6 mm**. The Ø3.4 hole plus 1.6 mm of wall each side |
 | Band thickness | **2.4 mm** |
 | Lobes | four, rounded tip, same **2.4 mm** plate as the band. The sides flare out into the band on a **5 mm** radius, in plan only |
-| Slot | **4.2 × 8.2 mm**, square to the bolt ray. 0.2 mm over the 4.0 × 8.0 mm tab |
+| Slot | **4.2 × 5.2 mm**, square to the bolt ray. 0.2 mm over the 4.0 × 5.0 mm tab |
 | Slot centre | radius **34.5 mm**, on the bolt ray |
 | M3 hole | radius **53.9 mm**, on the same ray |
 | Lobe tip | about **28.3 mm** from the centre |
@@ -74,11 +74,11 @@ The underside is **114.8 mm** above the deck. The top of the disc is **116.0 mm*
 
 Creality CR-10 V2, 300 × 300 × 400, PLA. Towers lie on the flat face. The C is the layer outline. The ring and the disc print flat. No supports.
 
-The widened spine is in the layer plane, full thickness, so nothing bridges when a tower lies on its side. The original 4 mm face still comes within about **0.08 mm** of the bore at the bed face and the top face, because the helix shifts the bore across the 8 mm. It does not enter the bore. Cutting that face back would leave a sliver, so it stays. Every new face is held 0.2 mm off the bore.
+The towers lie on the face the spine and the clips share. The extra 3 mm of each clip is in the build direction, grown up from that face, so it needs no chamfer and no support.
 
 | Part | On the bed (mm) |
 |---|---|
-| each tower | spine **4 to 11** wide, **8** thick, clips out to about **17** radially, **116.0** long |
+| each tower | spine **5** thick, clips **8** thick on the bed face, **17.0** from the spine back to the clip tips, **116.0** long |
 | `tower_coupon` | short spine, one clip, and the tab. Print this first. |
 | `tower_base` | **Ø114.4 × 2.4**, lobes included. One flat top |
 | `tower_cap` | **Ø73.77 × 1.2**, hole Ø68.97 |
@@ -89,7 +89,7 @@ Stood up, the assembly is 114.4 × 114.4 × **116.0** mm. The tower tops and the
 
 ## Reprint
 
-Reprint the four towers, the base, the coupon, and the top disc.
+Reprint the four towers, the base, and the coupon. The top disc did not change.
 
 ## Assembly
 

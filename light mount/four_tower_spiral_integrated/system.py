@@ -64,10 +64,19 @@ DISC_RADIAL = 2.4
 # Arc notch: 0.15 mm each side of the ring. 0.1 mm under a flush top.
 NOTCH_SIDE = 0.15
 NOTCH_DROP = 0.1
+# Ring size fixed when it moved onto the spine (inner arc 1.6 mm clear of
+# the old 8 mm spine's inner face). The 5 mm spine's shorter chord still
+# clears that wall, so the ring is not resized.
+_RING_INNER = math.hypot(34.1, 4.0)
+DISC_HOLE_R = _RING_INNER + NOTCH_SIDE
+DISC_R = DISC_HOLE_R + DISC_RADIAL
 # Spine. 4 mm radial is the narrow beam that still leaves a solid root on the
 # clip wall without entering the bore. 8 mm matches the clip thickness, so
 # the tower is one slab on the bed.
 SPINE_RADIAL = 4.0
+# Tangential thickness. The C-clips stay 8 mm and share the bed face,
+# so they stand 3 mm proud of this spine on the side away from the bed.
+SPINE_T = 5.0
 ROOT_GAP = 0.3
 # Tab drops through the plate. 2.4 mm ends flush with the underside
 # when the shoulder sits on the plate top.
@@ -178,18 +187,23 @@ def specs(
     if quarter_arc <= 0:
         reject("pitch and coil diameter do not make a helix", param="pitch")
 
-    # The placement origin is shifted by half the spine thickness, so the
-    # bore centre lies on the tower ray. Local x is then the world radius
-    # minus R_PIN, and the helix needs no extra phase.
-    bore_z = clip_width / 2.0
-    if bore_z >= radius - 1.0:
+    # The 8 mm clip shares the bed face with the 5 mm spine, so its centre
+    # sits 1.5 mm off the spine midplane, on the side away from the bed.
+    # The placement puts the spine midplane on the bolt ray. Shift local x
+    # until that offset bore is still on the 43.5 mm helix.
+    clip_center_z = clip_width / 2.0
+    spine_mid_z = SPINE_T / 2.0
+    bore_offset = clip_center_z - spine_mid_z
+    if abs(bore_offset) >= radius - 1.0:
         reject("clip_width is too long for the coil radius", param="clip_width")
-    tube_x = radius - R_PIN
+    radial_len = math.sqrt(radius * radius - bore_offset * bore_offset)
+    tube_x = radial_len - R_PIN
     x_in = tube_x - ro
     x_out = tube_x + ro
     if x_out - x_in < 8.0:
         reject("the bar is too narrow to plug into a slot", param="clip_wall")
-    bore_phase = 0.0
+    bore_z = clip_center_z
+    bore_phase = -math.atan2(bore_offset, radial_len)
     helix_angle = math.atan2(pitch, 2.0 * math.pi * radius)
 
     # The rim tangent, from the first clip out to the ring edge, is fixed by
@@ -246,15 +260,15 @@ def specs(
     spine_in = spine_out - SPINE_RADIAL
     if spine_out <= spine_in:
         reject("the spine has no radial thickness", param="clip_wall")
-    # The ring sits on the spine. Its inner arc, at the bed face and the
-    # top face, stays 1.6 mm outboard of the spine's inner face. 0.15 mm
-    # of clearance each side of the 2.4 mm band.
-    notch_r_in = math.hypot(R_PIN + spine_in + CLIP_WALL, bore_z)
-    disc_hole_r = notch_r_in + NOTCH_SIDE
-    disc_r = disc_hole_r + DISC_RADIAL
-    notch_r_out = disc_r + NOTCH_SIDE
-    if notch_r_out <= notch_r_in:
-        reject("the top notch has no radial width", param="joint_clear")
+    # Same ring as before. Across the 5 mm spine the arc is a shorter
+    # chord, so the inboard wall is at least the 1.6 mm it had at 8 mm.
+    notch_r_in = DISC_HOLE_R - NOTCH_SIDE
+    notch_r_out = DISC_R + NOTCH_SIDE
+    disc_hole_r = DISC_HOLE_R
+    disc_r = DISC_R
+    x_inner = math.sqrt(notch_r_in * notch_r_in - spine_mid_z * spine_mid_z) - R_PIN
+    if x_inner < spine_in + CLIP_WALL - 1e-6:
+        reject("the top notch leaves under 1.6 mm inside the 5 mm spine", param="clip_wall")
     tower_len = cap_y
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -295,6 +309,10 @@ def specs(
         turns=turns,
         coil_height=turns * pitch,
         bore_z=bore_z,
+        bore_offset=bore_offset,
+        spine_t=SPINE_T,
+        spine_mid_z=spine_mid_z,
+        clip_center_z=clip_center_z,
         bore_phase=bore_phase,
         helix_angle_deg=math.degrees(helix_angle),
         tube_x=tube_x,
@@ -304,7 +322,7 @@ def specs(
         spine_out=spine_out,
         bar_w=bar_w,
         slot_radial=bar_w + joint_clear,
-        slot_tangent=clip_width + joint_clear,
+        slot_tangent=SPINE_T + joint_clear,
         cap_y=cap_y,
         disc_r=disc_r,
         disc_hole_r=disc_hole_r,
@@ -505,7 +523,7 @@ def _tower_mark(spec, index):
     """Recess the numeral into the top face of the spine, just above the tab."""
     face = _digit(TOWER_MARK[index])
     x = (spec.spine_in + spec.spine_out) / 2.0
-    return Pos(x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+    return Pos(x, 6.0, spec.spine_t - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
 def _bed_corner_chamfer(spec, y0, y1, leg):
@@ -599,7 +617,7 @@ def _spine_flesh(spec, stations):
         reach = spec.rb + BORE_CLEAR
         y0 = max(0.0, ys[0] - reach)
         y1 = ys[0] + reach
-    block = _box(spec.spine_out - 0.05, spec.tube_x, y0, y1, 0.0, spec.clip_width)
+    block = _box(spec.spine_out - 0.05, spec.tube_x, y0, y1, 0.0, spec.spine_t)
     for k in stations:
         block -= Pos(0, 0, spec.bore_z) * _clearance_solid(spec, clip_y(spec, k))
     if block is None or len(block.solids()) < 1:
@@ -618,9 +636,9 @@ def _arc_notch(spec, y0, y1):
         reject("a curved slot has no radial width", param="joint_clear")
     height = y1 - y0
     mid = (y0 + y1) / 2.0
-    centre = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0)
+    centre = Pos(-R_PIN, mid, spec.spine_mid_z) * Rot(90, 0, 0)
     outer = centre * Cylinder(spec.notch_r_out, height)
-    inner = Pos(-R_PIN, mid, spec.bore_z) * Rot(90, 0, 0) * Cylinder(spec.notch_r_in, height + 0.4)
+    inner = Pos(-R_PIN, mid, spec.spine_mid_z) * Rot(90, 0, 0) * Cylinder(spec.notch_r_in, height + 0.4)
     band = outer - inner
     if len(band.solids()) < 1:
         reject("the top notch did not cut as a solid", param="joint_clear")
@@ -639,7 +657,7 @@ def _top_head(spec, stations):
     y_last = max(clip_y(spec, k) for k in stations)
     if y_top - spec.slot_depth - NOTCH_FLOOR < 0.0:
         reject("the top notch falls off the tower", param="tube_length")
-    head = _box(spec.spine_in, x_out, y_last - spec.ro, y_top, 0.0, spec.clip_width)
+    head = _box(spec.spine_in, x_out, y_last - spec.ro, y_top, 0.0, spec.spine_t)
     head -= _arc_notch(spec, y_top - spec.slot_depth, y_top + 0.6)
     for k in stations:
         cy = clip_y(spec, k)
@@ -667,7 +685,7 @@ def build_tower(spec, index):
     z0 = spec.bed_z
     y0 = tab_bottom_y()
     y1 = spec.cap_y
-    solid = _box(spec.spine_in, spec.spine_out, y0, y1, z0, spec.clip_width)
+    solid = _box(spec.spine_in, spec.spine_out, y0, y1, z0, spec.spine_t)
     for k in found:
         cy = clip_y(spec, k)
         disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, cy)
@@ -706,7 +724,7 @@ def _lobe_solid(spec, bolt_ang):
     x_mid = (spec.spine_in + spec.spine_out) / 2.0
     # The spine midplane is the bolt ray, so the slot centre radius is plain.
     r_slot = R_PIN + x_mid
-    half_t = (spec.clip_width + spec.joint_clear) / 2.0
+    half_t = (spec.spine_t + spec.joint_clear) / 2.0
     half_r = (SPINE_RADIAL + spec.joint_clear) / 2.0
     rad = math.hypot(half_r, half_t) + LOBE_WALL
     fillet_r = 5.0
@@ -773,7 +791,7 @@ def build_base(spec, holes):
         slot = _box(
             spec.spine_in - c, spec.spine_out + c,
             y0 - 0.4, y1 + 0.4,
-            -c, spec.clip_width + c,
+            -c, spec.spine_t + c,
         )
         body -= place_tower(slot, tower_angle(index, spec))
     half = holes.bolt / 2.0
@@ -833,10 +851,10 @@ def place_tower(solid, angle, centre_z=None):
 
     The print frame still has the bed at local z = 0. The origin is shifted
     along the tangent so the spine midplane, local z = centre_z, lies on the
-    ray. Local X then runs along that ray and the 8 mm side is square to it.
+    ray. Local X then runs along that ray and the 5 mm side is square to it.
     """
     if centre_z is None:
-        centre_z = CLIP_WIDTH / 2.0
+        centre_z = SPINE_T / 2.0
     radial = Vector(math.cos(angle), math.sin(angle), 0)
     z_dir = Vector(math.sin(angle), -math.cos(angle), 0)
     origin = (
@@ -854,9 +872,9 @@ def bore_world(spec, index, k):
     up = Vector(0, 0, 1)
     origin = (
         Vector(R_PIN * math.cos(angle), R_PIN * math.sin(angle), FLANGE_T)
-        - spec.bore_z * z_dir
+        - spec.spine_mid_z * z_dir
     )
-    local = Vector(spec.tube_x, clip_y(spec, k), spec.bore_z)
+    local = Vector(spec.tube_x, clip_y(spec, k), spec.clip_center_z)
     return origin + local.X * radial + local.Y * up + local.Z * z_dir
 
 
@@ -868,7 +886,7 @@ def build_coupon(spec):
     z0 = spec.bed_z
     y_clip = 18.0
     y0 = tab_bottom_y()
-    solid = _box(spec.spine_in, spec.spine_out, y0, 32.0, z0, spec.clip_width)
+    solid = _box(spec.spine_in, spec.spine_out, y0, 32.0, z0, spec.spine_t)
     disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, y_clip)
     slab = _box(
         spec.tube_x - spec.ro - 1.0, spec.tube_x + spec.ro + 1.0,
@@ -888,7 +906,7 @@ def build_coupon(spec):
     block = _box(
         spec.spine_out - 0.05, spec.tube_x,
         max(0.0, y_clip - reach), y_clip + reach,
-        z0, spec.clip_width,
+        z0, spec.spine_t,
     )
     block -= clearance
     solid += block
