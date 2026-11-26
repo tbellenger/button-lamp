@@ -136,7 +136,7 @@ def slot_closeup():
     add_solid(pl, disc, COLORS["cap"])
     nx = (SPEC.notch_r_in + SPEC.notch_r_out) / 2.0 - R_PIN
     ny = SPEC.cap_y - SPEC.slot_depth / 2.0
-    c = _world(nx, ny, SPEC.clip_width / 2.0, ang)
+    c = _world(nx, ny, SPEC.spine_mid_z, ang)
     radial, tangent = _frame(ang)
     # From the side and a little outside, so the notch reads as a slot with the ring in it.
     shot(pl, c, tangent * 1.15 + radial * 0.45 + np.array([0.0, 0.0, 0.35]), 48, zoom=1.45)
@@ -201,7 +201,7 @@ def _world(x, y, z, ang):
     measured from the bed face and the midplane offset is removed.
     """
     radial, tangent = _frame(ang)
-    return (R_PIN + x) * radial + (z - SPEC.bore_z) * tangent + np.array([0.0, 0.0, FLANGE_T + y])
+    return (R_PIN + x) * radial + (z - SPEC.spine_mid_z) * tangent + np.array([0.0, 0.0, FLANGE_T + y])
 
 
 def _label(pl, points, texts, size=22):
@@ -256,7 +256,7 @@ def base_slot_closeup():
     ang = tower_angle(1, SPEC)
     add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
     add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
-    focus = _world((SPEC.spine_in + SPEC.spine_out) / 2.0, -FLANGE_T + TAB_LEN / 2.0, SPEC.clip_width / 2.0, ang)
+    focus = _world((SPEC.spine_in + SPEC.spine_out) / 2.0, -FLANGE_T + TAB_LEN / 2.0, SPEC.spine_mid_z, ang)
     radial, tangent = _frame(ang)
     shot(pl, focus, radial * 0.9 + tangent * 0.55 + np.array([0.0, 0.0, 0.7]), 48, zoom=1.6)
     save(pl, "base_slot_closeup.png")
@@ -383,6 +383,23 @@ def base_joint_edge():
     save(pl, "base_joint_edge.png")
 
 
+def tower_end():
+    """One clip from above, so the 5 mm spine and the 8 mm clip read in plan.
+
+    The shared face is the print bed. The clip stands 3 mm proud on the other side.
+    """
+    pl = pv.Plotter(off_screen=True, window_size=(1100, 900))
+    pl.set_background("white")
+    ang = tower_angle(1, SPEC)
+    add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
+    focus = _world(SPEC.tube_x, 16.0, SPEC.clip_center_z, ang)
+    radial, _tangent = _frame(ang)
+    pl.enable_parallel_projection()
+    shot(pl, focus, (0.0, 0.0, 1.0), 50, up=(radial[0], radial[1], 0.0), zoom=1.4)
+    pl.camera.parallel_scale = 14.0
+    save(pl, "tower_end.png")
+
+
 def tab_flush():
     """Cut through the seated foot, level, so the tab end and the plate bottom share one line."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 800))
@@ -391,7 +408,7 @@ def tab_flush():
     focus = _world(
         (SPEC.spine_in + SPEC.spine_out) / 2.0,
         -FLANGE_T + TAB_LEN / 2.0,
-        SPEC.clip_width / 2.0,
+        SPEC.spine_mid_z,
         ang,
     )
     _radial, tangent = _frame(ang)
@@ -416,4 +433,5 @@ if __name__ == "__main__":
     base_slot_closeup()
     base_edge()
     base_joint_edge()
+    tower_end()
     tab_flush()
