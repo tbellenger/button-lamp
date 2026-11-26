@@ -5,6 +5,7 @@
 
 from nurb import Pos
 
+import math
 import os
 
 import numpy as np
@@ -119,16 +120,21 @@ def assembled():
 
 
 def slot_closeup():
-    """Print pose, looking at the top end. The notch is the disc's arc."""
+    """Assembled. The disc sits in the curved slot at one tower top."""
     pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
     pl.set_background("white")
-    tower = to_poly(build_tower(SPEC, 1))
+    ang = tower_angle(1)
+    tower = to_poly(place_tower(build_tower(SPEC, 1), ang))
+    disc = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     add_solid(pl, tower, COLORS[1])
-    y = SPEC.cap_y
-    x = (SPEC.x_in + SPEC.x_out) / 2.0
-    bed = pv.Plane(center=(x, y - 8, 0), direction=(0, 0, 1), i_size=40, j_size=28)
-    pl.add_mesh(bed, color="#e7e2d8", opacity=0.35)
-    shot(pl, (x, y - 1.5, 4.0), (0.45, 1.15, 0.72), 46, zoom=1.2)
+    add_solid(pl, disc, COLORS["cap"])
+    c = np.array([
+        SPEC.radius * math.cos(ang),
+        SPEC.radius * math.sin(ang),
+        disc_world_z(SPEC) + SPEC.disc_t / 2.0,
+    ])
+    outward = np.array([math.cos(ang), math.sin(ang), 0.42])
+    shot(pl, c, outward, 55, zoom=1.35)
     save(pl, "slot_closeup.png")
 
 

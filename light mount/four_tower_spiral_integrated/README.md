@@ -55,12 +55,12 @@ A plain annulus. No tabs, no pockets.
 
 | | |
 |---|---|
-| Outside radius | **45.5 mm** (Ø91) |
-| Hole | **41.5 mm** (Ø83) |
-| Radial width | **4 mm**. Narrower leaves a ring that ovals in the hand. This is the band that still crosses the middle of every bar |
+| Outside radius | **44.7 mm** (Ø89.4) |
+| Hole | **42.3 mm** (Ø84.6) |
+| Radial width | **2.4 mm**. Six perimeters on a 0.4 mm nozzle, centred on the 43.5 mm coil |
 | Thickness | **1.2 mm**, six layers at 0.2 mm |
 
-The hole is the open centre. About **6.0 mm** of bar stays outside the slot and **5.5 mm** stays inside it, so the curved walls remain.
+The hole is the open centre. About **6.8 mm** of bar stays outside the slot and **6.3 mm** stays inside it, so the curved walls remain.
 
 The underside is **114.7 mm** above the deck. The top of the disc is **115.9 mm**. The tower tops are **116.1 mm**, 0.2 mm above the disc.
 
@@ -70,7 +70,7 @@ The disc slot is **1.4 mm** deep, 0.2 mm over the 1.2 mm disc. The ring slot sta
 
 | Slot | Arc radii | Radial width | Depth |
 |---|---|---|---|
-| Top | **41.4 / 45.6 mm** | **4.2 mm** (0.2 mm over the 4 mm annulus, 0.1 mm a side) | **1.4 mm** |
+| Top | **42.2 / 44.8 mm** | **2.6 mm** (0.2 mm over the 2.4 mm annulus, 0.1 mm a side) | **1.4 mm** |
 | Bottom | inner arc **48.98 mm** (0.2 mm under the ring's 49.18 mm). The outer side is open | the overlap, 2.4–3.1 mm | **2.6 mm** |
 
 The arcs are concentric with the lamp axis.
@@ -94,7 +94,7 @@ On a tower the slot is a straight notch in each layer. The arc shows up as that 
 | each tower | **16.6 × 116.1 × 8** |
 | `tower_coupon` | **16.6 × 38.5 × 8**. One opening and the bottom slot. Print this first. |
 | `tower_base` | **Ø117.2 × 6.4** with the tabs. The ring itself is 2.4 mm |
-| `tower_cap` | **Ø91 × 1.2**, hole Ø83 |
+| `tower_cap` | **Ø89.4 × 1.2**, hole Ø84.6 |
 
 Stood up, the assembly is 117.2 × 117.2 × **116.1** mm. The disc's top is at 115.9 mm. The tower tops are the high point.
 
@@ -118,7 +118,7 @@ Reprint the disc and all four towers. The ring and the coupon did not change.
 |---|---|
 | `stl/`, `3mf/` | The seven parts, in the print pose |
 | `render/assembled_iso.png` | Assembly, ring, disc, and the tube |
-| `render/slot_closeup.png` | Top slot, tower on its side |
+| `render/slot_closeup.png` | Disc seated in one top slot |
 | `render/print_orientation.png` | Bed poses |
 | `render/base_top.png` | Ring, looking down |
 | `render/disc_top.png` | Disc, looking down |

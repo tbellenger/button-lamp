@@ -55,11 +55,10 @@ FOOT_CLEAR = 16.0
 # Base ring. 2.4 mm is twelve layers at 0.2 mm. The top disc is separate.
 BASE_T = 2.4
 # Top disc. 1.2 mm is six layers at 0.2 mm. Thinner than that and a ring
-# this size flops in the hand. 4 mm of radial width is the narrow band that
-# still crosses the middle of every bar and leaves about 5.5 mm of tower
-# on each side of the slot.
+# this size flops in the hand. 2.4 mm of radial width is six perimeters
+# on a 0.4 mm nozzle, centred on the coil.
 DISC_T = 1.2
-DISC_RADIAL = 4.0
+DISC_RADIAL = 2.4
 DISC_MID_R = 43.5
 DISC_R = DISC_MID_R + DISC_RADIAL / 2.0
 DISC_HOLE_R = DISC_MID_R - DISC_RADIAL / 2.0
