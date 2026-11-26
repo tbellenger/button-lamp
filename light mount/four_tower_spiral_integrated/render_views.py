@@ -15,6 +15,7 @@ from system import (
     BASE_T,
     FLANGE_T,
     R_PIN,
+    TAB_LEN,
     THETA0,
     TOWER_MARK,
     build_base,
@@ -244,19 +245,32 @@ def exploded():
     save(pl, "exploded.png")
 
 
+def base_slot_closeup():
+    """Tower 1's tab seated in its lobe, from outside and above."""
+    pl = pv.Plotter(off_screen=True, window_size=(1200, 900))
+    pl.set_background("white")
+    ang = tower_angle(1)
+    add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
+    add_solid(pl, to_poly(build_base(SPEC, Holes)), COLORS["base"])
+    focus = _world((SPEC.spine_in + SPEC.spine_out) / 2.0, -FLANGE_T + TAB_LEN / 2.0, SPEC.clip_width / 2.0, ang)
+    radial, tangent = _frame(ang)
+    shot(pl, focus, radial * 0.9 + tangent * 0.55 + np.array([0.0, 0.0, 0.7]), 48, zoom=1.6)
+    save(pl, "base_slot_closeup.png")
+
+
 def tower_side():
-    """Tower 1 from the tangential side, so the diamonds read as holes."""
+    """Tower 1 from the tangential side, so the clip rings read against the spine."""
     pl = pv.Plotter(off_screen=True, window_size=(700, 1400))
     pl.set_background("white")
     ang = tower_angle(1)
     add_solid(pl, to_poly(place_tower(build_tower(SPEC, 1), ang)), COLORS[1])
     radial, tangent = _frame(ang)
-    focus = radial * (R_PIN + (SPEC.x_in + SPEC.x_out) / 2.0)
+    focus = radial * (R_PIN + (SPEC.spine_in + SPEC.spine_out) / 2.0)
     focus = focus + tangent * (SPEC.clip_width / 2.0)
     focus = focus + np.array([0.0, 0.0, (FLANGE_T + SPEC.cap_y) / 2.0])
     pl.enable_parallel_projection()
     shot(pl, focus, tangent, 80, up=(0, 0, 1), zoom=1.0)
-    pl.camera.parallel_scale = 62.0
+    pl.camera.parallel_scale = 68.0
     save(pl, "tower_side.png")
 
 
@@ -346,6 +360,4 @@ if __name__ == "__main__":
     top_view("cap")
     exploded()
     tower_side()
-    foot_closeup(False, "foot_notch.png")
-    foot_closeup(True, "foot_seated.png")
-    foot_section()
+    base_slot_closeup()

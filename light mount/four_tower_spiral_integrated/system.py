@@ -1,16 +1,15 @@
 """Four-tower spiral. The openings are cut into the tower bar.
 
-The bar stands on the tube. There is no arm and no key tooth. Each end of
-the bar has a curved slot. A thin base ring sits in the bottom slots and a
-plain disc sits in the top slots. Short tabs on the base ring flank the
-bar and locate it sideways. The top disc has no tabs.
+The bar is a slim spine. Each clip is a C-shaped ring on the outer edge,
+joined by a short root, opening away from the lamp. The foot is a rectangular
+tab that drops through a slot in a lobe on the base ring. The top of the
+spine carries the curved slot for the plain disc.
 
-The base ring is only as wide as the four M3 holes, on the deck's 76.2 mm
-square. The middle is open, so the light cable still comes up through the
-deck hole. The coil and the clips are unchanged.
+The base ring is only as wide as the four M3 holes. A lobe reaches inward
+under each tower. The middle is open, so the light cable still comes up
+through the deck hole. The coil and the clip centres are unchanged.
 
 Each tower prints lying on its side. The ring and the disc print flat.
-The base tabs stand up off the bed.
 Lengths are millimetres. Fits are design allowances, not measured.
 """
 
@@ -62,11 +61,16 @@ DISC_RADIAL = 2.4
 DISC_MID_R = 43.5
 DISC_R = DISC_MID_R + DISC_RADIAL / 2.0
 DISC_HOLE_R = DISC_MID_R - DISC_RADIAL / 2.0
-# Windows between clips. 1.6 mm is four perimeters on a 0.4 mm nozzle.
-# The foot notch and the top slot keep a taller solid margin.
-FRAME_WALL = 1.6
-FRAME_END = 2.0
-# Solid bar between the outside of the top clip and the floor of the disc slot.
+# Spine. 4 mm radial is the narrow beam that still leaves a solid root on the
+# clip wall without entering the bore. 8 mm matches the clip thickness, so
+# the tower is one slab on the bed.
+SPINE_RADIAL = 4.0
+ROOT_GAP = 0.3
+TAB_LEN = 4.0
+LOBE_WALL = 1.6
+# Band around each M3 hole, from the hole edge to the ring edge.
+BAND_WALL = 1.6
+# Solid spine between the outside of the top clip and the floor of the disc slot.
 SLOT_ABOVE_CLIP = 1.4
 # PLA outside an M3 clearance hole, measured from the hole edge. 3 mm covers
 # the M3 socket head (Ø5.5) and leaves a rim the screw can clamp.
@@ -91,11 +95,15 @@ TOWER_MARK = {1: "1", 2: "2", 3: "3", 0: "4"}
 
 
 def _base_ring_radii():
-    """Inner and outer radius of the base ring, from the deck bolt square."""
+    """Inner and outer radius of the base band, from the deck bolt square.
+
+    The band is the M3 hole plus BAND_WALL on each side. The lobes that hold
+    the towers are added inside this edge.
+    """
     bolt = measured("top_deck_bolt_spacing")
     hole = measured("m3_clearance")
     bolt_r = bolt / math.sqrt(2.0)
-    return bolt_r - hole / 2.0 - BOLT_MARGIN, bolt_r + hole / 2.0 + BOLT_MARGIN
+    return bolt_r - hole / 2.0 - BAND_WALL, bolt_r + hole / 2.0 + BAND_WALL
 
 
 def _span_x(r0, r1, z_a, z_b):
@@ -238,10 +246,10 @@ def specs(
     if slot_depth >= 4.0:
         reject("the disc slot would cut more than 4 mm off the tower top", param="joint_clear")
     base_r_in, base_r_out = _base_ring_radii()
-    # The bolt circle is outside the bar. The ring's inner edge is the part
-    # that enters the tower. It has to bite in, or the slot does nothing.
-    if base_r_in > face_out - 1.5:
-        reject("the base ring does not reach into the bar", param="clip_wall")
+    spine_out = tube_x - rb - ROOT_GAP
+    spine_in = spine_out - SPINE_RADIAL
+    if spine_out <= spine_in:
+        reject("the spine has no radial thickness", param="clip_wall")
     tower_len = cap_y
     bed_length = tower_len + FLANGE_T
     if bed_length > 290.0:
@@ -287,6 +295,8 @@ def specs(
         tube_x=tube_x,
         x_in=x_in,
         x_out=x_out,
+        spine_in=spine_in,
+        spine_out=spine_out,
         bar_w=bar_w,
         slot_radial=bar_w + joint_clear,
         slot_tangent=clip_width + joint_clear,
@@ -447,9 +457,10 @@ def _digit(char):
 
 
 def _tower_mark(spec, index):
-    """Recess the numeral into the top face of the bar, just above the ring."""
+    """Recess the numeral into the top face of the spine, just above the tab."""
     face = _digit(TOWER_MARK[index])
-    return Pos(spec.tube_x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
+    x = (spec.spine_in + spec.spine_out) / 2.0
+    return Pos(x, 6.0, spec.clip_width - MARK_DEPTH) * extrude(face, MARK_DEPTH + 0.2)
 
 
 def _bed_corner_chamfer(spec, y0, y1, leg):
@@ -463,43 +474,117 @@ def _bed_corner_chamfer(spec, y0, y1, leg):
     return Pos(0, y1, 0) * Rot(90, 0, 0) * solid
 
 
-def _frame_window(spec, y_mid, half):
-    """Diamond through the 8 mm thickness. Points are 45°, so the hole is self-supporting.
+def _clip_disk(spec, cy):
+    """Solid disk of the clip ring, following the same helix as the bore.
 
-    The tower prints on its side, layers stacked through this thickness, so the
-    diamond is the layer outline and the cut has no ceiling to bridge.
+    The spine overlaps the inner edge of this disk. Subtracting the bore
+    and the mouth leaves the C and the short root.
     """
-    x = (spec.x_in + spec.x_out) / 2.0
-    pts = [
-        (x, y_mid + half),
-        (x - half, y_mid),
-        (x, y_mid - half),
-        (x + half, y_mid),
-    ]
-    area = 0.0
-    for i in range(4):
-        x0, y0 = pts[i]
-        x1, y1 = pts[(i + 1) % 4]
-        area += x0 * y1 - x1 * y0
-    if area < 0.0:
-        pts.reverse()
-    height = spec.clip_width + 0.4
-    return Pos(0, 0, -0.2) * extrude(Polygon(pts), height)
-
-
-def _window_half(spec):
-    """Half-diagonal that stays FRAME_WALL clear of every clip void.
-
-    Clips on one tower are one pitch apart. The void reaches rb past the
-    small helix shift of the loft.
-    """
+    radius = spec.radius
+    cx = spec.tube_x
     reach = spec.clip_width / 2.0 + 2.0
-    alpha = math.asin(min(0.5, reach / spec.radius))
-    keep = spec.rb + abs(spec.climb * alpha) + FRAME_WALL
-    half = spec.pitch / 2.0 - keep - 0.15
-    if half < 2.0:
-        reject("the clips are too close to leave a window between them", param="pitch")
-    return half
+    alpha = math.asin(min(0.5, reach / radius))
+    sections = []
+    for i in range(5):
+        dth = -alpha + 2.0 * alpha * i / 4.0
+        x = cx - radius * (1.0 - math.cos(dth))
+        y = cy + spec.climb * dth
+        z = -radius * math.sin(dth)
+        sections.append(Pos(x, y, z) * Circle(spec.ro))
+    disk = loft(sections, ruled=True)
+    if len(disk.solids()) != 1:
+        reject("a clip ring did not loft as a single solid", param="clip_width")
+    return disk
+
+
+def _top_lug_bounds(spec):
+    """Local X and Y of the pad that holds the disc slot, with 1.6 mm walls."""
+    z_far = spec.clip_width
+    x_in = math.sqrt(spec.slot_r_inner ** 2 - z_far * z_far) - R_PIN - CLIP_WALL
+    x_out = spec.slot_r_outer - R_PIN + CLIP_WALL
+    y0 = spec.cap_y - spec.slot_depth - SLOT_ABOVE_CLIP
+    return min(spec.spine_in, x_in), max(spec.spine_out, x_out), y0
+
+
+def build_tower(spec, index):
+    """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
+
+    A 4 mm spine carries a C-ring at each clip. The foot is the tab. The top
+    pad holds the disc slot. Nothing hangs below z = 0.
+    """
+    if index not in TOWER_MARK:
+        reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
+    found = stations_for(spec, index)
+    if not found:
+        reject("this tower has no opening on the tube", param="tube_length")
+    z0 = spec.bed_z
+    y0 = -FLANGE_T
+    y1 = spec.cap_y
+    solid = _box(spec.spine_in, spec.spine_out, y0, y1, z0, spec.clip_width)
+    for k in found:
+        cy = clip_y(spec, k)
+        disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, cy)
+        slab = _box(
+            spec.tube_x - spec.ro - 1.0, spec.tube_x + spec.ro + 1.0,
+            cy - spec.ro - 2.0, cy + spec.ro + 2.0,
+            z0, spec.clip_width,
+        )
+        ring = disk.intersect(slab)
+        if ring is None or len(ring.solids()) < 1:
+            reject("a clip ring missed the print slab", param="clip_width")
+        solid += ring
+    solid -= _tower_mark(spec, index)
+    for k in found:
+        solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
+    lug_x0, lug_x1, lug_y0 = _top_lug_bounds(spec)
+    solid += _box(lug_x0, lug_x1, lug_y0, y1, z0, spec.clip_width)
+    solid -= _arc_band(
+        spec.slot_r_inner, spec.slot_r_outer,
+        y1 - spec.slot_depth, y1 + 0.4,
+    )
+    if len(solid.solids()) != 1:
+        reject("the tower did not come back as a single solid", param="clip_width")
+    low = solid.bounding_box().min.Z
+    if low < -0.05:
+        reject("the tower hangs below the bed", param="clip_width")
+    return solid
+
+
+def build_base(spec, holes):
+    """Narrow bolt ring. Each tower has an inward lobe with a through-slot.
+
+    The band is the M3 hole plus 1.6 mm of wall. The lobe is 4 mm tall so
+    the tab can be 4 mm long without sticking through the deck.
+    """
+    width = holes.bolt_d + 2.0 * BAND_WALL
+    if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:
+        reject("the base ring does not match the deck bolt holes", param="joint_clear")
+    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), BASE_T)
+    body = ring
+    c = spec.joint_clear / 2.0
+    y0 = -FLANGE_T
+    y1 = -FLANGE_T + TAB_LEN
+    # Stop the lobe at the inner edge of the band so the M3 hole keeps its wall.
+    lobe_x1 = spec.base_r_in - R_PIN + 0.25
+    lobe_z0 = -LOBE_WALL
+    lobe_z1 = spec.clip_width + LOBE_WALL
+    for index in range(4):
+        ang = tower_angle(index)
+        lobe = _box(spec.spine_in - LOBE_WALL, lobe_x1, y0, y1, lobe_z0, lobe_z1)
+        slot = _box(
+            spec.spine_in - c, spec.spine_out + c,
+            y0 - 0.4, y1 + 0.4,
+            -c, spec.clip_width + c,
+        )
+        body += place_tower(lobe - slot, ang)
+    half = holes.bolt / 2.0
+    span = TAB_LEN + 2.0
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            body -= Pos(sx * half, sy * half, span / 2.0) * Cylinder(holes.bolt_d / 2.0, span)
+    if len(body.solids()) != 1:
+        reject("the base ring did not come back as a single solid", param="coil_diameter")
+    return body
 
 
 def _box(x0, x1, y0, y1, z0, z1):
@@ -539,78 +624,6 @@ def _guide(spec, side, r0, r1, y0, y1):
     return _box(x0, x1, y0, y1, z_a, z_b)
 
 
-def build_tower(spec, index):
-    """One tower, in its print frame. +X out, +Y up the tower, +Z print-up.
-
-    The bar is the clip. Diamonds between the clips cut through the 8 mm
-    thickness, leaving rails on both edges. Nothing hangs below z = 0.
-    """
-    if index not in TOWER_MARK:
-        reject("tower index must be 0, 1, 2 or 3", param="extra_stations")
-    found = stations_for(spec, index)
-    if not found:
-        reject("this tower has no opening on the tube", param="tube_length")
-    z0 = spec.bed_z
-    y0 = -FLANGE_T
-    y1 = spec.cap_y
-    solid = _box(spec.x_in, spec.x_out, y0, y1, z0, spec.clip_width)
-    solid -= _bed_corner_chamfer(spec, y0 - 0.2, y1 + 0.2, BOLT_CHAMFER)
-    solid -= _tower_mark(spec, index)
-    solid -= _arc_band(
-        spec.slot_r_inner, spec.slot_r_outer,
-        y1 - spec.slot_depth, y1 + 0.4,
-    )
-    solid -= _arc_band(
-        spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.base_slot_depth,
-    )
-    for k in found:
-        solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
-    half = _window_half(spec)
-    y_keep_lo = -FLANGE_T + spec.base_slot_depth + FRAME_END
-    y_keep_hi = spec.cap_y - spec.slot_depth - FRAME_END
-    for k0, k1 in zip(found, found[1:]):
-        y_mid = (clip_y(spec, k0) + clip_y(spec, k1)) / 2.0
-        if y_mid - half < y_keep_lo or y_mid + half > y_keep_hi:
-            reject("a frame window runs into the foot or the top slot", param="pitch")
-        solid -= _frame_window(spec, y_mid, half)
-    if len(solid.solids()) != 1:
-        reject("the tower did not come back as a single solid", param="clip_width")
-    low = solid.bounding_box().min.Z
-    if low < -0.05:
-        reject("the tower hangs below the bed", param="clip_width")
-    return solid
-
-
-def build_base(spec, holes):
-    """Thin ring on the deck bolts, with a tab each side of every tower.
-
-    The ring is only as wide as the M3 holes plus BOLT_MARGIN. It does not
-    close over the cable. The cable comes up in the open middle.
-    """
-    width = holes.bolt_d + 2.0 * BOLT_MARGIN
-    if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:
-        reject("the base ring does not match the deck bolt holes", param="joint_clear")
-    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), BASE_T)
-    body = ring
-    y0 = -FLANGE_T + BASE_T - 0.2
-    y1 = -FLANGE_T + BASE_T + GUIDE_H
-    r0 = spec.base_r_in
-    r1 = spec.base_r_in + BASE_GUIDE_RADIAL
-    for index in range(4):
-        ang = tower_angle(index)
-        for side in (-1, 1):
-            body += place_tower(_guide(spec, side, r0, r1, y0, y1), ang)
-    half = holes.bolt / 2.0
-    span = BASE_T + GUIDE_H + 2.0
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            body -= Pos(sx * half, sy * half, span / 2.0) * Cylinder(holes.bolt_d / 2.0, span)
-    if len(body.solids()) != 1:
-        reject("the base ring did not come back as a single solid", param="coil_diameter")
-    return body
-
-
 def build_cap(spec):
     """Plain annulus. Prints flat, and drops into the top slots as printed."""
     return extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), spec.disc_t)
@@ -636,20 +649,25 @@ def bore_world(spec, index, k):
 
 
 def build_coupon(spec):
-    """A short bar, one outward opening, and the curved slot for the base ring.
+    """A short spine, one outward clip, and the foot tab.
 
-    Print it on its side. Offer the slotted end up to the ring before the towers.
+    Print it on its side. Try the tab in a base slot before the towers.
     """
     z0 = spec.bed_z
-    y_clip = 24.0
+    y_clip = 18.0
     y0 = -FLANGE_T
-    solid = _box(spec.x_in, spec.x_out, y0, 34.0, z0, spec.clip_width)
-    solid -= _bed_corner_chamfer(spec, y0 - 0.2, 34.2, BOLT_CHAMFER)
-    solid -= _tower_mark(spec, 1)
-    solid -= _arc_band(
-        spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.base_slot_depth,
+    solid = _box(spec.spine_in, spec.spine_out, y0, 32.0, z0, spec.clip_width)
+    disk = Pos(0, 0, z0 + spec.bore_z) * _clip_disk(spec, y_clip)
+    slab = _box(
+        spec.tube_x - spec.ro - 1.0, spec.tube_x + spec.ro + 1.0,
+        y_clip - spec.ro - 2.0, y_clip + spec.ro + 2.0,
+        z0, spec.clip_width,
     )
+    ring = disk.intersect(slab)
+    if ring is None or len(ring.solids()) < 1:
+        reject("the coupon clip missed the print slab", param="clip_width")
+    solid += ring
+    solid -= _tower_mark(spec, 1)
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
     if len(solid.solids()) != 1:
         reject("the fit coupon did not come back as a single solid", param="joint_clear")
