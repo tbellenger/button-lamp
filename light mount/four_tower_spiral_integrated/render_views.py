@@ -3,7 +3,7 @@
     xvfb-run -a python3 render_views.py
 """
 
-from nurb import Pos, Rot
+from nurb import Pos
 
 import os
 
@@ -11,7 +11,6 @@ import numpy as np
 import pyvista as pv
 
 from system import (
-    DISC_T,
     THETA0,
     build_base,
     build_cap,
@@ -104,7 +103,7 @@ def placed():
     for index in range(4):
         ang = tower_angle(index)
         parts.append((index, to_poly(place_tower(build_tower(SPEC, index), ang))))
-    cap = to_poly(Pos(0, 0, disc_world_z(SPEC) + DISC_T) * Rot(180, 0, 0) * build_cap(SPEC))
+    cap = to_poly(Pos(0, 0, disc_world_z(SPEC)) * build_cap(SPEC))
     parts.append(("cap", cap))
     return parts
 

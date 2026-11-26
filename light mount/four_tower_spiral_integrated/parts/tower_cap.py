@@ -1,4 +1,4 @@
-"""Thin disc. Printed tabs-up. Turn it over onto the towers."""
+"""Plain disc that drops into the four tower tops."""
 
 import os
 import sys

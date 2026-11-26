@@ -2,15 +2,15 @@
 
 The bar stands on the tube. There is no arm and no key tooth. Each end of
 the bar has a curved slot. A thin base ring sits in the bottom slots and a
-thin disc sits in the top slots. Short tabs on each plate flank the bar and
-locate it sideways.
+plain disc sits in the top slots. Short tabs on the base ring flank the
+bar and locate it sideways. The top disc has no tabs.
 
 The base ring is only as wide as the four M3 holes, on the deck's 76.2 mm
 square. The middle is open, so the light cable still comes up through the
 deck hole. The coil and the clips are unchanged.
 
-Each tower prints lying on its side. The ring and the disc print flat, tabs
-up. The disc is turned over on assembly so the tabs point down at the towers.
+Each tower prints lying on its side. The ring and the disc print flat.
+The base tabs stand up off the bed.
 Lengths are millimetres. Fits are design allowances, not measured.
 """
 
@@ -52,18 +52,25 @@ FLANGE_T = 4.5
 # 45° relief on the outer bed corner of the bar. Kept with the bar section.
 BOLT_CHAMFER = 2.0
 FOOT_CLEAR = 16.0
-# Both plates are 2.4 mm: twelve layers at 0.2 mm, inside the 2–3 mm band.
-DISC_T = 2.4
-# Top disc. Outer radius 48 mm crosses the bar with plastic left on both sides.
-DISC_R = 48.0
-DISC_HOLE_R = 40.0
+# Base ring. 2.4 mm is twelve layers at 0.2 mm. The top disc is separate.
+BASE_T = 2.4
+# Top disc. 1.2 mm is six layers at 0.2 mm. Thinner than that and a ring
+# this size flops in the hand. 4 mm of radial width is the narrow band that
+# still crosses the middle of every bar and leaves about 5.5 mm of tower
+# on each side of the slot.
+DISC_T = 1.2
+DISC_RADIAL = 4.0
+DISC_MID_R = 43.5
+DISC_R = DISC_MID_R + DISC_RADIAL / 2.0
+DISC_HOLE_R = DISC_MID_R - DISC_RADIAL / 2.0
+# Solid bar between the outside of the top clip and the floor of the disc slot.
+SLOT_ABOVE_CLIP = 1.4
 # PLA outside an M3 clearance hole, measured from the hole edge. 3 mm covers
 # the M3 socket head (Ø5.5) and leaves a rim the screw can clamp.
 BOLT_MARGIN = 3.0
-# Tabs perpendicular to each plate, one on each side of a tower.
+# Tabs on the base ring only, perpendicular to the ring, one each side of a tower.
 GUIDE_T = 2.0
 GUIDE_H = 4.0
-GUIDE_RADIAL = 4.0
 BASE_GUIDE_RADIAL = 2.4
 TUBE_OD = 13.0
 COIL_DIAMETER = 100.0
@@ -211,10 +218,10 @@ def specs(
     real_last = k_last - int(extra_stations)
     tail = helix_length - real_last * quarter_arc
 
-    # Solid bar above the highest opening. The disc slot is cut down from
-    # this top. joint_clear is the extra depth and the extra radial width.
-    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + 4.0
+    # The slot is cut down from the top. 1.4 mm of solid stays between the
+    # clip and the slot floor. The slot itself is the disc plus 0.2 mm.
     slot_depth = DISC_T + joint_clear
+    cap_y = FOOT_CLEAR + k_last * (pitch / 4.0) + ro + SLOT_ABOVE_CLIP + slot_depth
     slot_r_outer = DISC_R + joint_clear / 2.0
     slot_r_inner = DISC_HOLE_R - joint_clear / 2.0
     # The bar's outer face is closest to the axis at the bed edge (z = 0).
@@ -289,6 +296,7 @@ def specs(
         slot_r_inner=slot_r_inner,
         base_r_in=base_r_in,
         base_r_out=base_r_out,
+        base_slot_depth=BASE_T + joint_clear,
         base_slot_r_inner=base_r_in - joint_clear,
         base_slot_r_outer=base_r_out + joint_clear,
         tower_len=tower_len,
@@ -512,7 +520,7 @@ def build_tower(spec, index):
     )
     solid -= _arc_band(
         spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.slot_depth,
+        y0 - 0.4, y0 + spec.base_slot_depth,
     )
     for k in found:
         solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, clip_y(spec, k))
@@ -533,10 +541,10 @@ def build_base(spec, holes):
     width = holes.bolt_d + 2.0 * BOLT_MARGIN
     if abs((spec.base_r_out - spec.base_r_in) - width) > 0.05:
         reject("the base ring does not match the deck bolt holes", param="joint_clear")
-    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), DISC_T)
+    ring = extrude(Circle(spec.base_r_out) - Circle(spec.base_r_in), BASE_T)
     body = ring
-    y0 = -FLANGE_T + DISC_T - 0.2
-    y1 = -FLANGE_T + DISC_T + GUIDE_H
+    y0 = -FLANGE_T + BASE_T - 0.2
+    y1 = -FLANGE_T + BASE_T + GUIDE_H
     r0 = spec.base_r_in
     r1 = spec.base_r_in + BASE_GUIDE_RADIAL
     for index in range(4):
@@ -544,7 +552,7 @@ def build_base(spec, holes):
         for side in (-1, 1):
             body += place_tower(_guide(spec, side, r0, r1, y0, y1), ang)
     half = holes.bolt / 2.0
-    span = DISC_T + GUIDE_H + 2.0
+    span = BASE_T + GUIDE_H + 2.0
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             body -= Pos(sx * half, sy * half, span / 2.0) * Cylinder(holes.bolt_d / 2.0, span)
@@ -554,30 +562,8 @@ def build_base(spec, holes):
 
 
 def build_cap(spec):
-    """Thin disc. Printed tabs-up. Turn it over so the tabs point down.
-
-    The returned solid sits on z = 0 with the tabs standing up, which is the
-    print pose.
-    """
-    disc_z0 = disc_world_z(spec)
-    disc = Pos(0, 0, disc_z0) * extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), DISC_T)
-    body = disc
-    y1 = spec.cap_y - spec.slot_depth + 0.2
-    y0 = spec.cap_y - spec.slot_depth - GUIDE_H
-    r0 = spec.disc_hole_r + 2.0
-    r1 = spec.disc_r - 2.0
-    for index in range(4):
-        ang = tower_angle(index)
-        for side in (-1, 1):
-            body += place_tower(_guide(spec, side, r0, r1, y0, y1), ang)
-    z_lift = disc_z0 + DISC_T
-    parked = Rot(180, 0, 0) * Pos(0, 0, -z_lift) * body
-    if len(parked.solids()) != 1:
-        reject("the disc did not come back as a single solid", param="clip_width")
-    low = parked.bounding_box().min.Z
-    if low < -0.05:
-        reject("the disc hangs below the bed", param="clip_width")
-    return parked
+    """Plain annulus. Prints flat, and drops into the top slots as printed."""
+    return extrude(Circle(spec.disc_r) - Circle(spec.disc_hole_r), spec.disc_t)
 
 
 def place_tower(solid, angle):
@@ -612,7 +598,7 @@ def build_coupon(spec):
     solid -= _tower_mark(spec, 1)
     solid -= _arc_band(
         spec.base_slot_r_inner, spec.base_slot_r_outer,
-        y0 - 0.4, y0 + spec.slot_depth,
+        y0 - 0.4, y0 + spec.base_slot_depth,
     )
     solid -= Pos(0, 0, z0 + spec.bore_z) * _bore_void(spec, y_clip)
     if len(solid.solids()) != 1:

@@ -5,9 +5,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nurb import Pos, Rot, assembly, use
+from nurb import Pos, assembly, use
 
-from system import DISC_T, disc_world_z, place_tower, specs, tower_angle
+from system import disc_world_z, place_tower, specs, tower_angle
 
 
 @assembly
@@ -50,6 +50,5 @@ def tower_assembly(
     parts = [use("tower_base", **common)]
     for index, name in enumerate(("0", "90", "180", "270")):
         parts.append(place_tower(use(f"tower_{name}", **common), tower_angle(index)))
-    # The disc is exported tabs-up. Turn it over so the tabs hang beside the towers.
-    parts.append(Pos(0, 0, disc_world_z(spec) + DISC_T) * Rot(180, 0, 0) * use("tower_cap", **common))
+    parts.append(Pos(0, 0, disc_world_z(spec)) * use("tower_cap", **common))
     return tuple(parts)
